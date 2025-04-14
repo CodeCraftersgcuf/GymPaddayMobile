@@ -1,0 +1,14 @@
+[33m179c05d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m rectified logic for chatting
+[33m67ad9aa[m rewrighting the socket logic handling the state at global level
+[33m512d698[m Integrated socket functionalities into chat component and refined the app directory and cleaned out extra sets of routes
+[33m2462eb6[m finalized integration of apis in categories and subcategories pages
+[33m1847570[m fixed some bugs related to authentication routes, and integrated apis till categories routes of both crypto and gift cards
+[33ma70fe89[m integrated apis for forgetting passwords and generating otp separately for email verfication and forgot password
+[33m5c7c2bc[m integrated apis in login and signup routes and initiated fetching categories in index page of tabs
+[33m7a84fc4[m finalized the structure of UI components, ready to integrate apis
+[33m91648c7[m fixed all the card routes, chat page and some other bugs in routes
+[33m8769dfe[m refactored select component in signup page, unified chatitem component throughout and make some other adaptability changes
+[33md08744f[m Code Upto FrontEnd Point. (#2)
+[33mbe0b5e8[m updated theme
+[33m9b6bd22[m initialized project
+[33maa7bd16[m Initial commit
