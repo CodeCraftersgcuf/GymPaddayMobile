@@ -1,90 +1,109 @@
-import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
-
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { Tabs } from 'expo-router';
+import { Image, StyleSheet, View } from 'react-native';
+import { useTheme } from '@/contexts/themeContext';
+import { Fontisto } from '@expo/vector-icons';
+import { images } from '@/constants';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { dark } = useTheme();
+  const isDarkMode = dark;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: '#FF759E',
+        tabBarInactiveTintColor: isDarkMode ? '#888888' : '#666666',
+        tabBarStyle: {
+          ...styles.tabBar,
+          backgroundColor: isDarkMode ? '#1A1A1A' : '#FFFFFF',
+          borderTopColor: isDarkMode ? '#333333' : '#EEEEEE',
+          borderRadius: 10
+        },
+        tabBarLabelStyle: styles.tabBarLabel,
         headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Socials',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <View style={styles.iconContainer}>
+              <Image source={images.social} width={size} height={size}  />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="chat"
+        name="connect"
         options={{
           title: 'Connect',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="paperplane.fill" color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <View style={styles.iconContainer}>
+              <Image source={images.connect} width={size} height={size}  />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="transactions"
+        name="market"
         options={{
           title: 'Market',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol
-              size={28}
-              name="chevron.left.forwardslash.chevron.right"
-              color={color}
-            />
+          tabBarIcon: ({ color, size }) => (
+            <View style={styles.iconContainer}>
+              <Image source={images.market} width={size} height={size}  />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="gymHub"
         options={{
           title: 'Gym Hub',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.fill.badge.plus" color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <View style={styles.iconContainer}>
+              <Image source={images.GymTabIcon} width={size} height={size} />
+            </View>
           ),
         }}
       />
-        <Tabs.Screen
+      <Tabs.Screen
         name="more"
         options={{
           title: 'More',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.fill.badge.plus" color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <View style={styles.iconContainer}>
+              <Image source={images.moreIcon} width={size} height={size} />
+            </View>
           ),
         }}
       />
-      {/* <Tabs.Screen
-        name="+not-found"
-        options={{
-          title: 'Oops!',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="chevron.right" color={color} />
-          ),
-        }}
-      /> */}
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    height: 60,
+    paddingBottom: 5,
+    paddingTop: 5,
+    elevation: 2,
+    shadowOffset: {
+      width: 0,
+      height: -1,
+    },
+    margin: 15,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  tabBarLabel: {
+    fontSize: 12,
+    marginTop: 1,
+    fontWeight: '500',
+  },
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

@@ -1,10 +1,7 @@
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,23 +9,21 @@ import {
 import { useTheme } from "@/contexts/themeContext";
 import { COLORS, images } from "@/constants";
 import { Image } from "expo-image";
-import { validationSignInSchema } from "@/constants/validation"; // ✅ Your Yup validation schema
+import { CodeValidation } from "@/constants/validation"; // ✅ Your Yup validation schema
 import { Formik } from "formik";
-import { Link,useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import FloatingLabelInput from "@/components/login/FloatingLabelInput";
 import ThemeText from "@/components/ThemedText";
 import ThemedView from "@/components/ThemedView";
 
-const Login = () => {
+const codeverification = () => {
   const route = useRouter();
   const { dark } = useTheme();
-  setTimeout(() => {
-    route.push('/(tabs)')
-  }, 1000);
-  const handleLogin = (values: { email: string; password: string }) => {
+
+  const handleLogin = (values: { code: string;}) => {
     console.log("Login Data:", values);
-    route.push('/(tabs)')
+    route.push('/resetpassword');
   };
 
   return (
@@ -80,7 +75,7 @@ const Login = () => {
                 textAlign: "center",
               }}
             >
-              Login
+              Forget Password
             </ThemeText>
             <ThemeText
               style={{
@@ -89,15 +84,15 @@ const Login = () => {
                 textAlign: "center",
               }}
             >
-              Login to your account
+              Input 6-digit code sent to your email
             </ThemeText>
 
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : "height"}
             >
               <Formik
-                initialValues={{ email: "", password: "" }}
-                validationSchema={validationSignInSchema}
+                initialValues={{ code: "" }}
+                validationSchema={CodeValidation}
                 onSubmit={handleLogin}
               >
                 {({
@@ -110,39 +105,19 @@ const Login = () => {
                 }) => (
                   <ThemedView darkColor="transparent" style={styles.card}>
                     <FloatingLabelInput
-                      label="Email"
-                      value={values.email}
-                      onChangeText={handleChange("email")}
-                      onBlur={handleBlur("email")}
-                      error={touched.email && errors.email ? errors.email : ""}
-                      keyboardType="email-address"
+                      label="Input Code"
+                      value={values.code}
+                      onChangeText={handleChange("code")}
+                      onBlur={handleBlur("code")}
+                      error={touched.code && errors.code ? errors.code : ""}
+                      keyboardType="default"
                       autoComplete="off"
                     />
-
-                    <FloatingLabelInput
-                      label="Password"
-                      autoComplete="off"
-                      value={values.password}
-                      onChangeText={handleChange("password")}
-                      onBlur={handleBlur("password")}
-                      error={touched.password && errors.password ? errors.password : ''}
-                      isPassword={true}
-                    />
-
-                    {/* Forgot Password */}
-                    <TouchableOpacity onPress={()=> route.push('/forgetpassword') }>
-                      <ThemeText style={styles.forgotPassword}>Forgot Password?</ThemeText>
-                    </TouchableOpacity>
 
                     {/* Login Button */}
-                    <Pressable onPress={()=>handleSubmit()} style={{ backgroundColor: '#FF0000', paddingVertical: 15, borderRadius: 10 }}>
-                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: 500, fontSize: 16 }}>Login</ThemeText>
+                    <Pressable onPress={() => handleSubmit()} style={{ backgroundColor: '#FF0000', paddingVertical: 15, borderRadius: 10 }}>
+                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: 500, fontSize: 16 }}>Proceed</ThemeText>
                     </Pressable>
-
-                    {/* Register Redirect */}
-                    <Link href={'/register'} style={{ paddingVertical: 15, borderRadius: 10 }}>
-                      <ThemeText style={styles.registerText}>Register</ThemeText>
-                    </Link>
                   </ThemedView>
                 )}
               </Formik>
@@ -153,8 +128,8 @@ const Login = () => {
         <ThemedView style={{ flex: 1, justifyContent: "flex-end" }}>
           <ThemeText style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}>
             By continuing you agree to gym paddy’s{" "}
-            <ThemeText style={{color:'red'}}>terms of use</ThemeText> and{" "}
-            <ThemeText style={{color:'red'}}>privacy policy</ThemeText>.
+            <ThemeText style={{ color: 'red' }}>terms of use</ThemeText> and{" "}
+            <ThemeText style={{ color: 'red' }}>privacy policy</ThemeText>.
           </ThemeText>
         </ThemedView>
       </ThemedView>
@@ -170,18 +145,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 15
   },
-  forgotPassword: {
-    color: "#EF4444",
-    textAlign: "right",
-    marginBottom: 16,
-    fontSize: 14,
-  },
-  registerText: {
-    color: "#EF4444",
-    textAlign: "center",
-    fontSize: 14,
-    marginTop: 16,
-  },
 });
 
-export default Login;
+export default codeverification;
