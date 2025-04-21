@@ -1,60 +1,45 @@
-import { Text, type TextProps, StyleSheet } from 'react-native';
+import React from 'react';
+import { Text, StyleSheet, TextProps, TextStyle } from 'react-native';
+import { useTheme } from '@/contexts/themeContext';
 
-import { useThemeColor } from '@/hooks/useThemeColor';
-
-export type ThemedTextProps = TextProps & {
-  lightColor?: string;
-  darkColor?: string;
-  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link';
+const defaultLightThemeColors = {
+  text: '#121212',
 };
 
-export function ThemedText({
-  style,
-  lightColor,
-  darkColor,
-  type = 'default',
-  ...rest
-}: ThemedTextProps) {
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+const defaultDarkThemeColors = {
+  text: '#FFFFFF',
+};
 
-  return (
-    <Text
-      style={[
-        { color },
-        type === 'default' ? styles.default : undefined,
-        type === 'title' ? styles.title : undefined,
-        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
-        type === 'subtitle' ? styles.subtitle : undefined,
-        type === 'link' ? styles.link : undefined,
-        style,
-      ]}
-      {...rest}
-    />
-  );
+interface ThemeTextProps extends TextProps {
+  lightColor?: string;
+  darkColor?: string;
 }
 
-const styles = StyleSheet.create({
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  defaultSemiBold: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    lineHeight: 32,
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 16,
-    color: '#0a7ea4',
-  },
-});
+const ThemeText: React.FC<ThemeTextProps> = ({
+  style,
+  children,
+  lightColor,
+  darkColor,
+  ...rest
+}) => {
+
+  const { dark } = useTheme();
+  let themeBasedColor: string;
+  if (dark) {
+
+    themeBasedColor = darkColor || defaultDarkThemeColors.text;
+  } else {
+    themeBasedColor = lightColor || defaultLightThemeColors.text;
+  }
+  const combinedStyle: TextStyle = StyleSheet.flatten([
+    { color: themeBasedColor },
+    style,
+  ]);
+  return (
+    <Text style={combinedStyle} {...rest}>
+      {children}
+    </Text>
+  );
+};
+
+export default ThemeText;

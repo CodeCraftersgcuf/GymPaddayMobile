@@ -1,73 +1,148 @@
+import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "@/contexts/themeContext";
-import { COLORS } from "@/constants";
 import {
-  View,
-  Text,
   StyleSheet,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
 } from "react-native";
+import { useTheme } from "@/contexts/themeContext";
+import { COLORS, images } from "@/constants";
+import { Image } from "expo-image";
+import { validationSignInSchema } from "@/constants/validation";
 import { Formik } from "formik";
-import React from "react";
-import Input from "@/utils/CustomInput";
-import Button from "@/utils/Button";
-import { useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import FloatingLabelInput from "@/components/login/FloatingLabelInput";
+import ThemeText from "@/components/ThemedText";
+import ThemedView from "@/components/ThemedView";
 
-const ResetPassword = () => {
+const resetpassword = () => {
+  const route = useRouter();
   const { dark } = useTheme();
-  const { push } = useRouter();
+
+  const handleLogin = (values: { old_password: "", new_password: "" }) => {
+    console.log("Login Data:", values);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.inner}>
-        <Text style={[styles.title, { color: dark ? COLORS.white : COLORS.black }]}>
-          Reset Password
-        </Text>
+      <ThemedView style={{ flex: 1 }}>
+        <LinearGradient
+          colors={["#FF0000", "#840000"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ height: 150 }}
+        />
 
-        <Formik
-          initialValues={{ password: "" }}
-          onSubmit={(values) => {
-            console.log(values);
+        <ThemedView
+          style={{
+            marginHorizontal: 20,
+            borderRadius: 20,
+            padding: 10,
+            elevation: 5,
+            shadowColor: dark ? 'white' : 'black',
+            transform: [{ translateY: -50 }],
           }}
         >
-          {({
-            handleChange,
-            handleBlur,
-            handleSubmit,
-            values,
-            errors,
-            touched,
-          }) => (
-            <>
-              <Text style={[styles.label, { color: dark ? COLORS.white : COLORS.black }]}>
-                New Password
-              </Text>
-              <Input
-                value={values.password}
-                onChangeText={handleChange("password")}
-                onBlur={handleBlur("password")}
-                label="Enter new password"
-                errorText={
-                  touched.password && errors.password ? errors.password : ""
-                }
-                showCheckbox={false}
-                prefilledValue={values.password}
-                id="password"
-              />
+          {/* Logo */}
+          <ThemedView
+            darkColor="transparent"
+            style={{
+              alignSelf: "center",
+              backgroundColor: "white",
+              transform: [{ translateY: -60 }],
+              borderRadius: 10,
+              elevation: 5,
+              padding: 10,
+            }}
+          >
+            <Image
+              source={images.logo}
+              style={{
+                width: 70,
+                height: 70,
+              }}
+            />
+          </ThemedView>
 
-              <View style={{ marginVertical: 20 }}>
-                <Button title="Proceed" onPress={handleSubmit} />
-              </View>
+          <ThemedView darkColor="transparent" style={{ transform: [{ translateY: -40 }] }}>
+            <ThemeText
+              style={{
+                fontSize: 24,
+                fontWeight: "bold",
+                textAlign: "center",
+              }}
+            >
+              Change Password
+            </ThemeText>
+            <ThemeText
+              style={{
+                fontSize: 14,
+                color: dark ? COLORS.white : "gray",
+                textAlign: "center",
+              }}
+            >
+              Create new password
+            </ThemeText>
 
-              <TouchableOpacity onPress={() => push("/forgotPassword")}>
-                <Text style={[styles.forgotText, { color: COLORS.primary }]}>
-                  Forgot Password?
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </Formik>
-      </View>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+              <Formik
+                initialValues={{ old_password: "", new_password: "" }}
+                validationSchema={validationSignInSchema}
+                onSubmit={handleLogin}
+              >
+                {({
+                  handleChange,
+                  handleBlur,
+                  handleSubmit,
+                  values,
+                  errors,
+                  touched,
+                }) => (
+                  <ThemedView darkColor="transparent" style={styles.card}>
+
+                    <FloatingLabelInput
+                      label="Old Password"
+                      autoComplete="off"
+                      value={values.old_password}
+                      onChangeText={handleChange("old_password")}
+                      onBlur={handleBlur("old_password")}
+                      error={touched.old_password && errors.old_password ? errors.old_password : ''}
+                      isPassword={true}
+                    />
+                    <FloatingLabelInput
+                      label="New Password"
+                      autoComplete="off"
+                      value={values.new_password}
+                      onChangeText={handleChange("new_password")}
+                      onBlur={handleBlur("new_password")}
+                      error={touched.new_password && errors.new_password ? errors.new_password : ''}
+                      isPassword={true}
+                    />
+
+                    {/* Login Button */}
+                    <Pressable onPress={() => handleSubmit()} style={{ backgroundColor: '#FF0000', paddingVertical: 15, borderRadius: 10 }}>
+                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: 500, fontSize: 16 }}>Proceed</ThemeText>
+                    </Pressable>
+                  </ThemedView>
+                )}
+              </Formik>
+            </KeyboardAvoidingView>
+          </ThemedView>
+        </ThemedView>
+
+        <ThemedView style={{ flex: 1, justifyContent: "flex-end" }}>
+          <ThemeText style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}>
+            By continuing you agree to gym paddy’s{" "}
+            <ThemeText style={{ color: 'red' }}>terms of use</ThemeText> and{" "}
+            <ThemeText style={{ color: 'red' }}>privacy policy</ThemeText>.
+          </ThemeText>
+        </ThemedView>
+      </ThemedView>
     </SafeAreaView>
   );
 };
@@ -75,26 +150,23 @@ const ResetPassword = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
   },
-  inner: {
-    width: "100%",
+  card: {
+    marginTop: 20,
+    paddingHorizontal: 15
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 30,
-    textAlign: "center",
+  forgotPassword: {
+    color: "#EF4444",
+    textAlign: "right",
+    marginBottom: 16,
+    fontSize: 14,
   },
-  label: {
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  forgotText: {
+  registerText: {
+    color: "#EF4444",
     textAlign: "center",
     fontSize: 14,
+    marginTop: 16,
   },
 });
 
-export default ResetPassword;
+export default resetpassword;
