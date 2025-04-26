@@ -1,30 +1,29 @@
-const authImg = require('../assets/images/auth-bg.jpg');
-const authMidCircle = require('../assets/images/auth-midCircle.png');
-const radiusAuth = require('../assets/images/radiusAuth.png');
-const arrowLeft = require('../assets/images/arrow-left.png');
-const logo = require('../assets/images/logo.png');
-const male = require('../assets/images/male_avatar.svg');
-const female = require('../assets/images/female_avatar.svg');
-const social = require('../assets/images/tabs/social.svg');
-const connect = require('../assets/images/tabs/connect.svg');
-const market = require('../assets/images/tabs/market.svg');
-const moreIcon = require('../assets/images/tabs/moreMenu.svg');
-const GymTabIcon = require('../assets/images/tabs/gymHub.svg');
-
-
 const images = {
-  authImg,
-  authMidCircle,
-  radiusAuth,
-  arrowLeft,
-  logo,
-  male,
-  female,
-  social,
-  connect,
-  market,
-  moreIcon,
-  GymTabIcon
+  authImg: require('../assets/images/auth-bg.jpg'),
+  authMidCircle: require('../assets/images/auth-midCircle.png'),
+  radiusAuth: require('../assets/images/radiusAuth.png'),
+  arrowLeft: require('../assets/images/arrow-left.png'),
+  logo: require('../assets/images/logo.png'),
+  male: require('../assets/images/male_avatar.svg'),
+  female: require('../assets/images/female_avatar.svg'),
+  SocialIcons: require('../assets/images/ChatsCircle.png'),
+  ConnectIcons: require('../assets/images/Heart.png'),
+  marketIcon: require('../assets/images/ShoppingBag.png'),
+  gymIcon: require('../assets/images/Barbell.png'),
+  MoreIcons: require('../assets/images/List.png'),
+  notifcationIcon: require('../assets/images/PaperPlaneTilt.png'),
+  Share: require('../assets/images/share.png'),
+  comment: require('../assets/images/comment.png'),
+  downloadIcon: require('../assets/images/DownloadSimple.png'),
+  menuIcon: require('../assets/images/menu.png'),
+  CreatePlus: require('../assets/images/Plus.png'),
+  CreateVideo: require('../assets/images/VideoCamera.png'),
+  EditIcon: require('../assets/icons/post/PencilSimpleLine.png'),
+  BoostIcon: require('../assets/icons/post/AlignBottom.png'),
+  DeleteIcon: require('../assets/icons/post/TrashSimple.png'),
+  reportIcons: require('../assets/icons/post/Warning.png'),
+  eysIcon: require('../assets/icons/post/EyeSlash.png'),
+  followIcon: require('../assets/icons/post/UserPlus.png'),
 };
 
 export default images;
