@@ -8,7 +8,7 @@ export default function useCustomFonts() {
   useEffect(() => {
     async function loadFonts() {
       await Font.loadAsync({
-        CustomFont: require('../assets/fonts/CustomFont.ttf'),
+        CustomFont: require('../../assets/fonts/Caveat-VariableFont_wght.ttf'),
       });
       setFontsLoaded(true);
     }
