@@ -2,108 +2,104 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Image, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
-import { Fontisto } from '@expo/vector-icons';
 import { images } from '@/constants';
 
 export default function TabLayout() {
   const { dark } = useTheme();
   const isDarkMode = dark;
 
+  const tabBackgroundColor = isDarkMode ? '#252525' : '#FFFFFF';
+  const tabViewBackgroundColor = isDarkMode ? 'black' : '#FFFFFF';
+
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: '#FF759E',
-        tabBarInactiveTintColor: isDarkMode ? '#888888' : '#666666',
-        tabBarStyle: {
-          ...styles.tabBar,
-          backgroundColor: isDarkMode ? '#1A1A1A' : '#FFFFFF',
-          borderTopColor: isDarkMode ? '#333333' : '#EEEEEE',
-          borderRadius: 10
-        },
-        tabBarLabelStyle: styles.tabBarLabel,
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Socials',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Image source={images.social} width={size} height={size}  />
-            </View>
-          ),
+    <View style={[styles.tabContainerWrapper, { backgroundColor: tabViewBackgroundColor }]}>
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: '#FF759E',
+          tabBarInactiveTintColor: isDarkMode ? '#888888' : '#666666',
+          tabBarStyle: {
+            ...styles.tabBar,
+            backgroundColor: tabBackgroundColor,
+            position: 'absolute', 
+            bottom: 10, 
+            left: 20, 
+            right: 20, 
+            borderRadius: 15, 
+            elevation: 5, 
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+          },
+          tabBarLabelStyle: styles.tabBarLabel,
+          headerShown: false,
         }}
-      />
-      <Tabs.Screen
-        name="connect"
-        options={{
-          title: 'Connect',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Image source={images.connect} width={size} height={size}  />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="market"
-        options={{
-          title: 'Market',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Image source={images.market} width={size} height={size}  />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="gymHub"
-        options={{
-          title: 'Gym Hub',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Image source={images.GymTabIcon} width={size} height={size} />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{
-          title: 'More',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Image source={images.moreIcon} width={size} height={size} />
-            </View>
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Socials',
+            tabBarIcon: ({ color, size }) => (
+              <Image source={images.SocialIcons} style={{ width: size, height: size, tintColor: color }} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="connect"
+          options={{
+            title: 'Connect',
+            tabBarIcon: ({ color, size }) => (
+              <Image source={images.ConnectIcons} style={{ width: size, height: size, tintColor: color }} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="market"
+          options={{
+            title: 'Market',
+            tabBarIcon: ({ color, size }) => (
+              <Image source={images.marketIcon} style={{ width: size, height: size, tintColor: color }} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="gymHub"
+          options={{
+            title: 'Gym Hub',
+            tabBarIcon: ({ color, size }) => (
+              <Image source={images.gymIcon} style={{ width: size, height: size, tintColor: color }} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="more"
+          options={{
+            title: 'More',
+            tabBarIcon: ({ color, size }) => (
+              <Image source={images.MoreIcons} style={{ width: size, height: size, tintColor: color }} />
+            ),
+          }}
+        />
+      </Tabs>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  tabContainerWrapper: {
+    flex: 1,
+    borderWidth: 0,
+  },
   tabBar: {
+    borderWidth: 0,
     height: 60,
-    paddingBottom: 5,
-    paddingTop: 5,
-    elevation: 2,
-    shadowOffset: {
-      width: 0,
-      height: -1,
-    },
-    margin: 15,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginHorizontal:10
   },
   tabBarLabel: {
     fontSize: 12,
     marginTop: 1,
     fontWeight: '500',
-  },
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
