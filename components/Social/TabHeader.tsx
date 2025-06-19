@@ -4,6 +4,7 @@ import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
+import { useRouter } from 'expo-router';
 
 interface TabHeaderProps {
   title: string;
@@ -14,6 +15,7 @@ interface TabHeaderProps {
 
 const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, children }) => {
   const { dark } = useTheme();
+  const router = useRouter();
 
   const themeStyles = StyleSheet.create({
     notificationView: {
@@ -32,7 +34,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
       <ThemeText style={{ fontFamily: 'CustomFont', fontSize: 34, color: 'red' }}>{title}</ThemeText>
       <ThemedView style={styles.alignCenter}>
         {admin?.profile && (
-          <Pressable onPress={() => console.log(`User ID: ${admin.userId}`)}>
+          <Pressable onPress={() => router.push("/UserProfile")}>
             <Image source={{ uri: admin.profile }} style={styles.UserImage} />
           </Pressable>
         )}
@@ -41,7 +43,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
           <Pressable onPress={() => console.log(`Notification ID: ${notificationID}`)}>
             <ThemedView style={themeStyles.notificationView}>
               <Image
-                source={images.notifcationIcon}
+                source={images.bellIcon}
                 tintColor={dark ? 'white' : 'black'}
                 style={styles.notifcationIcon}
               />

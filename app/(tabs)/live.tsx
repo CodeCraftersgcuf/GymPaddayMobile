@@ -1,14 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 
-const connect = () => {
+const live = () => {
   return (
     <View>
-      <Text>connect</Text>
+      <Text>live</Text>
     </View>
   )
 }
 
-export default connect
+export default live
 
 const styles = StyleSheet.create({})

@@ -24,6 +24,10 @@ const images = {
   reportIcons: require('../assets/icons/post/Warning.png'),
   eysIcon: require('../assets/icons/post/EyeSlash.png'),
   followIcon: require('../assets/icons/post/UserPlus.png'),
+  bellIcon: require('../assets/icons/Bell.png'),
+  transactions: require('../assets/icons/more/Receipt.png'),
+  topUp : require('../assets/icons/more/PaperPlane.png'),
+  withdraw : require('../assets/icons/more/Vector.png'),
 };
 
 export default images;

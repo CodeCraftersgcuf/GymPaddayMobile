@@ -17,6 +17,7 @@ import ThemeText from "../ThemedText";
 import { useTheme } from "@/contexts/themeContext";
 import { dummyImage } from "@/constants/help";
 import PostDetailBottomsheet from "./PostDetailBottomsheet";
+import { useRouter } from "expo-router";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get("window");
@@ -44,6 +45,7 @@ interface PostItemProps {
 
 const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) => {
   const { dark } = useTheme();
+  const router = useRouter();
   
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -103,7 +105,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) 
     <View style={styles.postContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity activeOpacity={0.7}>
+        <TouchableOpacity activeOpacity={0.7} onPress={()=>router.push('/UserProfile')}>
           <View style={styles.headerLeft}>
             <Image source={{ uri: post.user.profile_picture }} style={styles.profileImage} />
             <View>
@@ -161,7 +163,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) 
 
       {/* Post Actions */}
       <View style={styles.actions}>
-        <ThemedView style={{ flexDirection: 'row', gap: 10 }}>
+        <ThemedView darkColor="transparent" style={{ flexDirection: 'row', gap: 10 }}>
           <TouchableOpacity onPress={handleLike} style={styles.actionItem}>
             <Image source={images.ConnectIcons} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
             <ThemeText style={styles.actionText}>{likesCount}</ThemeText>
@@ -177,13 +179,13 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) 
             <ThemeText style={styles.actionText}>100</ThemeText>
           </TouchableOpacity>
         </ThemedView>
-        <ThemedView>
+        <ThemedView darkColor="transparent">
           <TouchableOpacity style={styles.actionItem}>
             <Image source={images.downloadIcon} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
           </TouchableOpacity>
         </ThemedView>
       </View>
-      <ThemedView style={{ marginTop: 10 }}>
+      <ThemedView darkColor="transparent" style={{ marginTop: 10 }}>
         <ThemeText>
           Lorem ipsum dolor sit amet consectetur adipisicing elit. Eligendi, repellendus?
         </ThemeText>
