@@ -19,12 +19,14 @@ import FloatingActionButton from '@/components/Social/FloatingActionButton';
 import { useTheme } from '@/contexts/themeContext';
 import PostDetailBottomsheet from '@/components/Social/PostDetailBottomsheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router';
 
 export default function SocialFeedScreen() {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [currentComments, setCurrentComments] = useState<any[]>([]);
   const [currentPostId, setCurrentPostId] = useState<number | null>(null);
   const { dark } = useTheme();
+  const route = useRouter();
 
   const handleCommentPress = (comments: any[], postId: number) => {
     setCurrentComments(comments);
@@ -52,11 +54,14 @@ export default function SocialFeedScreen() {
   };
 
   const handleStartLive = () => {
+    route.push('/goLive')
     console.log('Start live streaming');
   };
 
   const handleCreatePost = () => {
     console.log('Create new post');
+    // route.push('/create-post');
+
   };
   const [BottomIndex, setBottomIndex] = useState(-1);
   const [PostType, setPostType] = useState('ViewerPost');

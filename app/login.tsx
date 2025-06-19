@@ -12,7 +12,7 @@ import {
 import { useTheme } from "@/contexts/themeContext";
 import { COLORS, images } from "@/constants";
 import { Image } from "expo-image";
-import { validationSignInSchema } from "@/constants/validation"; // ✅ Your Yup validation schema
+import { validationSignInSchema } from "@/constants/validation";
 import { Formik } from "formik";
 import { Link,useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,9 +23,9 @@ import ThemedView from "@/components/ThemedView";
 const Login = () => {
   const route = useRouter();
   const { dark } = useTheme();
-  setTimeout(() => {
-    route.push('/(tabs)')
-  }, 1000);
+  // setTimeout(() => {
+  //   route.push('/(tabs)')
+  // }, 500);
   const handleLogin = (values: { email: string; password: string }) => {
     console.log("Login Data:", values);
     route.push('/(tabs)')
@@ -143,6 +143,9 @@ const Login = () => {
                     <Link href={'/register'} style={{ paddingVertical: 15, borderRadius: 10 }}>
                       <ThemeText style={styles.registerText}>Register</ThemeText>
                     </Link>
+                    <Pressable onPress={()=>route.push('/(tabs)')}>
+                      <ThemeText>Login now</ThemeText>
+                    </Pressable>
                   </ThemedView>
                 )}
               </Formik>

@@ -23,7 +23,7 @@ const ViewpostDetail = () => {
         },
         {
             icon: images.reportIcons,
-            title: 'Repost post',
+            title: 'Report post',
             handleFunction: handleClick,
         },
     ]

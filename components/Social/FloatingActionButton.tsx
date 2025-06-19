@@ -91,7 +91,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
 
       <View style={styles.container}>
         {/* Live Button */}
-        <Animated.View style={[styles.menuButton, liveButtonStyle,{marginBottom:0}]}>
+        <Animated.View style={[styles.menuButton, liveButtonStyle,{marginBottom:0},{right:15}]}>
           <TouchableOpacity style={styles.button} onPress={onStartLive}>
             <Text style={styles.buttonText}>Start Live</Text>
             <View style={[styles.ImagesButton, styles.liveButton]}>
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   },
   container: {
     position: 'absolute',
-    bottom: 80, // Ensure it is visible
+    bottom: 90, // Ensure it is visible
     right: 20, // Ensure it is visible
     alignItems: 'center',
     zIndex: 10, // Ensure it is above other components
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   menuButton: {
     position: 'absolute',
     bottom: 0,
-    right: 36,
+    right: 30,
   },
   button: {
     flexDirection: 'row',
@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
   },
   liveButton: {
     backgroundColor: '#6c5ce7',
+    // right:0,
   },
   postButton: {
     backgroundColor: '#ff00ff',

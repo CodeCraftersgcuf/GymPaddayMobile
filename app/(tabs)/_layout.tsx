@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { Image, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function TabLayout() {
   const { dark } = useTheme();
@@ -20,18 +21,24 @@ export default function TabLayout() {
           tabBarStyle: {
             ...styles.tabBar,
             backgroundColor: tabBackgroundColor,
-            position: 'absolute', 
-            bottom: 10, 
-            left: 20, 
-            right: 20, 
-            borderRadius: 15, 
-            elevation: 5, 
-            shadowColor: '#000', 
+            position: 'absolute',
+            bottom: 20,
+            alignItems: 'center',
+            left: 20,
+            right: 20,
+            borderRadius: 15,
+            elevation: 5,
+            shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.2,
             shadowRadius: 4,
           },
-          tabBarLabelStyle: styles.tabBarLabel,
+          tabBarIconStyle:{
+            width: 20,
+            height: 20,
+            marginTop: 5,
+          },
+          tabBarLabelStyle: [styles.tabBarLabel , {color:isDarkMode ? 'white' : 'black'}],
           headerShown: false,
         }}
       >
@@ -45,15 +52,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="connect"
-          options={{
-            title: 'Connect',
-            tabBarIcon: ({ color, size }) => (
-              <Image source={images.ConnectIcons} style={{ width: size, height: size, tintColor: color }} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="market"
           options={{
             title: 'Market',
@@ -63,11 +61,27 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="gymHub"
+          name="live"
           options={{
-            title: 'Gym Hub',
+            tabBarLabelStyle: { display: 'none' },
             tabBarIcon: ({ color, size }) => (
-              <Image source={images.gymIcon} style={{ width: size, height: size, tintColor: color }} />
+              <LinearGradient
+                colors={["#FF0000", "#0000FF"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.liveIconContainer}
+              >
+                <Image source={images.CreateVideo} style={{ width: size, height: size, tintColor: 'white' }} />
+              </LinearGradient>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="chat"
+          options={{
+            title: 'Messages',
+            tabBarIcon: ({ color, size }) => (
+              <Image source={images.notifcationIcon} style={{ width: size, height: size, tintColor: color }} />
             ),
           }}
         />
@@ -88,18 +102,36 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabContainerWrapper: {
     flex: 1,
-    borderWidth: 0,
+    // borderWidth: 0,
+    // paddingBottom:40
   },
   tabBar: {
-    borderWidth: 0,
+    // borderWidth: 0,
     height: 60,
-    paddingHorizontal: 10,
+    // padding: 10,
     borderRadius: 10,
-    marginHorizontal:10
+    marginHorizontal: 15,
   },
   tabBarLabel: {
     fontSize: 12,
     marginTop: 1,
     fontWeight: '500',
+    zIndex:100
   },
+  liveIconContainer: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#FF759E',
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // position: 'absolute',
+    // top: '50%',
+    transform: [{ translateY: 10 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  }
 });

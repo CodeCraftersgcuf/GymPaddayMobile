@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "terescrow-frontend",
-    "slug": "terescrow-frontend",
+    "slug": "gym",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.hamzabilal.gym"
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +38,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4ebd22be-d38e-4d78-a7a0-9bfe0127d4f4"
+      }
+    },
+    "owner": "hamzabilal"
   }
 }
