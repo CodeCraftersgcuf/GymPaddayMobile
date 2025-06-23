@@ -15,6 +15,9 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { useRouter } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import MarketBottom from '@/components/Social/Boost/marketBottom';
+import BoostAdModal from '@/components/Social/Boost/BoostAdModal';
 
 type StatusType = 'Pending' | 'Running' | 'Closed';
 
@@ -38,7 +41,16 @@ interface Theme {
 const ProfileScreen: React.FC = () => {
     //   const [dark, setDark] = useState<boolean>(true);
     const { dark } = useTheme();
+    const [modalVisible, setModalVisible] = useState(false);
+
+    const handleOpenModal = () => setModalVisible(true);
+    const handleCloseModal = () => setModalVisible(false);
     const router = useRouter();
+    const [BottomIndex, setBottomIndex] = useState(-1);
+    const handleMenu = (userId: any, postId: any) => {
+        setBottomIndex(1);
+        console.log('click bottom sheet', userId, postId);
+    }
     const [activeFilter, setActiveFilter] = useState<string>('All');
     const filters: string[] = ['All', 'Pending', 'Running', 'Closed'];
     const items: Item[] = [
@@ -131,17 +143,17 @@ const ProfileScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.actionButtons}>
-                    <View style={{flexDirection:'row',gap:5,alignItems:'center'}}>
+                    <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
                         <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                             <MaterialIcons name="edit" size={15} color={theme.textSecondary} />
                         </TouchableOpacity>
-    
+
                         {item.status === 'Closed' && (
                             <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                                 <Ionicons name="play" size={15} color={theme.textSecondary} />
                             </TouchableOpacity>
                         )}
-    
+
                         {item.status === 'Running' && (
                             <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                                 <Ionicons name="stop" size={15} color={theme.textSecondary} />
@@ -158,67 +170,80 @@ const ProfileScreen: React.FC = () => {
     );
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+                <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={()=>router.back()}>
-                    <Ionicons name="chevron-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Adewale's Profile</Text>
-                <TouchableOpacity>
-                    <Ionicons name="ellipsis-vertical" size={24} color={theme.text} />
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Profile Section */}
-                <View style={styles.profileSection}>
-                    <Image
-                        source={{
-                            uri: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
-                        }}
-                        style={styles.profileImage}
-                    />
-                    <Text style={[styles.profileName, { color: theme.text }]}>Adewale</Text>
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Ionicons name="chevron-back" size={24} color={theme.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Adewale's Profile</Text>
+                    <TouchableOpacity onPress={() => handleMenu(1, 1)}>
+                        <Ionicons name="ellipsis-vertical" size={24} color={theme.text} />
+                    </TouchableOpacity>
                 </View>
+                <BoostAdModal
+                    visible={modalVisible}
+                    onClose={handleCloseModal}
+                    dark={dark}
+                />
 
-                {/* Filter Tabs */}
-                <View style={styles.filterContainer}>
-                    {filters.map((filter) => (
-                        <TouchableOpacity
-                            key={filter}
-                            style={[
-                                styles.filterTab,
-                                activeFilter === filter && styles.activeFilterTab,
-                            ]}
-                            onPress={() => setActiveFilter(filter)}
-                        >
-                            <Text
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    {/* Profile Section */}
+                    <View style={styles.profileSection}>
+                        <Image
+                            source={{
+                                uri: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
+                            }}
+                            style={styles.profileImage}
+                        />
+                        <Text style={[styles.profileName, { color: theme.text }]}>Adewale</Text>
+                    </View>
+
+                    {/* Filter Tabs */}
+                    <View style={styles.filterContainer}>
+                        {filters.map((filter) => (
+                            <TouchableOpacity
+                                key={filter}
                                 style={[
-                                    styles.filterText,
-                                    { color: activeFilter === filter ? '#FF6B6B' : theme.textSecondary },
+                                    styles.filterTab,
+                                    activeFilter === filter && styles.activeFilterTab,
                                 ]}
+                                onPress={() => setActiveFilter(filter)}
                             >
-                                {filter}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-                <View style={styles.itemsContainer}>
-                    <FlatList
-                        data={filteredItems}
-                        renderItem={renderItem}
-                        keyExtractor={(item) => item.id.toString()}
-                        numColumns={2}
-                        scrollEnabled={false}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 16 }}
-                    />
-                </View>
-            </ScrollView>
-        </SafeAreaView>
+                                <Text
+                                    style={[
+                                        styles.filterText,
+                                        { color: activeFilter === filter ? '#FF6B6B' : theme.textSecondary },
+                                    ]}
+                                >
+                                    {filter}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <View style={styles.itemsContainer}>
+                        <FlatList
+                            data={filteredItems}
+                            renderItem={renderItem}
+                            keyExtractor={(item) => item.id.toString()}
+                            numColumns={2}
+                            scrollEnabled={false}
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ gap: 16 }}
+                        />
+                    </View>
+                </ScrollView>
+                
+            </SafeAreaView>
+            <MarketBottom
+                BottomIndex={BottomIndex}
+                setbottomIndex={setBottomIndex}
+                onBoost={handleOpenModal} // pass handler as prop
+            />
+        </GestureHandlerRootView>
     );
 };
 
@@ -275,8 +300,8 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     itemCard: {
-        flex:1,
-        marginHorizontal:3,
+        flex: 1,
+        marginHorizontal: 3,
         borderRadius: 12,
         marginBottom: 16,
         overflow: 'hidden',

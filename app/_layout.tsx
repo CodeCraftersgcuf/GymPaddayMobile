@@ -57,6 +57,10 @@ export default function RootLayout() {
           <Stack.Screen name="UserListing" options={{ headerShown: false }} />
           <Stack.Screen name="UserProfile" options={{ headerShown: false }} />
           <Stack.Screen name="goLive" options={{ headerShown: false }} />
+          <Stack.Screen name="BoostPostScreen" options={{ headerShown: false }} />
+          <Stack.Screen name="BoostPostScreen_review" options={{ headerShown: false }} />
+          <Stack.Screen name="BoostPostScreen_Final" options={{ headerShown: false }} />
+          <Stack.Screen name="BoostPostScreen_audience" options={{ headerShown: false }} />
           {/* <Stack.Screen name="create-post" options={{ headerShown: false }} /> */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>

@@ -27,6 +27,7 @@ export default function DurationSelector({
 
   return (
     <Modal
+    // style={styles.modal}
   visible={visible}
   onRequestClose={onClose}
   transparent={true} // Ensure the modal overlays the screen
@@ -75,7 +76,7 @@ export default function DurationSelector({
 const styles = StyleSheet.create({
   modal: {
     flex:1,
-    // justifyContent: 'flex-end',
+    justifyContent: 'flex-end',
     margin: 0,
   },
   container: {
