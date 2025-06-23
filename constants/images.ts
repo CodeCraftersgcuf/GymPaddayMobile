@@ -28,6 +28,7 @@ const images = {
   transactions: require('../assets/icons/more/Receipt.png'),
   topUp : require('../assets/icons/more/PaperPlane.png'),
   withdraw : require('../assets/icons/more/Vector.png'),
+  boostImage: require('../assets/images/boost.png'),
 };
 
 export default images;

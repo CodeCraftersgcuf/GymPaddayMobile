@@ -61,13 +61,13 @@ export default function SocialFeedScreen() {
   const handleCreatePost = () => {
     console.log('Create new post');
     // route.push('/create-post');
-
   };
   const [BottomIndex, setBottomIndex] = useState(-1);
   const [PostType, setPostType] = useState('ViewerPost');
   const handleMenu = (userId: any, postId: any) => {
     setPostType(userId == 100 ? 'userpost' : 'ViewerPost');
     setBottomIndex(1);
+    console.log('click bottom sheet', userId, postId);
   }
 
   return (

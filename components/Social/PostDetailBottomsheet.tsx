@@ -26,6 +26,7 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
             ref={bottomSheetRef}
             snapPoints={['34%']}
             index={BottomIndex}
+            onClose={() => setbottomIndex(-1)}
             onChange={handleSheetChanges}
             enablePanDownToClose
             backgroundStyle={{
@@ -59,7 +60,7 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
                     backgroundColor: dark ? "#252525" : 'white',
                 }}
             >
-                {type == 'userpost' ?
+                {type != 'userpost' ?
                     <UserPostDetail /> :
                     <ViewpostDetail />
                 }
