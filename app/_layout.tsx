@@ -32,6 +32,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <MessageProvider>
+        <StatusBar style={dark ? 'dark' : 'light'} />
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -61,10 +62,11 @@ export default function RootLayout() {
           <Stack.Screen name="BoostPostScreen_review" options={{ headerShown: false }} />
           <Stack.Screen name="BoostPostScreen_Final" options={{ headerShown: false }} />
           <Stack.Screen name="BoostPostScreen_audience" options={{ headerShown: false }} />
+          <Stack.Screen name="userLiveViewMain" options={{ headerShown: false }} />
+          <Stack.Screen name="MediaViewer" options={{ headerShown: false }} />
           {/* <Stack.Screen name="create-post" options={{ headerShown: false }} /> */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
-        <StatusBar style={dark ? 'dark' : 'light'} />
       </MessageProvider>
     </ThemeProvider>
   );
