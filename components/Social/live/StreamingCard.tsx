@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 
 interface StreamingCardProps {
@@ -8,15 +9,18 @@ interface StreamingCardProps {
   selectedDuration: string;
   onDurationSelect: () => void;
   onGoLive: () => void;
+  onBuyMinutes: () => void;
 }
 
 export default function StreamingCard({ 
   dark, 
   selectedDuration, 
   onDurationSelect, 
-  onGoLive 
+  onGoLive ,
+  onBuyMinutes
 }: StreamingCardProps) {
-  const hasMinFollowers = false; // Set to true if user has 500+ followers
+  const router = useRouter();
+  const hasMinFollowers = true; // Set to true if user has 500+ followers
 
   return (
     <View style={styles.container}>
@@ -53,7 +57,7 @@ export default function StreamingCard({
         
         <View style={styles.priceContainer}>
           <Text style={styles.priceText}>30GP/30 Minute</Text>
-          <TouchableOpacity style={styles.buyButton}>
+          <TouchableOpacity style={styles.buyButton} onPress={onBuyMinutes}>
             <Text style={styles.buyButtonText}>Buy Now</Text>
           </TouchableOpacity>
         </View>
@@ -74,7 +78,7 @@ export default function StreamingCard({
         onPress={onDurationSelect}
       >
         <Text style={[styles.durationSelectorText, { color: dark ? '#FFFFFF' : '#666666' }]}>
-          Select Duration
+          { selectedDuration ?? "Select Duration"}
         </Text>
         <MaterialIcons 
           name="keyboard-arrow-down" 
@@ -96,6 +100,19 @@ export default function StreamingCard({
         disabled={!hasMinFollowers}
       >
         <Text style={styles.goLiveButtonText}>Go Live</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[
+          styles.goLiveButton, 
+          { 
+            backgroundColor: hasMinFollowers ? '#FF0000' : '#CCCCCC',
+            opacity: hasMinFollowers ? 1 : 0.6 
+          }
+        ]}
+        onPress={()=> router.push('/userLiveViewMain')}
+        disabled={!hasMinFollowers}
+      >
+        <Text style={styles.goLiveButtonText}>Go Live User View</Text>
       </TouchableOpacity>
     </View>
   );

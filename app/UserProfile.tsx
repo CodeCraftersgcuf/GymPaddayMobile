@@ -122,6 +122,16 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleMediaPress = (index: number) => {
+    router.push({
+      pathname: '/MediaViewer',
+      params: {
+        index: index.toString(),
+        type: activeTab,
+      },
+    });
+  };
+
   const theme = {
     background: dark ? '#000000' : '#ffffff',
     secondary: dark ? '#181818' : '#f5f5f5',
@@ -133,7 +143,12 @@ export default function ProfileScreen() {
   const renderPostGrid = () => (
     <View style={styles.gridContainer}>
       {postImages.map((image, index) => (
-        <TouchableOpacity key={index} style={styles.gridItem}>
+        <TouchableOpacity 
+          key={index} 
+          style={styles.gridItem}
+          onPress={() => handleMediaPress(index)}
+          activeOpacity={0.8}
+        >
           <Image source={{ uri: image }} style={styles.gridImage} />
           {activeTab === 'videos' && (
             <View style={styles.playButton}>

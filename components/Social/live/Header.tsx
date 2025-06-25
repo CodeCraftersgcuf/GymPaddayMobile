@@ -22,19 +22,20 @@ export default function Header({ dark, onThreeDotsPress }: HeaderProps) {
         Live Streaming
       </Text>
       
-      <TouchableOpacity onPress={onThreeDotsPress}>
+      {/* <TouchableOpacity onPress={onThreeDotsPress}>
         <MaterialIcons 
           name="more-vert" 
           size={24} 
           color={dark ? '#FFFFFF' : '#000000'} 
         />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -43,7 +44,12 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   title: {
+    alignSelf:'center',
     fontSize: 18,
     fontWeight: '600',
+    position: 'absolute',
+    left: "50%",
+    transform: [{ translateX: -50 }], 
+    textAlign: 'center',
   },
 });

@@ -23,6 +23,7 @@ export default function SummaryModal({
       visible={visible}
       onRequestClose={onClose}
       style={styles.modal}
+      transparent={true}
     >
       <View style={styles.overlay}>
         <View style={[styles.container, { backgroundColor: dark ? '#181818' : '#FFFFFF' }]}>
@@ -72,7 +73,7 @@ export default function SummaryModal({
           </View>
         </View>
         
-        <LinearGradient
+        {/* <LinearGradient
           colors={['#8B0000', '#4B0082']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
@@ -82,7 +83,7 @@ export default function SummaryModal({
             Live streaming will incure a cost of
           </Text>
           <Text style={styles.costBannerAmount}>100 GC/Hour</Text>
-        </LinearGradient>
+        </LinearGradient> */}
       </View>
     </Modal>
   );
@@ -90,14 +91,21 @@ export default function SummaryModal({
 
 const styles = StyleSheet.create({
   modal: {
+    flex:1,
     justifyContent: 'center',
     alignItems: 'center',
     margin: 20,
+    marginVertical: 20,
   },
   overlay: {
     width: '100%',
+    flex:1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   container: {
+    width:"100%",
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
@@ -144,8 +152,8 @@ const styles = StyleSheet.create({
   proceedButton: {
     flex: 1,
     backgroundColor: '#FF0000',
-    borderRadius: 25,
-    paddingVertical: 15,
+    borderRadius: 15,
+    paddingVertical: 8,
     alignItems: 'center',
   },
   proceedButtonText: {
@@ -155,8 +163,8 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     flex: 1,
-    borderRadius: 25,
-    paddingVertical: 15,
+    borderRadius: 15,
+    paddingVertical: 8,
     alignItems: 'center',
   },
   closeButtonText: {

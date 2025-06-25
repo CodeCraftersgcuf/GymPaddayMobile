@@ -27,59 +27,62 @@ export default function DurationSelector({
 
   return (
     <Modal
-    // style={styles.modal}
-  visible={visible}
-  onRequestClose={onClose}
-  transparent={true} // Ensure the modal overlays the screen
-  animationType="slide" // Add animation for better visibility
->
-      <View style={[styles.container, { backgroundColor: dark ? '#181818' : '#FFFFFF' }]}>
-        <Text style={[styles.title, { color: dark ? '#FFFFFF' : '#000000' }]}>
-          Duration
-        </Text>
-        
-        <View style={styles.optionsContainer}>
-          {durations.map((duration) => (
-            <TouchableOpacity
-              key={duration}
-              style={styles.option}
-              onPress={() => setTempSelected(duration)}
-            >
-              <Text style={[styles.optionText, { color: dark ? '#FFFFFF' : '#000000' }]}>
-                {duration}
-              </Text>
-              <View style={styles.radioContainer}>
-                {tempSelected === duration ? (
-                  <View style={styles.radioSelected} />
-                ) : (
-                  <View style={[styles.radioUnselected, { borderColor: dark ? '#666666' : '#CCCCCC' }]} />
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.customTimeContainer}>
-          <Text style={[styles.customTimeText, { color: dark ? '#AAAAAA' : '#666666' }]}>
-            Hour                                    Min
+      visible={visible}
+      onRequestClose={onClose}
+      transparent={true}
+      animationType="slide"
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.container, { backgroundColor: dark ? '#181818' : '#FFFFFF' }]}>
+          <Text style={[styles.title, { color: dark ? '#FFFFFF' : '#000000' }]}>
+            Duration
           </Text>
+          
+          <View style={styles.optionsContainer}>
+            {durations.map((duration) => (
+              <TouchableOpacity
+                key={duration}
+                style={styles.option}
+                onPress={() => setTempSelected(duration)}
+              >
+                <Text style={[styles.optionText, { color: dark ? '#FFFFFF' : '#000000' }]}>
+                  {duration}
+                </Text>
+                <View style={styles.radioContainer}>
+                  {tempSelected === duration ? (
+                    <View style={styles.radioSelected} />
+                  ) : (
+                    <View style={[styles.radioUnselected, { borderColor: dark ? '#666666' : '#CCCCCC' }]} />
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+  
+          <View style={styles.customTimeContainer}>
+            <Text style={[styles.customTimeText, { color: dark ? '#AAAAAA' : '#666666' }]}>
+              Hour                                    Min
+            </Text>
+          </View>
+  
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Save</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save</Text>
-        </TouchableOpacity>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modal: {
-    flex:1,
-    justifyContent: 'flex-end',
-    margin: 0,
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end', // or 'center' for a centered modal
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   container: {
+    width: '100%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
