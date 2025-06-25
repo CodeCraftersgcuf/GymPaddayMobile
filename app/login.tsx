@@ -14,22 +14,62 @@ import { COLORS, images } from "@/constants";
 import { Image } from "expo-image";
 import { validationSignInSchema } from "@/constants/validation";
 import { Formik } from "formik";
-import { Link,useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import FloatingLabelInput from "@/components/login/FloatingLabelInput";
 import ThemeText from "@/components/ThemedText";
 import ThemedView from "@/components/ThemedView";
 
+// ✅ Import toast & mutation
+import Toast from "react-native-toast-message";
+import { useMutation } from "@tanstack/react-query";
+import { loginUser } from "@/utils/mutations/auth";
+
+import * as SecureStore from 'expo-secure-store';
+
 const Login = () => {
   const route = useRouter();
   const { dark } = useTheme();
-  // setTimeout(() => {
-  //   route.push('/(tabs)')
-  // }, 500);
-  const handleLogin = (values: { email: string; password: string }) => {
-    console.log("Login Data:", values);
-    route.push('/(tabs)')
-  };
+
+ const mutation = useMutation({
+  mutationFn: loginUser,
+  onSuccess: async (data) => {
+    console.log("🎉 Login Success:", data);
+
+    if (data?.access_token) {
+      // ✅ Save token securely
+      await SecureStore.setItemAsync("auth_token", data.access_token);
+      await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
+
+      Toast.show({
+        type: "success",
+        text1: "Login Successful",
+        text2: `Welcome back, ${data.user?.fullname || 'user'}!`,
+      });
+
+      route.push("/(tabs)");
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Login Failed",
+        text2: "Invalid response from server.",
+      });
+    }
+  },
+  onError: (error: any) => {
+    console.error("❌ Login Error:", error);
+    Toast.show({
+      type: "error",
+      text1: "Login Failed",
+      text2: error?.message || "Something went wrong",
+    });
+  },
+});
+
+const handleLogin = (values: { email: string; password: string }) => {
+  console.log("Login Data:", values);
+  mutation.mutate({ data: values });
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -47,7 +87,7 @@ const Login = () => {
             borderRadius: 20,
             padding: 10,
             elevation: 5,
-            shadowColor: dark ? 'white' : 'black',
+            shadowColor: dark ? "white" : "black",
             transform: [{ translateY: -50 }],
           }}
         >
@@ -72,7 +112,10 @@ const Login = () => {
             />
           </ThemedView>
 
-          <ThemedView darkColor="transparent" style={{ transform: [{ translateY: -40 }] }}>
+          <ThemedView
+            darkColor="transparent"
+            style={{ transform: [{ translateY: -40 }] }}
+          >
             <ThemeText
               style={{
                 fontSize: 24,
@@ -114,7 +157,9 @@ const Login = () => {
                       value={values.email}
                       onChangeText={handleChange("email")}
                       onBlur={handleBlur("email")}
-                      error={touched.email && errors.email ? errors.email : ""}
+                      error={
+                        touched.email && errors.email ? errors.email : ""
+                      }
                       keyboardType="email-address"
                       autoComplete="off"
                     />
@@ -125,27 +170,52 @@ const Login = () => {
                       value={values.password}
                       onChangeText={handleChange("password")}
                       onBlur={handleBlur("password")}
-                      error={touched.password && errors.password ? errors.password : ''}
+                      error={
+                        touched.password && errors.password
+                          ? errors.password
+                          : ""
+                      }
                       isPassword={true}
                     />
 
                     {/* Forgot Password */}
-                    <TouchableOpacity onPress={()=> route.push('/forgetpassword') }>
-                      <ThemeText style={styles.forgotPassword}>Forgot Password?</ThemeText>
+                    <TouchableOpacity onPress={() => route.push("/forgetpassword")}>
+                      <ThemeText style={styles.forgotPassword}>
+                        Forgot Password?
+                      </ThemeText>
                     </TouchableOpacity>
 
                     {/* Login Button */}
-                    <Pressable onPress={()=>handleSubmit()} style={{ backgroundColor: '#FF0000', paddingVertical: 15, borderRadius: 10 }}>
-                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: 500, fontSize: 16 }}>Login</ThemeText>
+                    <Pressable
+                      onPress={() => handleSubmit()}
+                      style={{
+                        backgroundColor: "#FF0000",
+                        paddingVertical: 15,
+                        borderRadius: 10,
+                      }}
+                    >
+                      <ThemeText
+                        style={{
+                          textAlign: "center",
+                          color: "white",
+                          fontWeight: "500",
+                          fontSize: 16,
+                        }}
+                      >
+                        {mutation.isPending ? "Logging in..." : "Login"}
+                      </ThemeText>
                     </Pressable>
 
                     {/* Register Redirect */}
-                    <Link href={'/register'} style={{ paddingVertical: 15, borderRadius: 10 }}>
+                    <Link
+                      href={"/register"}
+                      style={{ paddingVertical: 15, borderRadius: 10 }}
+                    >
                       <ThemeText style={styles.registerText}>Register</ThemeText>
                     </Link>
-                    <Pressable onPress={()=>route.push('/(tabs)')}>
+                    {/* <Pressable onPress={() => route.push("/(tabs)")}>
                       <ThemeText>Login now</ThemeText>
-                    </Pressable>
+                    </Pressable> */}
                   </ThemedView>
                 )}
               </Formik>
@@ -154,10 +224,12 @@ const Login = () => {
         </ThemedView>
 
         <ThemedView style={{ flex: 1, justifyContent: "flex-end" }}>
-          <ThemeText style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}>
+          <ThemeText
+            style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}
+          >
             By continuing you agree to gym paddy’s{" "}
-            <ThemeText style={{color:'red'}}>terms of use</ThemeText> and{" "}
-            <ThemeText style={{color:'red'}}>privacy policy</ThemeText>.
+            <ThemeText style={{ color: "red" }}>terms of use</ThemeText> and{" "}
+            <ThemeText style={{ color: "red" }}>privacy policy</ThemeText>.
           </ThemeText>
         </ThemedView>
       </ThemedView>
@@ -171,7 +243,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginTop: 20,
-    paddingHorizontal: 15
+    paddingHorizontal: 15,
   },
   forgotPassword: {
     color: "#EF4444",
