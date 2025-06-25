@@ -16,7 +16,6 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import MarketBottom from '@/components/Social/Boost/marketBottom';
 import BoostAdModal from '@/components/Social/Boost/BoostAdModal';
 
 type StatusType = 'Pending' | 'Running' | 'Closed';
