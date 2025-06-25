@@ -70,9 +70,7 @@ export const AdCard: React.FC<AdCardProps> = ({
       ]}
       activeOpacity={0.7}
     >
-      <View style={styles.imageContainer}>
         <Image source={{ uri: ad.image }} style={styles.image} />
-      </View>
 
       <View style={styles.content}>
         <View style={styles.titleSection}>
@@ -164,6 +162,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     overflow: 'hidden',
+    width:'48%',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -179,7 +178,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: '100%',
+    height: 100,
     resizeMode: 'cover',
   },
   content: {
@@ -189,12 +188,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    fontSize: 16,
+    fontSize: 10,
     fontWeight: '500',
     marginBottom: 4,
   },
   price: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   statusRow: {
@@ -209,12 +208,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
     textTransform: 'capitalize',
   },
   timestamp: {
-    fontSize: 12,
+    fontSize: 10,
   },
   actions: {
     flexDirection: 'row',

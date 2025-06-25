@@ -78,13 +78,13 @@ export default function LiveStreamingView({ dark, onEndLive, onThreeDotsPress }:
           Live Streaming
         </Text>
         
-        <TouchableOpacity onPress={onThreeDotsPress}>
+        {/* <TouchableOpacity onPress={onThreeDotsPress}>
           <MaterialIcons 
             name="more-vert" 
             size={24} 
             color={dark ? '#FFFFFF' : '#000000'} 
           />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Live Stream View */}
@@ -150,9 +150,10 @@ export default function LiveStreamingView({ dark, onEndLive, onThreeDotsPress }:
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 50,
+    // paddingTop: 50,
   },
   header: {
+    position:'relative',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -160,6 +161,9 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   title: {
+    position:'absolute',
+    left: "50%",
+    transform: [{ translateX: -30 }],
     fontSize: 18,
     fontWeight: '600',
   },
@@ -261,7 +265,7 @@ const styles = StyleSheet.create({
   endLiveButton: {
     flex: 1,
     backgroundColor: '#FF0000',
-    borderRadius: 25,
+    borderRadius: 10,
     paddingVertical: 15,
     alignItems: 'center',
   },
@@ -272,7 +276,7 @@ const styles = StyleSheet.create({
   },
   viewAudienceButton: {
     flex: 1,
-    borderRadius: 25,
+    borderRadius: 10,
     paddingVertical: 15,
     alignItems: 'center',
     borderWidth: 1,
