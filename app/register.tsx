@@ -21,6 +21,14 @@ import { images } from "@/constants";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 
+//Code Related to the integration
+import { useMutation } from "@tanstack/react-query";
+import { registerUser } from "@/utils/mutations/auth";
+import Toast from "react-native-toast-message";
+import { showApiErrorToast } from "@/utils/showApiErrorToast";
+
+
+
 const validationSchema = Yup.object().shape({
   username: Yup.string().required("Username is required"),
   fullName: Yup.string().required("Full name is required"),
@@ -49,7 +57,20 @@ export default function Register() {
 
   const handleRegister = (values: any) => {
     console.log("Register Data:", values);
+    mutation.mutate({
+      data: {
+        username: values.username,
+        fullname: values.fullName,
+        email: values.email,
+        phone: values.phone,
+        age: parseInt(values.age),
+        gender: values.gender.toLowerCase(), // fix here 👈
+        password: values.password,
+        password_confirmation: values.password,
+      },
+    });
   };
+
 
   const handleSheetChanges = useCallback((index: number) => {
     console.log('handleSheetChanges', index);
@@ -159,6 +180,19 @@ export default function Register() {
       fontSize: 16,
     },
   });
+
+  const mutation = useMutation({
+    mutationFn: registerUser,
+    onSuccess: () => {
+      Toast.show({
+        type: 'success',
+        text1: 'Registered successfully!',
+      });
+      router.push("/login");
+    },
+    onError: (error) => showApiErrorToast(error, "Registration failed"),
+  });
+
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

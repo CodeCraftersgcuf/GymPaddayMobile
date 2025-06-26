@@ -17,14 +17,49 @@ import FloatingLabelInput from "@/components/login/FloatingLabelInput";
 import ThemeText from "@/components/ThemedText";
 import ThemedView from "@/components/ThemedView";
 
+
+//Code Related to the integration
+import { useMutation } from "@tanstack/react-query";
+import { verifyOtp } from "@/utils/mutations/auth";
+import Toast from "react-native-toast-message";
+import { useLocalSearchParams } from 'expo-router';
+
+
 const codeverification = () => {
   const route = useRouter();
   const { dark } = useTheme();
+  const { email } = useLocalSearchParams();
 
-  const handleLogin = (values: { code: string;}) => {
-    console.log("Login Data:", values);
-    route.push('/resetpassword');
+  console.log("Email from params:", email); // Debugging line to check if email is received correctly
+
+  const mutation = useMutation({
+    mutationFn: verifyOtp,
+    onSuccess: (_data, variables) => {
+      Toast.show({ type: 'success', text1: 'OTP verified!' });
+      route.push({
+        pathname: '/resetpassword',
+        params: {
+          email: email as string,
+          otp: variables.data.otp, // or variables.data.otp depending on your API naming
+        },
+      });
+    },
+    onError: (error: any) => {
+      Toast.show({ type: 'error', text1: error.message || 'Invalid code' });
+      
+    },
+  });
+
+
+  const handleLogin = (values: { code: string }) => {
+    mutation.mutate({
+      data: {
+        email: email as string,
+        otp: values.code, // make sure your API expects `token` not `otp`
+      },
+    });
   };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -115,9 +150,21 @@ const codeverification = () => {
                     />
 
                     {/* Login Button */}
-                    <Pressable onPress={() => handleSubmit()} style={{ backgroundColor: '#FF0000', paddingVertical: 15, borderRadius: 10 }}>
-                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: 500, fontSize: 16 }}>Proceed</ThemeText>
+                    <Pressable
+                      onPress={() => handleSubmit()}
+                      disabled={mutation.isPending}
+                      style={{
+                        backgroundColor: mutation.isPending ? '#FF0000AA' : '#FF0000',
+                        paddingVertical: 15,
+                        borderRadius: 10,
+                        opacity: mutation.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: '500', fontSize: 16 }}>
+                        {mutation.isPending ? 'Processing...' : 'Proceed'}
+                      </ThemeText>
                     </Pressable>
+
                   </ThemedView>
                 )}
               </Formik>

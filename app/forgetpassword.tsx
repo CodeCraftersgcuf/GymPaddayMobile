@@ -20,13 +20,34 @@ import FloatingLabelInput from "@/components/login/FloatingLabelInput";
 import ThemeText from "@/components/ThemedText";
 import ThemedView from "@/components/ThemedView";
 
+//Code Related to the integration
+import { useMutation } from "@tanstack/react-query";
+import { forgotPassword } from "@/utils/mutations/auth";
+import Toast from "react-native-toast-message";
+
+
+
 const forgetpassword = () => {
   const route = useRouter();
   const { dark } = useTheme();
 
-  const handleLogin = (values: { email: string;}) => {
-    console.log("Login Data:", values);
-    route.push('/codeverification');
+  const mutation = useMutation({
+    mutationFn: forgotPassword,
+    onSuccess: (res, variables) => {
+      const email = variables.data.email; // Access email from variables
+      Toast.show({ type: 'success', text1: res.message });
+      route.push({ pathname: '/codeverification', params: { email } });
+    },
+    onError: (error: any) => {
+      Toast.show({ type: 'error', text1: error.message || 'Failed to send reset link' });
+   
+    }
+  });
+
+
+  const handleLogin = (values: { email: string }) => {
+    console.log("Forgot password data:", values);
+    mutation.mutate({ data: { email: values.email } });
   };
 
   return (
@@ -118,9 +139,21 @@ const forgetpassword = () => {
                     />
 
                     {/* Login Button */}
-                    <Pressable onPress={() => handleSubmit()} style={{ backgroundColor: '#FF0000', paddingVertical: 15, borderRadius: 10 }}>
-                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: 500, fontSize: 16 }}>Proceed</ThemeText>
+                    <Pressable
+                      onPress={() => handleSubmit()}
+                      disabled={mutation.isPending}
+                      style={{
+                        backgroundColor: mutation.isPending ? '#FF0000AA' : '#FF0000',
+                        paddingVertical: 15,
+                        borderRadius: 10,
+                        opacity: mutation.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: '500', fontSize: 16 }}>
+                        {mutation.isPending ? 'Processing...' : 'Proceed'}
+                      </ThemeText>
                     </Pressable>
+
                   </ThemedView>
                 )}
               </Formik>

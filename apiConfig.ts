@@ -6,6 +6,7 @@ const API_ENDPOINTS = {
     Register: API_DOMAIN + "/auth/register",
     ForgotPassword: API_DOMAIN + "/auth/forgot-password",
     VerifyOtp: API_DOMAIN + "/auth/verify-otp",
+    ResetPassword: "/auth/reset-password", // 👈 Add this
   },
   PERSONAL_ACCESS_TOKENS: {
     List: API_DOMAIN + "/personal-access-tokens",
