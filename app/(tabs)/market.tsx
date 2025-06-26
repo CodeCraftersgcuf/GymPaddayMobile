@@ -76,12 +76,12 @@ export default function MarketplaceScreen() {
           {item.title}
         </Text>
         <Text style={styles.listingPrice}>{item.price}</Text>
-        <TouchableOpacity onPress={()=> router.push('/marketProfile')} style={styles.sellerInfo}>
+        <TouchableOpacity onPress={() => router.push('/marketProfile')} style={styles.sellerInfo}>
           <Image
             source={{ uri: 'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg' }}
             style={styles.sellerAvatar}
           />
-          <View style={{flexDirection:'column'}}>
+          <View style={{ flexDirection: 'column' }}>
             <Text style={[styles.sellerName, { color: theme.textSecondary }]}>
               {item.seller}
             </Text>
@@ -196,7 +196,7 @@ export default function MarketplaceScreen() {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} onPress={()=> router.push('/addListing')}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/addListing')}>
         <AntDesign name="plus" size={28} color="#FFFFFF" />
       </TouchableOpacity>
     </SafeAreaView>
@@ -206,6 +206,7 @@ export default function MarketplaceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: 30,
   },
   header: {
     paddingHorizontal: 20,
@@ -319,8 +320,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     // width: 200,
-    marginHorizontal:3,
-    flex:1,
+    marginHorizontal: 3,
+    flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

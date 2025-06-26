@@ -58,6 +58,7 @@ export default function RootLayout() {
             <Stack.Screen name="adsProfile" options={{ headerShown: false }} />
             <Stack.Screen name="adsDetail" options={{ headerShown: false }} />
             <Stack.Screen name="bussinessForm" options={{ headerShown: false }} />
+            <Stack.Screen name="createpost" options={{ headerShown: false }} />
             <Stack.Screen name="bussinessRegister" options={{ headerShown: false }} />
             <Stack.Screen name="marketView" options={{ headerShown: false }} />
             <Stack.Screen name="addListing" options={{ headerShown: false }} />

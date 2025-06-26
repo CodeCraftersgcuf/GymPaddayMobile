@@ -3,17 +3,15 @@ import { API_ENDPOINTS } from "../../apiConfig";
 
 export const createPost = async ({
   data,
-  token
+  token,
 }: {
-  data: {
-    title: string;
-    content: string;
-    media_url?: string;
-  };
+  data: FormData;
   token: string;
 }) => {
-  return await apiCall(API_ENDPOINTS.USER.POSTS.Create, "POST", data, token);
+  return await apiCall(API_ENDPOINTS.USER.POSTS.Create, 'POST', data, token);
 };
+
+
 
 export const updatePost = async ({
   id,

@@ -6,7 +6,8 @@ import {
   StatusBar,
   TouchableOpacity,
   Image,
-  ScrollView
+  ScrollView,
+  RefreshControl
 } from 'react-native';
 
 import StoryContainer from '@/components/Social/StoryContainer';
@@ -25,6 +26,7 @@ export default function SocialFeedScreen() {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [currentComments, setCurrentComments] = useState<any[]>([]);
   const [currentPostId, setCurrentPostId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { dark } = useTheme();
   const route = useRouter();
 
@@ -61,6 +63,7 @@ export default function SocialFeedScreen() {
   const handleCreatePost = () => {
     console.log('Create new post');
     // route.push('/create-post');
+    route.push('/createpost');
   };
   const [BottomIndex, setBottomIndex] = useState(-1);
   const [PostType, setPostType] = useState('ViewerPost');
@@ -69,6 +72,21 @@ export default function SocialFeedScreen() {
     setBottomIndex(1);
     console.log('click bottom sheet', userId, postId);
   }
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    
+    // Simulate API call delay
+    setTimeout(() => {
+      console.log('Refreshing feed...');
+      // Here you would typically:
+      // 1. Fetch new posts from API
+      // 2. Fetch new stories from API
+      // 3. Update state with fresh data
+      
+      setRefreshing(false);
+    }, 1000);
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -82,8 +100,20 @@ export default function SocialFeedScreen() {
           notificationID="notif123"
         />
 
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          {/* Main Content */}
+        <ScrollView 
+          style={{ flex: 1 }} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#ff0000']} // Android
+              tintColor={'#ff0000'} // iOS
+              title="Pull to refresh" // iOS
+              titleColor={dark ? '#ffffff' : '#000000'} // iOS
+            />
+          }
+        >
           {/* Stories */}
           <StoryContainer stories={mockStories} />
 
