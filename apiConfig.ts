@@ -40,6 +40,8 @@ const API_ENDPOINTS = {
       Withdraw: API_DOMAIN + "/user/wallet/withdraw",
     },
     GIFTS: {
+      List: API_DOMAIN + "/user/gifts",
+      
       Create: API_DOMAIN + "/user/gifts",
       Update: (id: number) => API_DOMAIN + `/user/gifts/${id}`,
     },
