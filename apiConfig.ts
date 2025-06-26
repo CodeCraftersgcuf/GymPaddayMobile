@@ -44,6 +44,7 @@ const API_ENDPOINTS = {
       Update: (id: number) => API_DOMAIN + `/user/gifts/${id}`,
     },
     TRANSACTIONS: {
+      List: API_DOMAIN + "/user/transactions",
       Create: API_DOMAIN + "/user/transactions",
       Update: (id: number) => API_DOMAIN + `/user/transactions/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/transactions/${id}`,
