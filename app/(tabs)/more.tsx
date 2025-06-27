@@ -20,9 +20,10 @@ import * as SecureStore from 'expo-secure-store';
 
 
 export default function More() {
-  const { dark } = useTheme();
+  const { dark, setScheme } = useTheme();
   const [balance] = useState(250000);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const [openTheme, setopenTheme] = useState(false)
   const route = useRouter();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
   
@@ -166,6 +167,42 @@ export default function More() {
         <View style={styles.settingsSection}>
           <ThemeText style={styles.sectionTitle}>Other</ThemeText>
           <View style={styles.settingsContainer}>
+            <View>
+              <SettingItem
+                item={{
+                  id: 'theme',
+                  title: 'Theme',
+                  icon: 'moon',
+                  iconFamily: 'Feather',
+                  backgroundColor: 'transparent',
+                }}
+                onPress={() => setopenTheme(!openTheme)}
+              />
+              {openTheme && (
+                <View style={{ padding: 10, backgroundColor: dark ? '#222' : '#f0f0f0', borderRadius: 8 ,borderTopLeftRadius:0,borderTopRightRadius:0}}>
+                  <SettingItem
+                    item={{
+                      id: 'light-theme',
+                      title: 'Light Theme',
+                      icon: 'sun',
+                      iconFamily: 'Feather',
+                      backgroundColor: 'transparent',
+                    }}
+                    onPress={() => setScheme('light')}
+                  />
+                  <SettingItem
+                    item={{
+                      id: 'dark-theme',
+                      title: 'Dark Theme',
+                      icon: 'moon',
+                      iconFamily: 'Feather',
+                      backgroundColor: 'transparent',
+                    }}
+                    onPress={() => setScheme('dark')}
+                  />
+                </View>
+              )}
+            </View>
             {otherSettingsData.map((item) => (
               <SettingItem
                 key={item.id}

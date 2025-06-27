@@ -29,6 +29,16 @@ const images = {
   topUp : require('../assets/icons/more/PaperPlane.png'),
   withdraw : require('../assets/icons/more/Vector.png'),
   boostImage: require('../assets/images/boost.png'),
+  profileImages:require('../assets/icons/SquaresFour.png'),
+  profileVideos:require('../assets/icons/YoutubeLogo.png'),
+  chatsPhone:require('../assets/icons/chats/PhoneCall.png'),
+  chatsFollower:require('../assets/icons/chats/UserPlus.png'),
+  liveClose:require('../assets/icons/live/close.png'),
+  livecamera:require('../assets/icons/live/camera.png'),
+  liveaudio:require('../assets/icons/live/audio.png'),
+  moreUser:require('../assets/icons/more/User.png'),
+  moreBag:require('../assets/icons/more/Bag.png'),
+  moreClipboard:require('../assets/icons/more/ClipboardText.png'),
 };
 
 export default images;
