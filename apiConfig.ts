@@ -16,6 +16,9 @@ const API_ENDPOINTS = {
     Delete: (id: number) => API_DOMAIN + `/personal-access-tokens/${id}`,
   },
   USER: {
+    PROFILE:{
+      EditProfile: API_DOMAIN + "/user/edit-profile",
+    },
     POSTS: {
       List: API_DOMAIN + "/user/posts",
       Create: API_DOMAIN + "/user/posts",
@@ -41,7 +44,7 @@ const API_ENDPOINTS = {
     },
     GIFTS: {
       List: API_DOMAIN + "/user/gifts",
-      
+
       Create: API_DOMAIN + "/user/gifts",
       Update: (id: number) => API_DOMAIN + `/user/gifts/${id}`,
     },

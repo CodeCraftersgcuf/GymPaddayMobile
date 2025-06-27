@@ -12,16 +12,25 @@ import {
 } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 // import { ArrowLeft, Camera } from 'lucide-react-native';
-import FloatingLabelInput from '@/components/login/FloatingLabelInput'; 
-import FloatingLabelGenderPicker from '@/components/login/FloatingLabelGenderPicker'; 
+import FloatingLabelInput from '@/components/login/FloatingLabelInput';
+import FloatingLabelGenderPicker from '@/components/login/FloatingLabelGenderPicker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Header from '@/components/more/withdraw/Header';
 import { FontAwesome } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+
+//Code Related to the intgration
+import { useMutation } from '@tanstack/react-query';
+import { editUserProfile } from '@/utils/mutations/profile';
+import Toast from 'react-native-toast-message';
+import * as SecureStore from 'expo-secure-store';
+import { useNavigation } from '@react-navigation/native';
 
 export default function EditProfileScreen() {
   const { dark } = useTheme();
-  
+  const navigation = useNavigation();
+
   // Form state
   const [formData, setFormData] = useState({
     username: '',
@@ -29,9 +38,58 @@ export default function EditProfileScreen() {
     gender: '',
     age: '',
   });
-  
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const bottomSheetRef = useRef<BottomSheet>(null);
+
+  // Load user_data from SecureStore on mount
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('user_data');
+        if (userDataStr) {
+          const user = JSON.parse(userDataStr);
+          setFormData({
+            username: user.username || '',
+            fullName: user.fullname || '',
+            gender: user.gender || '',
+            age: user.age ? String(user.age) : '',
+          });
+          setProfileImage(user.profile_picture_url || null);
+        } else {
+          setProfileImage(null);
+        }
+      } catch (e) {
+        setProfileImage(null);
+      } finally {
+        setInitializing(false);
+      }
+    })();
+  }, []);
+
+  // React Query mutation for profile update
+  const mutation = useMutation({
+    mutationFn: editUserProfile,
+    onSuccess: () => {
+      Toast.show({
+        type: 'success',
+        text1: 'Profile updated!',
+        visibilityTime: 500,
+      });
+      setTimeout(() => {
+        navigation.goBack();
+      }, 600);
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: 'error',
+        text1: 'Update failed',
+        text2: error?.message || 'Something went wrong',
+      });
+    },
+  });
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -48,48 +106,83 @@ export default function EditProfileScreen() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required';
     } else if (formData.username.length < 3) {
       newErrors.username = 'Username must be at least 3 characters';
     }
-    
+
     if (!formData.fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     }
-    
+
     if (!formData.gender) {
       newErrors.gender = 'Please select your gender';
     }
-    
+
     if (!formData.age.trim()) {
       newErrors.age = 'Age is required';
     } else if (isNaN(Number(formData.age)) || Number(formData.age) < 1 || Number(formData.age) > 120) {
       newErrors.age = 'Please enter a valid age';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
-    if (validateForm()) {
-      // Here you would typically save to your backend
-      Alert.alert('Success', 'Profile updated successfully!');
+  // Gallery picker
+  const handleImagePress = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow photo access to change your profile picture.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not open image picker.');
     }
   };
 
-  const handleImagePress = () => {
-    Alert.alert(
-      'Change Profile Picture',
-      'Choose an option',
-      [
-        { text: 'Camera', onPress: () => console.log('Camera pressed') },
-        { text: 'Gallery', onPress: () => console.log('Gallery pressed') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+  // Save handler
+  const handleSave = async () => {
+    if (!validateForm()) return;
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) {
+        Toast.show({ type: 'error', text1: 'Not authenticated' });
+        return;
+      }
+      const form = new FormData();
+      form.append('username', formData.username);
+      form.append('fullname', formData.fullName);
+      form.append('gender', formData.gender);
+      form.append('age', formData.age);
+
+      if (profileImage) {
+        // Only append if it's a new image (uri not starting with http)
+        if (!profileImage.startsWith('http')) {
+          const fileName = profileImage.split('/').pop() || 'profile.jpg';
+          form.append('profile_picture', {
+            uri: profileImage,
+            name: fileName,
+            type: 'image/jpeg',
+          } as any);
+        }
+      }
+
+      mutation.mutate({ token, data: form });
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not update profile.' });
+    }
   };
 
   const handleSheetChanges = useCallback((index: number) => {
@@ -137,6 +230,14 @@ export default function EditProfileScreen() {
     },
   });
 
+  if (initializing) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: dark ? 'black' : '#fff' }}>
+        <Text style={{ color: dark ? '#fff' : '#000' }}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[
@@ -145,24 +246,24 @@ export default function EditProfileScreen() {
       ]}>
         {/* Header */}
         <Header
-            title='Edit Profile'
-            showBackButton={true}
-            onBackPress={()=>{}}
+          title='Edit Profile'
+          showBackButton={true}
+          onBackPress={() => { }}
         />
 
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
         >
           {/* Profile Image */}
           <View style={styles.imageContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.imageWrapper}
               onPress={handleImagePress}
             >
               <Image
                 source={{
-                  uri: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400'
+                  uri: profileImage || 'https://ui-avatars.com/api/?name=User'
                 }}
                 style={styles.profileImage}
               />
@@ -211,11 +312,12 @@ export default function EditProfileScreen() {
 
         {/* Save Button */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSave}
+            disabled={mutation.isPending}
           >
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>{mutation.isPending ? "Saving..." : "Save"}</Text>
           </TouchableOpacity>
         </View>
 
@@ -249,11 +351,11 @@ export default function EditProfileScreen() {
                 formData.gender === "Male" && genderStyles.selectedCard,
               ]}
             >
-              <Image 
+              <Image
                 source={{
                   uri: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=400'
                 }}
-                style={genderStyles.genderImage} 
+                style={genderStyles.genderImage}
               />
               <View style={genderStyles.genderTextWrapper}>
                 <Text style={genderStyles.genderText}>Male</Text>
@@ -267,11 +369,11 @@ export default function EditProfileScreen() {
                 formData.gender === "Female" && genderStyles.selectedCard,
               ]}
             >
-              <Image 
+              <Image
                 source={{
                   uri: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400'
                 }}
-                style={genderStyles.genderImage} 
+                style={genderStyles.genderImage}
               />
               <View style={genderStyles.genderTextWrapper}>
                 <Text style={genderStyles.genderText}>Female</Text>
