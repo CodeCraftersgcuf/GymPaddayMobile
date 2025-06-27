@@ -11,6 +11,14 @@ import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 
+
+//Code Related to the integration
+import { useMutation } from '@tanstack/react-query';
+import { createBusiness } from '@/utils/mutations/businesses';
+import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
+
+
 const validationSchema = Yup.object().shape({
     businessName: Yup.string()
         .min(2, 'Business name must be at least 2 characters')
@@ -50,6 +58,31 @@ export default function BusinessRegistrationScreen() {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
 
+    // --- Mutation for business creation ---
+    const createBusinessMutation = useMutation({
+        mutationFn: async (formData: FormData) => {
+            const token = await SecureStore.getItemAsync('auth_token');
+            console.log("Token", token);
+            if (!token) throw new Error('Not authenticated');
+            return createBusiness({ data: formData, token });
+        },
+        onSuccess: () => {
+            Toast.show({
+                type: 'success',
+                text1: 'Business registered successfully!',
+            });
+            setTimeout(() => {
+                router.back();
+            }, 500);
+        },
+        onError: (error: any) => {
+            Toast.show({
+                type: 'error',
+                text1: error?.message || 'Failed to register business',
+            });
+        },
+    });
+
     const pickImage = async () => {
         if (Platform.OS === 'web') {
             Alert.alert('Image Upload', 'Image upload is not supported in web preview. This would work on mobile devices.');
@@ -68,17 +101,31 @@ export default function BusinessRegistrationScreen() {
         }
     };
 
-    const handleSubmit = (values: any) => {
-        console.log('Form submitted:', values);
-
-        // Simulate different submission states
-        const rand = Math.random();
-        if (rand < 0.4) {
-            setSubmissionState('reviewing');
-        } else if (rand < 0.7) {
-            setSubmissionState('rejected');
-        } else {
-            setSubmissionState('approved');
+    // --- Updated handleSubmit ---
+    const handleSubmit = async (values: any) => {
+        try {
+            const formData = new FormData();
+            formData.append('business_name', values.businessName);
+            formData.append('category', values.category);
+            formData.append('address', values.address);
+            formData.append('business_email', values.businessEmail);
+            formData.append('business_phone', values.businessPhone);
+            if (selectedImage) {
+                // Guess filename and type from uri
+                const uriParts = selectedImage.split('/');
+                const name = uriParts[uriParts.length - 1] || 'photo.jpg';
+                formData.append('photo', {
+                    uri: selectedImage,
+                    name,
+                    type: 'image/jpeg',
+                } as any);
+            }
+            createBusinessMutation.mutate(formData);
+        } catch (error: any) {
+            Toast.show({
+                type: 'error',
+                text1: error?.message || 'Failed to register business',
+            });
         }
     };
 
@@ -339,11 +386,15 @@ export default function BusinessRegistrationScreen() {
                             <TouchableOpacity
                                 style={[
                                     styles.saveButton,
-                                    submissionState === 'approved' && styles.saveButtonSuccess
+                                    submissionState === 'approved' && styles.saveButtonSuccess,
+                                    createBusinessMutation.isLoading && { opacity: 0.6 }
                                 ]}
                                 onPress={() => handleSubmit()}
+                                disabled={createBusinessMutation.isLoading}
                             >
-                                <Text style={styles.saveButtonText}>Save</Text>
+                                <Text style={styles.saveButtonText}>
+                                    {createBusinessMutation.isLoading ? 'Saving...' : 'Save'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     </>
