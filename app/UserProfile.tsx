@@ -15,6 +15,7 @@ import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import FollowersBottomSheet, { User } from '@/components/Social/post/FollowersBottomSheet';
 import FollowingBottomSheet from '@/components/Social/post/FollowingBottomSheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { images } from '@/constants';
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
@@ -228,14 +229,14 @@ export default function ProfileScreen() {
               style={[styles.tab, activeTab === 'posts' && styles.activeTab]}
               onPress={() => setActiveTab('posts')}
             >
-              <MaterialIcons name="grid-on" size={20} color={activeTab === 'posts' ? theme.text : theme.textSecondary} />
+              <Image source={images.profileImages} style={{ width: 20, height: 20, tintColor: activeTab === 'posts' ? theme.text : theme.textSecondary }} />
               <Text style={[styles.tabText, { color: activeTab === 'posts' ? theme.text : theme.textSecondary }]}>Posts</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'videos' && styles.activeTab]}
               onPress={() => setActiveTab('videos')}
             >
-              <Icon name="play-circle-outline" size={20} color={activeTab === 'videos' ? theme.text : theme.textSecondary} />
+              <Image source={images.profileVideos} style={{ width: 20, height: 20, tintColor: activeTab === 'videos' ? theme.text : theme.textSecondary }} />
               <Text style={[styles.tabText, { color: activeTab === 'videos' ? theme.text : theme.textSecondary }]}>Videos</Text>
             </TouchableOpacity>
           </View>

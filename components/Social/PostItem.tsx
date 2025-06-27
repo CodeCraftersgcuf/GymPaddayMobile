@@ -40,13 +40,13 @@ interface PostItemProps {
     };
   };
   onCommentPress: (value: any[], postId: number) => void;
-  handleMenu:(userId: number | string, postId: number) => void;
+  handleMenu: (userId: number | string, postId: number) => void;
 }
 
-const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) => {
+const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu }) => {
   const { dark } = useTheme();
   const router = useRouter();
-  
+
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -100,22 +100,26 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) 
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
     setCurrentIndex(newIndex);
   };
-  
+
   return (
     <View style={styles.postContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity activeOpacity={0.7} onPress={()=>router.push('/UserProfile')}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/UserProfile')}>
           <View style={styles.headerLeft}>
             <Image source={{ uri: post.user.profile_picture }} style={styles.profileImage} />
             <View>
               <ThemeText style={styles.username}>{post.user.username}</ThemeText>
-              <Text style={styles.time}>{post.timestamp}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center',gap:5 }}>
+                <Text style={styles.time}>Lagos, Nigeria</Text>
+                <Text style={styles.time}>•</Text>
+                <Text style={styles.time}>{post.timestamp}</Text>
+              </View>
             </View>
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={()=>handleMenu(post.user.id,post.id)}>
+        <TouchableOpacity onPress={() => handleMenu(post.user.id, post.id)}>
           <Image source={images.menuIcon} style={{ width: 25, height: 25 }} tintColor={dark ? "white" : 'black'} />
         </TouchableOpacity>
       </View>
@@ -230,7 +234,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress,handleMenu }) 
           </TouchableOpacity>
         </View>
       </Modal>
-      
+
     </View>
   );
 };

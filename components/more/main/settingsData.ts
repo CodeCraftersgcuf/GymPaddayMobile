@@ -1,10 +1,11 @@
+import { images } from '@/constants';
 import { AntDesign, MaterialIcons, Feather, FontAwesome } from '@expo/vector-icons';
 
 export interface SettingItem {
   id: string;
   title: string;
   icon: string;
-  iconFamily: 'AntDesign' | 'MaterialIcons' | 'Feather' | 'FontAwesome';
+  iconFamily?: 'AntDesign' | 'MaterialIcons' | 'Feather' | 'FontAwesome';
   backgroundColor: string;
   onPress?: () => void;
   isDestructive?: boolean;
@@ -14,15 +15,13 @@ export const settingsData: SettingItem[] = [
   {
     id: 'notifications',
     title: 'Notifications',
-    icon: 'notification',
-    iconFamily: 'AntDesign',
+    icon: images.notifcationIcon,
     backgroundColor: '#FF3B30',
   },
   {
     id: 'edit-profile',
     title: 'Edit Profile',
-    icon: 'user',
-    iconFamily: 'AntDesign',
+    icon: images.moreUser,
     backgroundColor: '#007AFF',
   },
   {
@@ -35,15 +34,13 @@ export const settingsData: SettingItem[] = [
   {
     id: 'business-settings',
     title: 'Business Settings',
-    icon: 'shopping-bag',
-    iconFamily: 'Feather',
+    icon: images.moreBag,
     backgroundColor: '#34C759',
   },
   {
     id: 'view-ads',
     title: 'View Ads',
-    icon: 'file-text',
-    iconFamily: 'Feather',
+    icon: images.moreClipboard,
     backgroundColor: '#1C1C1E',
   },
   {
@@ -56,13 +53,7 @@ export const settingsData: SettingItem[] = [
 ];
 
 export const otherSettingsData: SettingItem[] = [
-  {
-    id: 'theme',
-    title: 'Theme',
-    icon: 'moon',
-    iconFamily: 'Feather',
-    backgroundColor: 'transparent',
-  },
+  
   {
     id: 'logout',
     title: 'Logout',
