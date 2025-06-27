@@ -17,6 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 
 
+//Code Related to the integration
+import { useQuery } from '@tanstack/react-query';
+import { getMarketplaceListingById } from '@/utils/queries/marketplace';
+import * as SecureStore from 'expo-secure-store';
+
 
 interface RelatedItem {
     id: string;
@@ -50,18 +55,14 @@ export default function ItemDetailsScreen() {
     const { dark } = useTheme();
     const isDark = dark;
     const router = useRouter();
-    const { itemId } = useLocalSearchParams();
+    const { id } = useLocalSearchParams();
     const [message, setMessage] = useState('');
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const screenWidth = Dimensions.get('window').width;
 
-    const images = [
-        'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg',
-        'https://images.pexels.com/photos/1552252/pexels-photo-1552252.jpeg',
-        'https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg',
-        'https://images.pexels.com/photos/4164761/pexels-photo-4164761.jpeg',
-    ];
+    console.log('Listing ID:', id);
 
+    // Fix: define theme object before using it
     const theme = {
         background: isDark ? '#000000' : '#FFFFFF',
         cardBackground: isDark ? '#181818' : '#FFFFFF',
@@ -70,6 +71,76 @@ export default function ItemDetailsScreen() {
         borderColor: isDark ? '#333333' : '#E5E5E5',
         inputBackground: isDark ? '#333333' : '#F5F5F5',
     };
+
+    // Fetch listing data
+    const [token, setToken] = useState<string | null>(null);
+    React.useEffect(() => {
+        SecureStore.getItemAsync('auth_token').then(setToken);
+    }, []);
+  const {
+    data: listingData,
+    isLoading,
+    isError,
+    error,
+} = useQuery({
+    queryKey: ['marketplace-listing', id, token],
+    queryFn: async () => {
+        if (!token || !id) throw new Error('No auth');
+        return getMarketplaceListingById(Number(id), token); // ✅ Correct order
+    },
+    enabled: !!token && !!id,
+});
+
+console.log("Listing Data:", listingData);
+
+  // Base API URL
+const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
+
+// Extract the actual data from the API response
+const listing = listingData?.data;
+
+// Prepare images from API
+const images =
+    Array.isArray(listing?.media_urls) && listing.media_urls.length > 0
+        ? listing.media_urls.map((url: string) =>
+              url.startsWith('http') ? url : API_BASE_URL + url
+          )
+        : [
+              'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg',
+          ];
+
+// Prepare seller image
+const sellerImage =
+    listing?.user?.profile_picture_url ||
+    'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg';
+
+// Prepare other fields
+const title = listing?.title || '...';
+const price = listing?.price ? `N${listing.price}` : '';
+const location = listing?.location || '';
+const description = listing?.description || '';
+const sellerName = listing?.user?.name || 'User';
+
+
+    // Loading and error handling
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+                <Text style={{ color: isDark ? '#fff' : '#000' }}>Loading...</Text>
+            </SafeAreaView>
+        );
+    }
+    if (isError) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+                <Text style={{ color: 'red' }}>
+                    {error instanceof Error ? error.message : 'Failed to load listing'}
+                </Text>
+            </SafeAreaView>
+        );
+    }
 
     const handleBack = () => {
         router.back();
@@ -147,28 +218,27 @@ export default function ItemDetailsScreen() {
                     {/* Image Counter */}
                     <View style={styles.imageCounter}>
                         <Text style={styles.imageCounterText}>
-                            {currentImageIndex + 1}/{images.length}
+                            {Math.min(currentImageIndex + 1, images.length)}/{images.length}
                         </Text>
                     </View>
                 </View>
 
                 {/* Item Info Card */}
                 <View style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}>
-                    <Text style={[styles.itemTitle, { color: theme.text }]}>20KG Dumb Bells</Text>
-                    <Text style={styles.itemPrice}>N25,000</Text>
+                    <Text style={[styles.itemTitle, { color: theme.text }]}>{title}</Text>
+                    <Text style={styles.itemPrice}>{price}</Text>
 
                     <View style={styles.sellerSection}>
                         <Image
-                            source={{ uri: 'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg' }}
+                            source={{ uri: sellerImage }}
                             style={styles.sellerImage}
                         />
                         <View style={styles.sellerDetails}>
-                            <Text style={[styles.sellerName, { color: theme.text }]}>Alucard</Text>
+                            <Text style={[styles.sellerName, { color: theme.text }]}>{sellerName}</Text>
                             <View style={styles.sellerMeta}>
-                                <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
-                                <Text style={[styles.sellerTime, { color: theme.textSecondary }]}>5 min ago</Text>
+                                {/* You can add time and location if available */}
                                 <Ionicons name="location-outline" size={14} color={theme.textSecondary} />
-                                <Text style={[styles.sellerLocation, { color: theme.textSecondary }]}>Ikeja Lagos</Text>
+                                <Text style={[styles.sellerLocation, { color: theme.textSecondary }]}>{location}</Text>
                             </View>
                         </View>
                     </View>
@@ -178,9 +248,7 @@ export default function ItemDetailsScreen() {
                 <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
                     <Text style={[styles.sectionTitle, { color: theme.text }]}>Description</Text>
                     <Text style={[styles.description, { color: theme.textSecondary }]}>
-                        The best dumb bells, The best dumb bells, The best dumb bells{'\n'}
-                        The best dumb bells, The best dumb bells, The best dumb bells{'\n'}
-                        The best dumb bells, The best dumb bells
+                        {description}
                     </Text>
                 </View>
 
@@ -247,6 +315,7 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
+        marginTop: 30, // Adjusted for status bar
     },
     imageContainer: {
         position: 'relative',

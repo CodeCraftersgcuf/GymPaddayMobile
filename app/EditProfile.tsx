@@ -72,7 +72,11 @@ export default function EditProfileScreen() {
   // React Query mutation for profile update
   const mutation = useMutation({
     mutationFn: editUserProfile,
-    onSuccess: () => {
+    onSuccess: async (response: any) => {
+      // ✅ Update SecureStore with latest data if available
+      if (response?.user) {
+        await SecureStore.setItemAsync('user_data', JSON.stringify(response.user));
+      }
       Toast.show({
         type: 'success',
         text1: 'Profile updated!',

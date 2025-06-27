@@ -67,6 +67,8 @@ export default function AddListingScreen() {
     const router = useRouter();
     const categoryBottomSheetRef = useRef<BottomSheet>(null);
     const locationBottomSheetRef = useRef<BottomSheet>(null);
+    const [isSending, setIsSending] = useState(false);
+
 
     const [formData, setFormData] = useState({
         productName: '',
@@ -176,6 +178,8 @@ export default function AddListingScreen() {
     };
 
     const handlePostListing = async () => {
+        if (isSending) return; // prevent duplicate taps
+
         // Validate form
         if (!formData.productName.trim()) {
             Alert.alert('Error', 'Please enter a product name');
@@ -241,6 +245,9 @@ export default function AddListingScreen() {
                 type: 'error',
                 text1: error?.message || 'Failed to post listing',
             });
+        }
+        finally {
+            setIsSending(false);
         }
     };
 
@@ -408,11 +415,18 @@ export default function AddListingScreen() {
                 {/* Post Button */}
                 <View style={[styles.bottomContainer, { backgroundColor: theme.background }]}>
                     <TouchableOpacity
-                        style={styles.postButton}
+                        style={[
+                            styles.postButton,
+                            isSending && { opacity: 0.6 } // optional visual feedback
+                        ]}
                         onPress={handlePostListing}
+                        disabled={isSending}
                     >
-                        <Text style={styles.postButtonText}>Post Listing</Text>
+                        <Text style={styles.postButtonText}>
+                            {isSending ? 'Sending...' : 'Post Listing'}
+                        </Text>
                     </TouchableOpacity>
+
                 </View>
 
                 {/* Bottom Sheets */}
@@ -439,13 +453,15 @@ export default function AddListingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginTop: 30,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingVertical: 16
+        ,
     },
     backButton: {
         width: 40,

@@ -10,12 +10,19 @@ import {
   StatusBar,
   SafeAreaView,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { categories, mockListings } from '@/constants/marketData';
+import { categories } from '@/constants/marketData';
 import { AntDesign, Entypo, Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
+
+//Code Related to the integration
+import { useQuery } from '@tanstack/react-query';
+import { getMarketplaceListings } from '@/utils/queries/marketplace';
+import * as SecureStore from 'expo-secure-store';
 
 
 interface ListingItem {
@@ -31,11 +38,34 @@ interface ListingItem {
 
 export default function MarketplaceScreen() {
   const { dark } = useTheme();
-  const isDark = dark; // You can control this boolean
+  const isDark = dark;
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('gym');
-  const [selectedLocation, setSelectedLocation] = useState('all');
+  // Default to 'all' so all listings show by default
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
+  const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          if (userData.profile_picture_url) {
+            setProfileImage(userData.profile_picture_url);
+          } else {
+            setProfileImage(dummyImage);
+          }
+        } else {
+          setProfileImage(dummyImage);
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setProfileImage(dummyImage);
+      }
+    })();
+  }, []);
 
   const theme = {
     background: isDark ? '#000000' : '#FFFFFF',
@@ -47,20 +77,104 @@ export default function MarketplaceScreen() {
     borderColor: isDark ? '#333333' : '#E5E5E5',
   };
 
-  const filteredListings = mockListings.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+  // --- Fetch listings from API ---
+  const [token, setToken] = useState<string | null>(null);
+  React.useEffect(() => {
+    SecureStore.getItemAsync('auth_token').then(setToken);
+  }, []);
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['marketplace-listings'],
+    queryFn: async () => {
+      if (!token) throw new Error('No auth token');
+      return await getMarketplaceListings(token);
+    },
+    enabled: !!token,
+  });
+
+  // Add refresh state (optional, but not strictly needed with isFetching)
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  // --- Map API data to local listing structure ---
+  const API_BASE_URL = 'http://127.0.0.1:8000/storage/';
+
+  // Map local category id to API category name for filtering
+  const categoryIdToApiName: Record<string, string> = {
+    gym: 'gymEquipment',
+    supplement: 'supplement',
+    wears: 'wears',
+    others: 'others',
+  };
+
+  const BASE_STORAGE_URL = 'http://192.168.175.151:8000/storage/';
+
+  const apiListings = Array.isArray(data?.data)
+    ? data.data.map((item: any) => {
+      // Handle product image
+      let imageUrl = dummyImage;
+      if (Array.isArray(item.media_urls) && item.media_urls.length > 0) {
+        const firstUrl = item.media_urls[0];
+        imageUrl = firstUrl.startsWith('http')
+          ? firstUrl
+          : BASE_STORAGE_URL + firstUrl;
+      }
+
+      // Handle seller avatar
+      let sellerAvatar = dummyImage;
+      if (item.user?.profile_picture_url) {
+        sellerAvatar = item.user.profile_picture_url.startsWith('http')
+          ? item.user.profile_picture_url
+          : BASE_STORAGE_URL + item.user.profile_picture_url.replace(/^\/?storage\//, '');
+      }
+
+      const categoryName = item.category?.name || '';
+      const sellerName = item.user?.name || 'User';
+      // Use created_at for timeAgo
+      const timeAgo = item.created_at ? getTimeAgo(item.created_at) : 'Just now';
+
+      return {
+        id: String(item.id),
+        title: item.title,
+        price: item.price,
+        category: categoryName,
+        image: imageUrl,
+        isTopAd: !!item.isTopAd,
+        sellerAvatar: sellerAvatar,
+        seller: sellerName,
+        timeAgo: timeAgo,
+      };
+    })
+    : [];
+
+
+  // --- Filtering ---
+  const filteredListings = apiListings.filter((item) => {
+    const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase());
+    let matchesCategory = true;
+    if (selectedCategory !== 'all') {
+      // Compare API category name with mapped value from local category id
+      matchesCategory = item.category === categoryIdToApiName[selectedCategory];
+    }
     return matchesSearch && matchesCategory;
   });
 
   const topListings = filteredListings.filter((item) => item.isTopAd);
   const allListings = filteredListings;
 
-  const handleItemPress = (item: ListingItem) => {
-    router.push('/marketView');
+  const handleItemPress = (item: any) => {
+    router.push({
+      pathname: '/marketView',
+      params: { id: item.id.toString() }, // always pass params as strings
+    });
   };
 
-  const renderListingItem = ({ item }: { item: ListingItem }) => (
+
+  const renderListingItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.listingCard, { backgroundColor: theme.cardBackground }]}
       onPress={() => handleItemPress(item)}
@@ -76,9 +190,9 @@ export default function MarketplaceScreen() {
           {item.title}
         </Text>
         <Text style={styles.listingPrice}>{item.price}</Text>
-        <TouchableOpacity onPress={() => router.push('/marketProfile')} style={styles.sellerInfo}>
+        <TouchableOpacity onPress={() => router.push('/marketView')} style={styles.sellerInfo}>
           <Image
-            source={{ uri: 'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg' }}
+            source={{ uri: item.sellerAvatar || dummyImage }}
             style={styles.sellerAvatar}
           />
           <View style={{ flexDirection: 'column' }}>
@@ -94,6 +208,15 @@ export default function MarketplaceScreen() {
     </TouchableOpacity>
   );
 
+  // --- Loading state ---
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#FF0000" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -104,7 +227,7 @@ export default function MarketplaceScreen() {
           <Text style={styles.headerTitle}>Marketplace</Text>
           <View style={styles.headerRight}>
             <Image
-              source={{ uri: 'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg' }}
+              source={{ uri: profileImage }}
               style={styles.profileImage}
             />
             <TouchableOpacity style={styles.notificationButton}>
@@ -138,11 +261,23 @@ export default function MarketplaceScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isFetching || refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF0000']}
+            tintColor="#FF0000"
+          />
+        }
+      >
         {/* Categories */}
         <ThemedView darkColor='black' style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Categories</Text>
           <ThemedView darkColor='black' style={{ flexDirection: 'row', marginHorizontal: 20, gap: 5 }}>
+
             {categories.map((item, index) => (
               <TouchableOpacity
                 key={index}
@@ -158,8 +293,7 @@ export default function MarketplaceScreen() {
                 </View>
                 <Text style={[styles.categoryText, { color: theme.text }]}>{item.title}</Text>
               </TouchableOpacity>
-            ))
-            }
+            ))}
           </ThemedView>
         </ThemedView>
 
@@ -181,17 +315,23 @@ export default function MarketplaceScreen() {
         {/* All Listings */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>All Listings</Text>
-          {/* {allListings.map((item) => ( */}
-          <FlatList
-            data={allListings}
-            renderItem={renderListingItem}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            scrollEnabled={false}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalListings}
-          />
-          {/* ))} */}
+          {allListings.length === 0 ? (
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 16 }}>
+                No listings right now
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={allListings}
+              renderItem={renderListingItem}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              scrollEnabled={false}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalListings}
+            />
+          )}
         </View>
       </ScrollView>
 
@@ -207,6 +347,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     marginTop: 30,
+    paddingBottom: 60,
   },
   header: {
     paddingHorizontal: 20,
@@ -394,3 +535,24 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 });
+
+// Helper to get "time ago" string
+function getTimeAgo(dateString: string): string {
+  const now = new Date();
+  const created = new Date(dateString);
+  const diffMs = now.getTime() - created.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+  const diffWeek = Math.floor(diffDay / 7);
+  if (diffWeek < 4) return `${diffWeek} week${diffWeek === 1 ? '' : 's'} ago`;
+  const diffMonth = Math.floor(diffDay / 30);
+  if (diffMonth < 12) return `${diffMonth} month${diffMonth === 1 ? '' : 's'} ago`;
+  const diffYear = Math.floor(diffDay / 365);
+  return `${diffYear} year${diffYear === 1 ? '' : 's'} ago`;
+}

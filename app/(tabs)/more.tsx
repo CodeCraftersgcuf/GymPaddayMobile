@@ -75,7 +75,7 @@ export default function More() {
     // Alert.alert('Transaction', 'Transaction history will be shown here');
   };
 
-  const handleSettingPress = (id: string) => {
+  const handleSettingPress = async (id: string) => {
     switch (id) {
       case 'notifications':
         // Alert.alert('Notifications', 'Notification settings');
@@ -109,7 +109,20 @@ export default function More() {
           'Are you sure you want to logout?',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Logout', style: 'destructive' }
+            {
+              text: 'Logout',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await SecureStore.deleteItemAsync('auth_token');
+                  await SecureStore.deleteItemAsync('user_data');
+                  // Optionally clear other sensitive data here
+                  route.replace('/login');
+                } catch (e) {
+                  Alert.alert('Error', 'Failed to logout. Please try again.');
+                }
+              }
+            }
           ]
         );
         break;
