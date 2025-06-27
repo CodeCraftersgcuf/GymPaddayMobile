@@ -17,6 +17,14 @@ import ThemedView from '@/components/ThemedView';
 import { useTheme } from '@/contexts/themeContext';
 import ThemeText from '@/components/ThemedText';
 
+//Code Related to the integration
+
+import { useMutation } from '@tanstack/react-query';
+import { createTransaction } from '@/utils/mutations/transactions';
+import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
+
+
 type ViewMode = 'deposit' | 'payment';
 
 export default function DepositPaymentTab() {
@@ -25,6 +33,7 @@ export default function DepositPaymentTab() {
     const [depositorName, setDepositorName] = useState('');
     const [useMyDetails, setUseMyDetails] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [userName, setUserName] = useState('John Doe'); // Default name for the checkbox
     const { dark } = useTheme();
 
     const paymentDetails = {
@@ -34,6 +43,54 @@ export default function DepositPaymentTab() {
         amount: amount ? `N${amount}` : 'N4,000',
         reason: 'Connect VIP subscription',
     };
+    // ✅ Load user_data from SecureStore on mount
+    React.useEffect(() => {
+        (async () => {
+            try {
+                const userDataStr = await SecureStore.getItemAsync('user_data');
+                if (userDataStr) {
+                    const userData = JSON.parse(userDataStr);
+                    const name = userData.fullname || userData.username || 'John Doe';
+                    console.log('User name from SecureStore:', name); // ✅ Debug log
+                    setUserName(name);
+                } else {
+                    console.log('No user_data found in SecureStore');
+                }
+            } catch (error) {
+                console.error('Failed to load user data from SecureStore:', error);
+            }
+        })();
+    }, []);
+
+
+
+    const createTransactionMutation = useMutation({
+        mutationFn: async () => {
+            const authToken = await SecureStore.getItemAsync('auth_token');
+            if (!authToken) throw new Error('Not authenticated');
+            return createTransaction({
+                data: {
+                    wallet_id: 2,
+                    amount: parseFloat(amount),
+                    type: 'topup',
+                },
+                token: authToken,
+            });
+        },
+        onSuccess: () => {
+            Toast.show({
+                type: 'success',
+                text1: 'Deposit successful!',
+            });
+            setShowSuccessModal(true);
+        },
+        onError: (error: any) => {
+            Toast.show({
+                type: 'error',
+                text1: error?.message || 'Failed to create transaction',
+            });
+        },
+    });
 
     const handleProceed = () => {
         if (!amount || !depositorName) {
@@ -46,7 +103,7 @@ export default function DepositPaymentTab() {
     const handleUseMyDetails = () => {
         setUseMyDetails(!useMyDetails);
         if (!useMyDetails) {
-            setDepositorName('John Doe');
+            setDepositorName(userName);
         } else {
             setDepositorName('');
         }
@@ -58,7 +115,7 @@ export default function DepositPaymentTab() {
     };
 
     const handlePaymentMade = () => {
-        setShowSuccessModal(true);
+        createTransactionMutation.mutate();
     };
 
     const handleCloseModal = () => {
@@ -161,7 +218,7 @@ export default function DepositPaymentTab() {
                             style={styles.copyButton}
                             onPress={handleCopyAccountNumber}
                         >
-                            <Ionicons name="copy-outline" size={18} color={dark ? 'white' :"#666"} />
+                            <Ionicons name="copy-outline" size={18} color={dark ? 'white' : "#666"} />
                         </TouchableOpacity>
                         <ThemeText darkColor='#666' style={styles.detailValue}>{paymentDetails.accountNumber}</ThemeText>
                     </View>
@@ -180,10 +237,10 @@ export default function DepositPaymentTab() {
                 </View>
                 {/* Exchange Rate */}
             </ThemedView>
-                <View style={[styles.exchangeRateContainer,{marginHorizontal:20}]}>
-                    <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                    <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
-                </View>
+            <View style={[styles.exchangeRateContainer, { marginHorizontal: 20 }]}>
+                <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
+                <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+            </View>
 
 
             {/* Payment Made Button */}
