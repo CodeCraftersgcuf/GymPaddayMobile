@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   SafeAreaView,
   Image,
-  Alert 
+  Alert
 } from 'react-native';
 import WalletCard from '@/components/more/main/WalletCard';
 import SettingItem from '@/components/more/main/SettingItem';
@@ -16,11 +16,39 @@ import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
 
+import * as SecureStore from 'expo-secure-store';
+
+
 export default function More() {
-  const {dark} = useTheme();
+  const { dark } = useTheme();
   const [balance] = useState(250000);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const route = useRouter();
+  const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
+  
+  const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
+
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          if (userData.profile_picture_url) {
+            setProfileImage(userData.profile_picture_url);
+          } else {
+            setProfileImage(defatulImage); // fallback to prop
+          }
+        } else {
+          setProfileImage(defatulImage); // fallback to prop
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setProfileImage(defatulImage); // fallback to prop
+      }
+    })();
+  }, []);
 
   const userProfile = {
     name: 'Sarah Johnson',
@@ -100,12 +128,12 @@ export default function More() {
   };
 
   return (
-    <SafeAreaView style={[styles.container,{backgroundColor:dark ? 'black' : 'white'}]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
-          <Text style={[styles.headerTitle,{fontFamily: 'CustomFont', }]}>Wallet</Text>
-          <Image source={{ uri: userProfile.image }} style={styles.headerProfileImage} />
+          <Text style={[styles.headerTitle, { fontFamily: 'CustomFont', }]}>Wallet</Text>
+          <Image source={{ uri: profileImage }} style={styles.headerProfileImage} />
         </ThemedView>
 
         {/* Wallet Card */}
@@ -157,8 +185,8 @@ export default function More() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop:15,
-    paddingBottom:100,
+    paddingTop: 15,
+    paddingBottom: 100,
     marginTop: 30,
   },
   header: {

@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
 import { useTheme } from '@/contexts/themeContext';
 import ThemeText from '@/components/ThemedText';
+
+import * as SecureStore from 'expo-secure-store';
+
 
 interface WalletCardProps {
   balance: number;
@@ -27,10 +30,35 @@ export default function WalletCard({
   userName,
   userImage,
 }: WalletCardProps) {
-  const {dark} = useTheme();
+  const { dark } = useTheme();
+  const [profileImage, setProfileImage] = useState<string | null>(userImage);
+
+
   const formatBalance = (amount: number) => {
     return new Intl.NumberFormat('en-US').format(amount);
   };
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          if (userData.profile_picture_url) {
+            setProfileImage(userData.profile_picture_url);
+          } else {
+            setProfileImage(userImage); // fallback to prop
+          }
+        } else {
+          setProfileImage(userImage); // fallback to prop
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setProfileImage(userImage); // fallback to prop
+      }
+    })();
+  }, []);
+
+
 
   return (
     <View style={styles.container}>
@@ -39,10 +67,10 @@ export default function WalletCard({
         style={styles.cardContainer}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}>
-        
+
         <View style={styles.header}>
           <View style={styles.userInfo}>
-            <Image source={{ uri: userImage }} style={styles.userImage} />
+            <Image source={{ uri: profileImage }} style={styles.userImage} />
             <Text style={styles.walletTitle}>My Wallet</Text>
           </View>
         </View>
@@ -54,10 +82,10 @@ export default function WalletCard({
               GP {isBalanceHidden ? '***,***' : formatBalance(balance)}
             </Text>
             <TouchableOpacity onPress={onToggleBalance} style={styles.eyeButton}>
-              <AntDesign 
-                name={isBalanceHidden ? 'eyeo' : 'eye'} 
-                size={24} 
-                color="#ffffff" 
+              <AntDesign
+                name={isBalanceHidden ? 'eyeo' : 'eye'}
+                size={24}
+                color="#ffffff"
               />
             </TouchableOpacity>
           </View>
@@ -67,19 +95,19 @@ export default function WalletCard({
         </View>
       </LinearGradient>
 
-      <View style={[styles.actionsContainer,{backgroundColor:dark ? '#181818' : 'white'}]}>
+      <View style={[styles.actionsContainer, { backgroundColor: dark ? '#181818' : 'white' }]}>
         <TouchableOpacity style={styles.actionButton} onPress={onTopup}>
-          <Image  source={images.topUp}  style={{width:20,height:20}}  tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.topUp} style={{ width: 20, height: 20 }} tintColor={dark ? 'white' : "#007AFF"} />
           <ThemeText style={styles.actionText}>Topup</ThemeText>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.actionButton} onPress={onWithdraw}>
-          <Image  source={images.withdraw}  style={{width:18,height:18}}  tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.withdraw} style={{ width: 18, height: 18 }} tintColor={dark ? 'white' : "#007AFF"} />
           <ThemeText style={styles.actionText}>Withdraw</ThemeText>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.actionButton} onPress={onTransaction}>
-          <Image  source={images.transactions}  style={{width:20,height:20}}  tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.transactions} style={{ width: 20, height: 20 }} tintColor={dark ? 'white' : "#007AFF"} />
           <ThemeText style={styles.actionText}>Transaction</ThemeText>
         </TouchableOpacity>
       </View>
@@ -91,13 +119,13 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: 20,
     marginTop: 20,
-    position:'relative',
+    position: 'relative',
   },
   cardContainer: {
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
-    paddingBottom:40
+    paddingBottom: 40
   },
   header: {
     marginBottom: 30,
@@ -144,9 +172,9 @@ const styles = StyleSheet.create({
     color: '#a0a0a0',
   },
   actionsContainer: {
-    position:'absolute',
-    bottom:-20,
-    left:'50%',
+    position: 'absolute',
+    bottom: -20,
+    left: '50%',
     transform: [{ translateX: '-50%' }],
     flexDirection: 'row',
     // backgroundColor: '#ffffff',
