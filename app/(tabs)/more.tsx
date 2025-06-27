@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   SafeAreaView,
   Image,
-  Alert 
+  Alert
 } from 'react-native';
 import WalletCard from '@/components/more/main/WalletCard';
 import SettingItem from '@/components/more/main/SettingItem';
@@ -17,9 +17,10 @@ import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
 
 export default function More() {
-  const {dark} = useTheme();
+  const { dark, setScheme } = useTheme();
   const [balance] = useState(250000);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const [openTheme, setopenTheme] = useState(false)
   const route = useRouter();
 
   const userProfile = {
@@ -100,11 +101,11 @@ export default function More() {
   };
 
   return (
-    <SafeAreaView style={[styles.container,{backgroundColor:dark ? 'black' : 'white'}]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
-          <Text style={[styles.headerTitle,{fontFamily: 'CustomFont', }]}>Wallet</Text>
+          <Text style={[styles.headerTitle, { fontFamily: 'CustomFont', }]}>Wallet</Text>
           <Image source={{ uri: userProfile.image }} style={styles.headerProfileImage} />
         </ThemedView>
 
@@ -138,6 +139,42 @@ export default function More() {
         <View style={styles.settingsSection}>
           <ThemeText style={styles.sectionTitle}>Other</ThemeText>
           <View style={styles.settingsContainer}>
+            <View>
+              <SettingItem
+                item={{
+                  id: 'theme',
+                  title: 'Theme',
+                  icon: 'moon',
+                  iconFamily: 'Feather',
+                  backgroundColor: 'transparent',
+                }}
+                onPress={() => setopenTheme(!openTheme)}
+              />
+              {openTheme && (
+                <View style={{ padding: 10, backgroundColor: dark ? '#222' : '#f0f0f0', borderRadius: 8 ,borderTopLeftRadius:0,borderTopRightRadius:0}}>
+                  <SettingItem
+                    item={{
+                      id: 'light-theme',
+                      title: 'Light Theme',
+                      icon: 'sun',
+                      iconFamily: 'Feather',
+                      backgroundColor: 'transparent',
+                    }}
+                    onPress={() => setScheme('light')}
+                  />
+                  <SettingItem
+                    item={{
+                      id: 'dark-theme',
+                      title: 'Dark Theme',
+                      icon: 'moon',
+                      iconFamily: 'Feather',
+                      backgroundColor: 'transparent',
+                    }}
+                    onPress={() => setScheme('dark')}
+                  />
+                </View>
+              )}
+            </View>
             {otherSettingsData.map((item) => (
               <SettingItem
                 key={item.id}
@@ -157,8 +194,8 @@ export default function More() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop:15,
-    paddingBottom:100,
+    paddingTop: 15,
+    paddingBottom: 100,
     marginTop: 30,
   },
   header: {

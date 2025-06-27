@@ -5,18 +5,23 @@ import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
 import { LinearGradient } from 'expo-linear-gradient';
 
+const getTabIconBg = (isFocused: boolean, dark: boolean) => {
+  if (isFocused) return dark ? '#FFAAAA' : '#FFAAAA'; // active: light pink with opacity
+  return 'transparent'; // inactive: dark or light gray
+};
+
 export default function TabLayout() {
   const { dark } = useTheme();
   const isDarkMode = dark;
 
   const tabBackgroundColor = isDarkMode ? '#252525' : '#FFFFFF';
-  const tabViewBackgroundColor = isDarkMode ? 'black' : '#FFFFFF';
+  const tabViewBackgroundColor = 'transparent';
 
   return (
     <View style={[styles.tabContainerWrapper, { backgroundColor: tabViewBackgroundColor }]}>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: '#FF759E',
+          tabBarActiveTintColor: 'black',
           tabBarInactiveTintColor: isDarkMode ? '#888888' : '#666666',
           tabBarStyle: {
             ...styles.tabBar,
@@ -27,18 +32,19 @@ export default function TabLayout() {
             left: 20,
             right: 20,
             borderRadius: 15,
+            height:70,
             elevation: 5,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.2,
             shadowRadius: 4,
           },
-          tabBarIconStyle:{
-            width: 20,
-            height: 20,
+          tabBarIconStyle: {
+            // width: 20,
+            // height: 20,
             marginTop: 5,
           },
-          tabBarLabelStyle: [styles.tabBarLabel , {color:isDarkMode ? 'white' : 'black'}],
+          tabBarLabelStyle: [styles.tabBarLabel, { color: isDarkMode ? 'white' : 'black' }],
           headerShown: false,
         }}
       >
@@ -46,8 +52,19 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Socials',
-            tabBarIcon: ({ color, size }) => (
-              <Image source={images.SocialIcons} style={{ width: size, height: size, tintColor: color }} />
+            tabBarIcon: ({ color, size ,focused}) => (
+              <View
+                style={{
+                  width: 55,
+                  height: 35,
+                  borderRadius: 20,
+                  backgroundColor: getTabIconBg(focused, isDarkMode),
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Image source={images.SocialIcons} style={{ width: size, height: size, tintColor: color }} />
+              </View>
             ),
           }}
         />
@@ -55,8 +72,19 @@ export default function TabLayout() {
           name="market"
           options={{
             title: 'Market',
-            tabBarIcon: ({ color, size }) => (
-              <Image source={images.marketIcon} style={{ width: size, height: size, tintColor: color }} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <View
+                style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 20,
+                  backgroundColor: getTabIconBg(focused, isDarkMode),
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Image source={images.marketIcon} style={{ width: size, height: size, tintColor: color }} />
+              </View>
             ),
           }}
         />
@@ -80,8 +108,19 @@ export default function TabLayout() {
           name="chat"
           options={{
             title: 'Messages',
-            tabBarIcon: ({ color, size }) => (
-              <Image source={images.notifcationIcon} style={{ width: size, height: size, tintColor: color }} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <View
+                style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 20,
+                  backgroundColor: getTabIconBg(focused, isDarkMode),
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Image source={images.notifcationIcon} style={{ width: size, height: size, tintColor: color }} />
+              </View>
             ),
           }}
         />
@@ -89,8 +128,19 @@ export default function TabLayout() {
           name="more"
           options={{
             title: 'More',
-            tabBarIcon: ({ color, size }) => (
-              <Image source={images.MoreIcons} style={{ width: size, height: size, tintColor: color }} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <View
+                style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 20,
+                  backgroundColor: getTabIconBg(focused, isDarkMode),
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Image source={images.MoreIcons} style={{ width: size, height: size, tintColor: color }} />
+              </View>
             ),
           }}
         />
@@ -114,9 +164,9 @@ const styles = StyleSheet.create({
   },
   tabBarLabel: {
     fontSize: 12,
-    marginTop: 1,
+    marginTop: 8,
     fontWeight: '500',
-    zIndex:100
+    zIndex: 100
   },
   liveIconContainer: {
     width: 50,

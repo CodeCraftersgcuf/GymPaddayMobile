@@ -18,6 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { images } from '@/constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -212,13 +213,16 @@ export default function MessageChat() {
 
           <View style={styles.callControls}>
             <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-              <Icon name="close" size={24} color="#fff" />
+              <Image source={images.liveClose} style={{width:"100%",height:'100%'}} />
+              {/* <Icon name="close" size={24} color="#fff" /> */}
             </TouchableOpacity>
             <TouchableOpacity style={styles.muteButton}>
-              <MaterialIcons name="mic-off" size={24} color="#fff" />
+              <Image source={images.livecamera} style={{width:"100%",height:'100%'}} />
+              {/* <MaterialIcons name="mic-off" size={24} color="#fff" /> */}
             </TouchableOpacity>
             <TouchableOpacity style={styles.speakerButton}>
-              <MaterialIcons name="volume-up" size={24} color="#fff" />
+              <Image source={images.liveaudio} style={{width:"100%",height:'100%'}} />
+              {/* <MaterialIcons name="volume-up" size={24} color="#fff" /> */}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -233,9 +237,9 @@ export default function MessageChat() {
       animationType="slide"
     >
       <LinearGradient
-      // 'linear-gradient(135deg, #FF3B30 0%, #8E44AD 100%)'
+        // 'linear-gradient(135deg, #FF3B30 0%, #8E44AD 100%)'
         colors={['#FF3B30', '#8E44AD']}
-        style={{flex:1}}
+        style={{ flex: 1 }}
       >
         <View style={styles.voiceCallScreen}>
           <SafeAreaView style={styles.voiceCallContainer}>
@@ -250,13 +254,16 @@ export default function MessageChat() {
 
             <View style={styles.callControls}>
               <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-                <Icon name="close" size={24} color="#fff" />
+                <Image source={images.liveClose} style={{width:"100%",height:'100%'}} />
+                {/* <Icon name="close" size={24} color="#fff" /> */}
               </TouchableOpacity>
               <TouchableOpacity style={styles.muteButton}>
-                <MaterialIcons name="mic-off" size={24} color="#fff" />
+                {/* <MaterialIcons name="mic-off" size={24} color="#fff" /> */}
+                <Image source={images.livecamera} style={{width:"100%",height:'100%'}} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.speakerButton}>
-                <MaterialIcons name="volume-up" size={24} color="#fff" />
+                <Image source={images.liveaudio} style={{width:"100%",height:'100%'}} />
+                {/* <MaterialIcons name="volume-up" size={24} color="#fff" /> */}
               </TouchableOpacity>
             </View>
           </SafeAreaView>
@@ -295,7 +302,8 @@ export default function MessageChat() {
 
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.actionButton} onPress={handleVoiceCall}>
-              <Icon name="call" size={20} color={theme.text} />
+              <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
+              {/* <Icon name="call" size={20} color={theme.text} /> */}
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
               <MaterialIcons name="videocam" size={20} color={theme.text} />
@@ -313,13 +321,14 @@ export default function MessageChat() {
             <Text style={styles.profileName}>{mockUser.username}</Text>
             <View style={styles.profileStats}>
               <View style={styles.stat}>
-                <Text style={styles.statIcon}>👥</Text>
+                <Image source={images.chatsFollower} style={{ width: 16, height: 16 }}  tintColor={'white'} />
                 <Text style={styles.statValue}>
                   {mockUser.followers?.toLocaleString()} Followers
                 </Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statIcon}>📝</Text>
+                {/* <Text style={styles.statIcon}>📝</Text> */}
+                <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={'white'}  />
                 <Text style={styles.statValue}>
                   {mockUser.posts} Posts
                 </Text>
@@ -363,7 +372,8 @@ export default function MessageChat() {
             onPress={handleSendMessage}
             disabled={!newMessage.trim()}
           >
-            <Icon name="send" size={20} color="#fff" />
+            <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"}  />
+            {/* <Icon name="send" size={20} color="#fff" /> */}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -535,12 +545,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FF3B30',
+    // backgroundColor: '#FF3B30',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#ccc',
+    // backgroundColor: '#ccc',
   },
 
   // Popup Styles
@@ -680,10 +690,10 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   callControls: {
-    position:'absolute',
-    bottom:10,
-    left:'50%',
-    transform : [{translateX:"-50%"}],
+    position: 'absolute',
+    bottom: 10,
+    left: '50%',
+    transform: [{ translateX: "-50%" }],
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',

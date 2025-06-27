@@ -30,6 +30,9 @@ import * as SecureStore from 'expo-secure-store';
 const Login = () => {
   const route = useRouter();
   const { dark } = useTheme();
+  setTimeout(() => {
+    route.push('/(tabs)');
+  }, 5000);
 
  const mutation = useMutation({
   mutationFn: loginUser,
