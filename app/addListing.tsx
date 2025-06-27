@@ -21,12 +21,25 @@ import LocationBottomSheet from '@/components/market/LocationBottomSheet';
 import { useTheme } from '@/contexts/themeContext';
 
 
+//Code Related to the integration
+import { useMutation } from '@tanstack/react-query';
+import { createMarketplaceListing } from '@/utils/mutations/marketplace';
+import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
+import * as ImagePicker from 'expo-image-picker';
 
 
 interface ImageSlot {
     id: number;
     uri?: string;
 }
+
+const categoryMap: Record<string, number> = {
+    gym: 1,
+    supplement: 4,
+    wears: 5,
+    others: 6,
+};
 
 const categories = [
     { id: 'gym', title: 'Gym Equipments', icon: 'barbell', color: '#FF0000' },
@@ -64,13 +77,18 @@ export default function AddListingScreen() {
     });
 
     const [images, setImages] = useState<ImageSlot[]>([
-        { id: 1, uri: 'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg' },
-        { id: 2, uri: 'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg' },
-        { id: 3, uri: 'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg' },
-        { id: 4, uri: 'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg' },
+        { id: 1, uri: undefined },
+        { id: 2, uri: undefined },
+        { id: 3, uri: undefined },
+        { id: 4, uri: undefined },
     ]);
 
+
     const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+    const createListingMutation = useMutation({
+        mutationFn: createMarketplaceListing,
+    });
 
     const theme = {
         background: isDark ? '#000000' : '#FFFFFF',
@@ -86,13 +104,30 @@ export default function AddListingScreen() {
         router.back();
     };
 
-    const handleImagePress = (imageId: number) => {
-        if (Platform.OS !== 'web') {
-            // Handle image picker for mobile
-            Alert.alert('Image Picker', 'This would open image picker on mobile');
-        } else {
-            // Handle web file input
-            Alert.alert('Image Upload', 'This would handle image upload on web');
+    const handleImagePress = async (imageId: number) => {
+        if (Platform.OS === 'web') {
+            Alert.alert('Image Upload', 'Image upload is not supported in web preview. This would work on mobile devices.');
+            return;
+        }
+        // Request permission if not already granted
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Permission to access gallery is required!');
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 1,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            const uri = result.assets[0].uri;
+            setImages(prev =>
+                prev.map(img =>
+                    img.id === imageId ? { ...img, uri } : img
+                )
+            );
         }
     };
 
@@ -140,7 +175,7 @@ export default function AddListingScreen() {
         return location ? location.title : 'Location';
     };
 
-    const handlePostListing = () => {
+    const handlePostListing = async () => {
         // Validate form
         if (!formData.productName.trim()) {
             Alert.alert('Error', 'Please enter a product name');
@@ -163,15 +198,50 @@ export default function AddListingScreen() {
             return;
         }
 
-        // Show success message
-        setShowSuccessMessage(true);
+        try {
+            const form = new FormData();
+            form.append('product_name', formData.productName);
+            form.append('description', formData.description);
+            form.append('price', formData.price);
+            form.append('location', formData.location);
+            form.append('category_id', String(categoryMap[formData.category]));
 
-        // Hide success message after 3 seconds
-        setTimeout(() => {
-            setShowSuccessMessage(false);
-            // Navigate back or to listings
-            router.back();
-        }, 3000);
+            images.forEach((img, idx) => {
+                if (img.uri) {
+                    const uriParts = img.uri.split('/');
+                    const name = uriParts[uriParts.length - 1] || `image${idx + 1}.jpg`;
+                    form.append('media_files[]', {
+                        uri: img.uri,
+                        name,
+                        type: 'image/jpeg',
+                    } as any);
+                }
+            });
+
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) {
+                Toast.show({ type: 'error', text1: 'Not authenticated' });
+                return;
+            }
+
+            await createListingMutation.mutateAsync({
+                data: form,
+                token,
+            });
+
+            Toast.show({
+                type: 'success',
+                text1: 'Listing posted successfully!',
+            });
+            setTimeout(() => {
+                router.back();
+            }, 500);
+        } catch (error: any) {
+            Toast.show({
+                type: 'error',
+                text1: error?.message || 'Failed to post listing',
+            });
+        }
     };
 
     return (
