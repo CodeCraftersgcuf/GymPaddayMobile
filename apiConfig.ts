@@ -129,6 +129,7 @@ const API_ENDPOINTS = {
       Delete: (id: number) => API_DOMAIN + `/user/notifications/${id}`,
     },
     CHAT_MESSAGES: {
+      ConnectedUsers: API_DOMAIN + "/user/chat-conversations",
       List: API_DOMAIN + "/user/chat-messages",
       Create: API_DOMAIN + "/user/chat-messages",
       Show: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,

@@ -13,61 +13,30 @@ import {
   ScrollView,
   Modal,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import * as SecureStore from 'expo-secure-store';
+import { fetchChatMessages } from '@/utils/queries/chat';
+import { sendChatMessage } from '@/utils/mutations/chat';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
 
+
 const { width, height } = Dimensions.get('window');
 
 const dark = true; // You can change this to toggle theme
 
-// Mock data for demonstration
-const mockUser = {
-  id: '1',
-  username: 'Christopher',
-  profile_img: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
-  online: true,
-  followers: 1500,
-  posts: 70,
-};
-
-const mockMessages = [
-  {
-    id: '1',
-    senderId: '1',
-    text: 'Hey! How are you doing?',
-    timestamp: new Date(Date.now() - 3600000),
-  },
-  {
-    id: '2',
-    senderId: 'current',
-    text: 'I\'m doing great! Just finished my workout.',
-    timestamp: new Date(Date.now() - 3500000),
-  },
-  {
-    id: '3',
-    senderId: '1',
-    text: 'That\'s awesome! What kind of workout?',
-    timestamp: new Date(Date.now() - 3400000),
-  },
-  {
-    id: '4',
-    senderId: 'current',
-    text: 'Yeah that is great, i have been pretty occupied these past few weeks',
-    timestamp: new Date(Date.now() - 3300000),
-  },
-];
-
 export default function MessageChat() {
-  const params = useLocalSearchParams();
-  const [messages, setMessages] = useState(mockMessages);
+  const { conversation_id, user_id, user_pic, user_name } = useLocalSearchParams();
   const [newMessage, setNewMessage] = useState('');
   const [showVideoCallPopup, setShowVideoCallPopup] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const flatListRef = useRef<FlatList<any>>(null);
 
   const theme = {
@@ -78,21 +47,66 @@ export default function MessageChat() {
     border: dark ? '#333333' : '#e0e0e0',
   };
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message = {
-        id: Date.now().toString(),
-        senderId: 'current',
-        text: newMessage.trim(),
-        timestamp: new Date(),
-      };
-      setMessages([...messages, message]);
+  // Securely get token for API call
+  const getToken = async () => {
+    return await SecureStore.getItemAsync('auth_token');
+  };
+
+  // Fetch messages from backend (removing mockMessages)
+  const {
+    data,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['chatMessages', conversation_id],
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error('No token found');
+      return fetchChatMessages(token, conversation_id);
+    },
+    enabled: !!conversation_id,
+  });
+
+  // Transform fetched data
+  const messages = data?.messages?.map((msg: any) => {
+    return {
+      id: String(msg.id),
+      isCurrentUser: msg.direction === 'sent',
+      text: msg.message,
+      timestamp: new Date(msg.created_at),
+      senderPicture: msg.direction === 'sent'
+        ? msg.sender?.profile_picture_url
+        : msg.receiver?.profile_picture_url,
+    }
+  }) || [];
+
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async (messageText: string) => {
+      const token = await getToken();
+      if (!token) throw new Error('No token found');
+      return sendChatMessage(
+        { sender_id: 'current', receiver_id: user_id, message: messageText },
+        token
+      );
+    },
+    onSuccess: () => {
       setNewMessage('');
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd();
-      }, 100);
+      refetch();
+    },
+  });
+
+  // Handle send button
+  const handleSendMessage = () => {
+    if (newMessage.trim() && !sendMessageMutation.isLoading) {
+      sendMessageMutation.mutate(newMessage.trim());
     }
   };
+
+  // Auto-scroll after new messages
+  useEffect(() => {
+    setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
+  }, [messages.length]);
 
   const handleVideoCall = () => {
     setShowVideoCallPopup(true);
@@ -117,37 +131,50 @@ export default function MessageChat() {
   };
 
   const renderMessage = ({ item, index }) => {
-    const isCurrentUser = item.senderId === 'current';
-    const showAvatar = !isCurrentUser &&
+    const isCurrentUser = item.isCurrentUser;
+
+    const showAvatar =
+      !isCurrentUser &&
       (index === 0 || messages[index - 1].senderId !== item.senderId);
 
     return (
       <View
         style={[
           styles.messageBubble,
-          isCurrentUser ? styles.sentBubble : styles.receivedBubble
+          { justifyContent: isCurrentUser ? 'flex-end' : 'flex-start' },
         ]}
       >
-        {showAvatar && (
+        {/* Avatar only for received messages */}
+        {!isCurrentUser && showAvatar && (
           <Image
-            source={{ uri: mockUser.profile_img }}
+            source={{ uri: item.senderPicture }}
             style={styles.messageAvatar}
           />
         )}
-        <View style={[
-          styles.messageContent,
-          isCurrentUser ? styles.sentContent : styles.receivedContent
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isCurrentUser ? styles.sentText : styles.receivedText
-          ]}>
+
+        {/* Bubble content */}
+        <View
+          style={[
+            styles.messageContent,
+            isCurrentUser ? styles.sentContent : styles.receivedContent,
+            {
+              alignSelf: isCurrentUser ? 'flex-end' : 'flex-start',
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.messageText,
+              isCurrentUser ? styles.sentText : styles.receivedText,
+            ]}
+          >
             {item.text}
           </Text>
         </View>
       </View>
     );
   };
+
 
   // Video Call Popup Component
   const VideoCallPopup = () => (
@@ -198,7 +225,7 @@ export default function MessageChat() {
     >
       <View style={styles.callScreen}>
         <Image
-          source={{ uri: mockUser.profile_img }}
+          source={{ uri: user_pic }}
           style={styles.callBackground}
         />
         <View style={styles.callOverlay} />
@@ -213,15 +240,15 @@ export default function MessageChat() {
 
           <View style={styles.callControls}>
             <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-              <Image source={images.liveClose} style={{width:"100%",height:'100%'}} />
+              <Image source={images.liveClose} style={{ width: "100%", height: '100%' }} />
               {/* <Icon name="close" size={24} color="#fff" /> */}
             </TouchableOpacity>
             <TouchableOpacity style={styles.muteButton}>
-              <Image source={images.livecamera} style={{width:"100%",height:'100%'}} />
+              <Image source={images.livecamera} style={{ width: "100%", height: '100%' }} />
               {/* <MaterialIcons name="mic-off" size={24} color="#fff" /> */}
             </TouchableOpacity>
             <TouchableOpacity style={styles.speakerButton}>
-              <Image source={images.liveaudio} style={{width:"100%",height:'100%'}} />
+              <Image source={images.liveaudio} style={{ width: "100%", height: '100%' }} />
               {/* <MaterialIcons name="volume-up" size={24} color="#fff" /> */}
             </TouchableOpacity>
           </View>
@@ -245,24 +272,26 @@ export default function MessageChat() {
           <SafeAreaView style={styles.voiceCallContainer}>
             <View style={styles.voiceCallContent}>
               <Image
-                source={{ uri: mockUser.profile_img }}
+                source={{ uri: user_pic }}
                 style={styles.voiceCallAvatar}
               />
-              <Text style={styles.voiceCallName}>Adam235</Text>
+              <Text style={styles.voiceCallName}>
+                {user_name || 'User'}
+              </Text>
               <Text style={styles.voiceCallStatus}>Calling....</Text>
             </View>
 
             <View style={styles.callControls}>
               <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-                <Image source={images.liveClose} style={{width:"100%",height:'100%'}} />
+                <Image source={images.liveClose} style={{ width: "100%", height: '100%' }} />
                 {/* <Icon name="close" size={24} color="#fff" /> */}
               </TouchableOpacity>
               <TouchableOpacity style={styles.muteButton}>
                 {/* <MaterialIcons name="mic-off" size={24} color="#fff" /> */}
-                <Image source={images.livecamera} style={{width:"100%",height:'100%'}} />
+                <Image source={images.livecamera} style={{ width: "100%", height: '100%' }} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.speakerButton}>
-                <Image source={images.liveaudio} style={{width:"100%",height:'100%'}} />
+                <Image source={images.liveaudio} style={{ width: "100%", height: '100%' }} />
                 {/* <MaterialIcons name="volume-up" size={24} color="#fff" /> */}
               </TouchableOpacity>
             </View>
@@ -272,116 +301,145 @@ export default function MessageChat() {
     </Modal>
   );
 
+  const otherUser = data?.messages?.length
+  ? (data.messages.find((m: any) => m.direction === 'received')?.sender
+    || data.messages[0].receiver)
+  : null;
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [refetch]);
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <SafeAreaView style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Icon name="chevron-back" size={24} color={theme.text} />
-          </TouchableOpacity>
-
-          <View style={styles.userInfo}>
-            <Image
-              source={{ uri: mockUser.profile_img }}
-              style={styles.userImage}
-            />
-            <View style={styles.userDetails}>
-              <Text style={[styles.userName, { color: theme.text }]}>{mockUser.username}</Text>
-              {mockUser.online && (
-                <Text style={styles.onlineStatus}>Online</Text>
-              )}
-            </View>
+        {isLoading && (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#fff" />
           </View>
+        )}
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleVoiceCall}>
-              <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
-              {/* <Icon name="call" size={20} color={theme.text} /> */}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
-              <MaterialIcons name="videocam" size={20} color={theme.text} />
-            </TouchableOpacity>
-          </View>
-        </View>
+        {!isLoading && (
+          <>
+            {/* Header */}
+            <View style={[styles.header, { borderBottomColor: theme.border }]}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => router.back()}
+              >
+                <Icon name="chevron-back" size={24} color={theme.text} />
+              </TouchableOpacity>
 
-        <ScrollView style={{ flex: 1 }}>
-          {/* Profile Card */}
-          <View style={styles.profileCard}>
-            <Image
-              source={{ uri: mockUser.profile_img }}
-              style={styles.profileImage}
-            />
-            <Text style={styles.profileName}>{mockUser.username}</Text>
-            <View style={styles.profileStats}>
-              <View style={styles.stat}>
-                <Image source={images.chatsFollower} style={{ width: 16, height: 16 }}  tintColor={'white'} />
-                <Text style={styles.statValue}>
-                  {mockUser.followers?.toLocaleString()} Followers
-                </Text>
+              <View style={styles.userInfo}>
+                <Image
+                  source={{ uri: otherUser?.profile_picture_url }}
+                  style={styles.userImage}
+                />
+                <View style={styles.userDetails}>
+                  <Text style={styles.userName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
+                  <Text style={styles.onlineStatus}>Online</Text>
+                </View>
               </View>
-              <View style={styles.stat}>
-                {/* <Text style={styles.statIcon}>📝</Text> */}
-                <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={'white'}  />
-                <Text style={styles.statValue}>
-                  {mockUser.posts} Posts
-                </Text>
+
+              <View style={styles.headerActions}>
+                <TouchableOpacity style={styles.actionButton} onPress={handleVoiceCall}>
+                  <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
+                  {/* <Icon name="call" size={20} color={theme.text} /> */}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
+                  <MaterialIcons name="videocam" size={20} color={theme.text} />
+                </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity style={styles.viewProfileButton}>
-              <Text style={styles.viewProfileText}>View Profile</Text>
-            </TouchableOpacity>
-          </View>
 
-          {/* Messages */}
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            style={styles.messagesContainer}
-            keyExtractor={(item) => item.id}
-            scrollEnabled={false}
-            renderItem={renderMessage}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-          />
-        </ScrollView>
+            {/* Profile Card */}
+            <View style={styles.profileCard}>
+              <Image
+                source={{ uri: otherUser?.profile_picture_url }}
+                style={styles.profileImage}
+              />
+              <Text style={styles.profileName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
+              <View style={styles.profileStats}>
+                <View style={styles.stat}>
+                  <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={'white'} />
+                  <Text style={styles.statValue}>
+                    0 Followers
+                  </Text>
+                </View>
+                <View style={styles.stat}>
+                  {/* <Text style={styles.statIcon}>📝</Text> */}
+                  <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={'white'} />
+                  <Text style={styles.statValue}>
+                    0 Posts
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.viewProfileButton}>
+                <Text style={styles.viewProfileText}>View Profile</Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Input Container */}
-        <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-          <TextInput
-            style={[styles.input, {
-              backgroundColor: theme.secondary,
-              color: theme.text
-            }]}
-            placeholder="Type a message"
-            placeholderTextColor={theme.textSecondary}
-            value={newMessage}
-            onChangeText={setNewMessage}
-            multiline
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              !newMessage.trim() && styles.sendButtonDisabled
-            ]}
-            onPress={handleSendMessage}
-            disabled={!newMessage.trim()}
-          >
-            <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"}  />
-            {/* <Icon name="send" size={20} color="#fff" /> */}
-          </TouchableOpacity>
-        </View>
+            {/* Messages */}
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              style={styles.messagesContainer}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={true}
+              renderItem={renderMessage}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+            />
+
+            {/* Input Container */}
+            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.secondary,
+                  color: theme.text
+                }]}
+                placeholder="Type a message"
+                placeholderTextColor={theme.textSecondary}
+                value={newMessage}
+                onChangeText={setNewMessage}
+                multiline
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  !newMessage.trim() && styles.sendButtonDisabled
+                ]}
+                onPress={handleSendMessage}
+                disabled={!newMessage.trim()}
+              >
+                {sendMessageMutation.isLoading ? (
+                  <Text>Sending...</Text>
+                ) : (
+                  <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {/* Modals */}
+        <VideoCallPopup />
+        <VideoCallScreen />
+        <VoiceCallScreen />
       </SafeAreaView>
-
-      {/* Modals */}
-      <VideoCallPopup />
-      <VideoCallScreen />
-      <VoiceCallScreen />
     </KeyboardAvoidingView>
   );
 }
@@ -492,9 +550,13 @@ const styles = StyleSheet.create({
   },
   sentBubble: {
     justifyContent: 'flex-end',
+    flexDirection: 'row-reverse', // avatar on the right
+
   },
   receivedBubble: {
     justifyContent: 'flex-start',
+    flexDirection: 'row', // avatar on the left
+
   },
   messageAvatar: {
     width: 32,
@@ -755,4 +817,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.8)',
   },
+
 });

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/themeContext';
 import { useMessages } from '@/components/messages/MessageContext';
@@ -12,38 +12,124 @@ import SocialsModal from '@/components/messages/SocialsModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedView from '@/components/ThemedView';
 
+// Integration
+import { useQuery } from '@tanstack/react-query';
+import { fetchConnectedUsers } from '@/utils/queries/chat';
+import * as SecureStore from 'expo-secure-store';
+
 export default function Chat() {
   const router = useRouter();
   const { dark } = useTheme();
-  const { users, conversations } = useMessages();
+  const { users } = useMessages();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSocialModal, setShowSocialModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleAvatarPress = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    if (user) {
-      const conversationId = `conv-1-${userId}`;
-      router.push({
-        pathname: '/messageChat',
-        params: { id: conversationId},
-      });
-    }
+  // Securely get token for API call
+  const getToken = async () => {
+    return await SecureStore.getItemAsync('auth_token');
   };
 
-  const handleConversationPress = (conversationId: string) => {
-    console.log('clicked')
-    router.push({
-      pathname: '/messageChat',
-      params: { id: conversationId},
-    });
-  };
+  // Query for conversations
+  const {
+    data,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error('No token found');
+      return fetchConnectedUsers(token);
+    },
+  });
+  console.log("The data from API:", data);
 
-  const filteredConversations = conversations.filter(
+  // Transform API data to ConversationList format
+  const apiConversations = data?.conversations?.map((conv: any) => ({
+    id: String(conv.conversation_id),
+    user: {
+      id: String(conv.other_user.id),
+      username: conv.other_user.username,
+      profile_img: conv.other_user.profile_picture_url,
+      online: false, // API does not provide online status
+    },
+    lastMessage: {
+      text: conv.last_message?.message || '',
+      timestamp: conv.last_message?.created_at
+        ? new Date(conv.last_message.created_at)
+        : new Date(conv.updated_at || conv.created_at),
+    },
+    other_user: conv.other_user, // for navigation
+    conversation_id: conv.conversation_id,
+  })) || [];
+
+  // Build users for AvatarList from API conversations
+  const apiUsers =
+    apiConversations.length > 0
+      ? Array.from(
+          new Map(
+            apiConversations.map((conv) => [
+              conv.user.id,
+              {
+                id: conv.user.id,
+                username: conv.user.username,
+                profile_img: conv.user.profile_img,
+                online: false,
+              },
+            ])
+          ).values()
+        )
+      : users;
+
+  // Filtering by username or last message
+  const filteredConversations = apiConversations.filter(
     (conv) =>
       conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       conv.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // AvatarList: use users from context (not API)
+  const handleAvatarPress = (userId: string) => {
+    // Find conversation with this user
+    const found = apiConversations.find(
+      (conv) => conv.user.id === userId
+    );
+    if (found) {
+      router.push({
+        pathname: '/messageChat',
+        params: {
+          conversation_id: found.conversation_id,
+          user_id: found.user.id,
+        },
+      });
+    }
+  };
+
+  // Conversation press: pass conversation_id and other_user id
+  const handleConversationPress = (conversationId: string) => {
+    const found = apiConversations.find(
+      (conv) => conv.id === conversationId
+    );
+    if (found) {
+      router.push({
+        pathname: '/messageChat',
+        params: {
+          conversation_id: found.conversation_id,
+          user_id: found.user.id,
+        },
+      });
+    }
+  };
+
+  // Pull-to-refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const socialOptions = ['Instagram', 'Twitter', 'Facebook', 'LinkedIn'];
 
@@ -52,13 +138,21 @@ export default function Chat() {
       <ThemedView style={styles.content} darkColor={dark ? '#000' : 'white'}>
         <Header onBack={() => router.back()} onOpenSocials={() => setShowSocialModal(true)} />
         <SearchBar query={searchQuery} onChange={setSearchQuery} />
-        <AvatarList users={users} onAvatarPress={handleAvatarPress} />
-        
+        <AvatarList users={apiUsers} onAvatarPress={handleAvatarPress} />
+
         <ThemedView style={styles.conversationsWrapper} darkColor={dark ? '#202020' : 'white'}>
-          <ConversationList
-            conversations={filteredConversations}
-            onConversationPress={handleConversationPress}
-          />
+          {isLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={dark ? 'white' : 'black'} />
+            </View>
+          ) : (
+            <ConversationList
+              conversations={filteredConversations}
+              onConversationPress={handleConversationPress}
+              refreshing={refreshing || isRefetching}
+              onRefresh={onRefresh}
+            />
+          )}
         </ThemedView>
       </ThemedView>
 
@@ -66,9 +160,7 @@ export default function Chat() {
         visible={showSocialModal}
         onClose={() => setShowSocialModal(false)}
         options={socialOptions}
-        onSelect={(option) => {
-          setShowSocialModal(false);
-        }}
+        onSelect={() => setShowSocialModal(false)}
       />
     </SafeAreaView>
   );

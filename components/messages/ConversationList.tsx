@@ -28,13 +28,18 @@ type Conversation = {
 type Props = {
   conversations: Conversation[];
   onConversationPress: (conversationId: string) => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 };
 
 export default function ConversationList({
   conversations,
   onConversationPress,
+  refreshing,
+  onRefresh,
 }: Props) {
   const { dark } = useTheme();
+  console.log("Conversations:", conversations);
 
   const formatMessageTime = (date: Date) =>
     isToday(date) ? format(date, 'h:mm a') : format(date, 'MMM d');
@@ -69,7 +74,8 @@ export default function ConversationList({
           onPress={() => onConversationPress(item.id)}
         >
           <View style={styles.avatarWrapper}>
-            <Image source={{ uri: item.user.profile_img }} style={styles.avatar} />
+           <Image source={{ uri: item.other_user?.profile_picture_url || item.user.profile_img }} style={styles.avatar} />
+
             {item.user.online && <View style={styles.online} />}
           </View>
           <View style={styles.content}>
@@ -85,6 +91,8 @@ export default function ConversationList({
           </View>
         </TouchableOpacity>
       )}
+      refreshing={!!refreshing}
+      onRefresh={onRefresh}
     />
   );
 }
