@@ -15,8 +15,10 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import { useTheme } from "@/contexts/themeContext";
 import { useQuery, useMutation } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
+import { useRouter } from "expo-router";
 import { fetchChatMessages } from '@/utils/queries/chat';
 import { sendChatMessage } from '@/utils/mutations/chat';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -28,9 +30,9 @@ import { images } from '@/constants';
 
 const { width, height } = Dimensions.get('window');
 
-const dark = true; // You can change this to toggle theme
 
 export default function MessageChat() {
+  const { dark } = useTheme();
   const { conversation_id, user_id, user_pic, user_name } = useLocalSearchParams();
   const [newMessage, setNewMessage] = useState('');
   const [showVideoCallPopup, setShowVideoCallPopup] = useState(false);
@@ -38,6 +40,7 @@ export default function MessageChat() {
   const [showVoiceCall, setShowVoiceCall] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const flatListRef = useRef<FlatList<any>>(null);
+  const router = useRouter();
 
   const theme = {
     background: dark ? '#000000' : '#ffffff',
@@ -129,6 +132,12 @@ export default function MessageChat() {
     setShowVideoCall(false);
     setShowVoiceCall(false);
   };
+  const hanldeViewProfile = (id: any) => {
+    router.push({
+      pathname: '/UserProfile',
+      params: { user_id: id },
+    })
+  }
 
   const renderMessage = ({ item, index }) => {
     const isCurrentUser = item.isCurrentUser;
@@ -302,9 +311,9 @@ export default function MessageChat() {
   );
 
   const otherUser = data?.messages?.length
-  ? (data.messages.find((m: any) => m.direction === 'received')?.sender
-    || data.messages[0].receiver)
-  : null;
+    ? (data.messages.find((m: any) => m.direction === 'received')?.sender
+      || data.messages[0].receiver)
+    : null;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -332,6 +341,7 @@ export default function MessageChat() {
         )}
 
         {!isLoading && (
+        // {true && (
           <>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -386,7 +396,7 @@ export default function MessageChat() {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.viewProfileButton}>
+              <TouchableOpacity onPress={()=>hanldeViewProfile(12)} style={styles.viewProfileButton}>
                 <Text style={styles.viewProfileText}>View Profile</Text>
               </TouchableOpacity>
             </View>

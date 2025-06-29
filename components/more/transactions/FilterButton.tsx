@@ -31,7 +31,7 @@ export default function FilterButton({ title, isActive, onPress }: FilterButtonP
 
 const styles = StyleSheet.create({
   button: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 10,
     flex:1

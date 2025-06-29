@@ -30,7 +30,6 @@ import * as SecureStore from 'expo-secure-store';
 const Login = () => {
   const route = useRouter();
   const { dark } = useTheme();
-  
 
  const mutation = useMutation({
   mutationFn: loginUser,
@@ -213,6 +212,12 @@ const handleLogin = (values: { email: string; password: string }) => {
                       style={{ paddingVertical: 15, borderRadius: 10 }}
                     >
                       <ThemeText style={styles.registerText}>Register</ThemeText>
+                    </Link>
+                    <Link
+                      href={"/(tabs)"}
+                      style={{ paddingVertical: 15, borderRadius: 10 }}
+                    >
+                      <ThemeText style={styles.registerText}>Login</ThemeText>
                     </Link>
                     {/* <Pressable onPress={() => route.push("/(tabs)")}>
                       <ThemeText>Login now</ThemeText>

@@ -1,3 +1,4 @@
+import ThemedView from '@/components/ThemedView';
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
@@ -20,15 +21,15 @@ export default function SummaryCard({
     <View style={styles.container}>
       <View style={styles.row}>
         <View style={styles.section}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{leftLabel}</Text>
-          </View>
+          <ThemedView darkColor='#181818' style={styles.badge}>
+            <Text style={[styles.badgeText,{color:'green'}]}>{leftLabel}</Text>
+          </ThemedView>
           <Text style={styles.amount}>{leftAmount}</Text>
         </View>
         <View style={styles.section}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{rightLabel}</Text>
-          </View>
+          <ThemedView darkColor='#181818' style={styles.badge}>
+            <Text style={[styles.badgeText,{color:'red'}]}>{rightLabel}</Text>
+          </ThemedView>
           <Text style={styles.amount}>{rightAmount}</Text>
         </View>
       </View>
@@ -55,7 +56,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   badge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    // backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -75,6 +76,6 @@ const styles = StyleSheet.create({
   lastUpdated: {
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
-    textAlign: 'center',
+    // textAlign: 'center',
   },
 });

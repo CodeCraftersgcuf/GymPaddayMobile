@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import React, { useState } from 'react'
 import { images } from '@/constants'
 import ThemedView from '@/components/ThemedView'
@@ -26,12 +26,18 @@ const UserPostDetail = () => {
   const handleClick = () => {
     console.log('clicked!!')
   }
+  const hanldeEditPost = () => {
+    router.push({ pathname: '/createpost', params: { postId: 12 } })
+  }
+  const handleDeletePost = () => {
+    Alert.alert('Post deleted');
+  }
 
   const Options = [
     {
       icon: images.EditIcon,
       title: 'Edit Profile',
-      handleFunction: handleClick,
+      handleFunction: hanldeEditPost,
     },
     {
       icon: images.BoostIcon,
@@ -41,7 +47,7 @@ const UserPostDetail = () => {
     {
       icon: images.DeleteIcon,
       title: 'Delete Post',
-      handleFunction: handleClick,
+      handleFunction: handleDeletePost,
     },
   ]
   return (

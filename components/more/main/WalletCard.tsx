@@ -97,17 +97,17 @@ export default function WalletCard({
 
       <View style={[styles.actionsContainer, { backgroundColor: dark ? '#181818' : 'white' }]}>
         <TouchableOpacity style={styles.actionButton} onPress={onTopup}>
-          <Image source={images.topUp} style={{ width: 20, height: 20 }} tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.topUp} style={{ width: 20, height: 20,objectFit:'contain' }} tintColor={dark ? 'white' : "#007AFF"} />
           <ThemeText style={styles.actionText}>Topup</ThemeText>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={onWithdraw}>
-          <Image source={images.withdraw} style={{ width: 18, height: 18 }} tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.withdraw} style={{ width: 18, height: 18,objectFit:'contain' }} tintColor={dark ? 'white' : "#007AFF"} />
           <ThemeText style={styles.actionText}>Withdraw</ThemeText>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={onTransaction}>
-          <Image source={images.transactions} style={{ width: 20, height: 20 }} tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.transactions} style={{ width: 20, height: 20,objectFit:'contain' }} tintColor={dark ? 'white' : "#007AFF"} />
           <ThemeText style={styles.actionText}>Transaction</ThemeText>
         </TouchableOpacity>
       </View>
@@ -172,6 +172,7 @@ const styles = StyleSheet.create({
     color: '#a0a0a0',
   },
   actionsContainer: {
+    paddingVertical:20,
     position: 'absolute',
     bottom: -20,
     left: '50%',
@@ -191,13 +192,16 @@ const styles = StyleSheet.create({
     width: '90%'
   },
   actionButton: {
-    alignItems: 'center',
     flex: 1,
+    // backgroundColor: 'red',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap:5
   },
   actionText: {
-    fontSize: 14,
+    fontSize: 12,
     // color: '#333',
-    marginTop: 8,
+    // marginTop: 8,
     fontWeight: '500',
   },
 });
