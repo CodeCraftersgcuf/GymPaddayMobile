@@ -17,10 +17,12 @@ import SelectedMedia from '@/components/Social/createpost/SelectedMedia';
 import GalleryGrid from '@/components/Social/createpost/GalleryGrid';
 import MediaViewModal from '@/components/Social/createpost/MediaViewModal';
 import { useTheme } from '@/contexts/themeContext';
+import { useLocalSearchParams } from 'expo-router';
 
 //Code related to integration
-import { useMutation } from '@tanstack/react-query';
-import { createPost } from '@/utils/mutations/posts';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { createPost, updatePost } from '@/utils/mutations/posts';
+import { getPostById } from '@/utils/queries/posts';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -35,58 +37,123 @@ export interface GalleryMedia {
 }
 
 export default function CreatePostScreen() {
+  const { postId } = useLocalSearchParams<{ postId?: string }>();
+  const isEditMode = Boolean(postId);
+  
   const [galleryMedia, setGalleryMedia] = useState<GalleryMedia[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<GalleryMedia[]>([]);
   const [postText, setPostText] = useState('');
   const [permissionStatus, setPermissionStatus] = useState<MediaLibrary.PermissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewingMedia, setViewingMedia] = useState<GalleryMedia | null>(null);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  
   const { dark } = useTheme();
   const router = useRouter();
 
-  // Add mutation for creating posts
+  // Fetch existing post data if in edit mode
+  const { data: existingPost, isLoading: isLoadingPost } = useQuery({
+    queryKey: ['post', postId],
+    queryFn: () => getPostById(postId!),
+    enabled: isEditMode && !!postId,
+    onSuccess: (data) => {
+      console.log('✅ Existing post loaded:', data);
+    },
+    onError: (error) => {
+      console.error('❌ Error loading post:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error Loading Post',
+        text2: 'Failed to load post data for editing',
+      });
+    }
+  });
+
+  // Populate form with existing post data
+  useEffect(() => {
+    if (isEditMode && existingPost && !initialDataLoaded) {
+      setPostText(existingPost.content || existingPost.title || '');
+      
+      // Convert existing media to GalleryMedia format
+      if (existingPost.media && existingPost.media.length > 0) {
+        const existingMedia: GalleryMedia[] = existingPost.media.map((mediaItem: any, index: number) => ({
+          id: `existing_${mediaItem.id || index}`,
+          uri: mediaItem.url || mediaItem.media_url,
+          width: 300,
+          height: 400,
+          mediaType: mediaItem.type === 'video' ? 'video' : 'photo',
+          duration: mediaItem.duration,
+        }));
+        setSelectedMedia(existingMedia);
+      }
+      
+      setInitialDataLoaded(true);
+      console.log('📝 Form populated with existing post data');
+    }
+  }, [existingPost, isEditMode, initialDataLoaded]);
+
+  // Create post mutation
   const createPostMutation = useMutation({
     mutationFn: createPost,
     onSuccess: (data) => {
       console.log('🎉 Post Created Successfully:', data);
-
       Toast.show({
         type: 'success',
         text1: 'Post Created!',
         text2: 'Your post has been shared successfully',
         visibilityTime: 500,
       });
-
-      // Navigate back after short delay
-      setTimeout(() => {
-        router.back();
-      }, 600);
+      setTimeout(() => router.back(), 600);
     },
     onError: (error: any) => {
       console.error('❌ Post Creation Error:', error);
-
-      // If it's an Axios error, show detailed backend response
-      if (error?.response) {
-        console.log('📡 Backend Response:', {
-          status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers,
-        });
-      } else if (error?.request) {
-        console.log('📤 Request Made But No Response:', error.request);
-      } else {
-        console.log('💥 General Error:', error.message);
-      }
-
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to Create Post',
-        text2: error?.response?.data?.message || error.message || 'Something went wrong. Please try again.',
-        visibilityTime: 3000,
-      });
+      handleMutationError(error, 'Failed to Create Post');
     },
-
   });
+
+  // Update post mutation
+  const updatePostMutation = ()=>{
+    console.log('📝 Updating Post...')
+  }
+  // const updatePostMutation = useMutation({
+  //   mutationFn: ({ postId, data, token }: { postId: string; data: FormData; token: string }) => 
+  //     updatePost(postId, data, token),
+  //   onSuccess: (data) => {
+  //     console.log('🎉 Post Updated Successfully:', data);
+  //     Toast.show({
+  //       type: 'success',
+  //       text1: 'Post Updated!',
+  //       text2: 'Your post has been updated successfully',
+  //       visibilityTime: 500,
+  //     });
+  //     setTimeout(() => router.back(), 600);
+  //   },
+  //   onError: (error: any) => {
+  //     console.error('❌ Post Update Error:', error);
+  //     handleMutationError(error, 'Failed to Update Post');
+  //   },
+  // });
+
+  const handleMutationError = (error: any, defaultMessage: string) => {
+    if (error?.response) {
+      console.log('📡 Backend Response:', {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers,
+      });
+    } else if (error?.request) {
+      console.log('📤 Request Made But No Response:', error.request);
+    } else {
+      console.log('💥 General Error:', error.message);
+    }
+
+    Toast.show({
+      type: 'error',
+      text1: defaultMessage,
+      text2: error?.response?.data?.message || error.message || 'Something went wrong. Please try again.',
+      visibilityTime: 3000,
+    });
+  };
 
   useEffect(() => {
     requestPermissionAndLoadGallery();
@@ -231,8 +298,8 @@ export default function CreatePostScreen() {
         mediaTypes,
         allowsMultipleSelection: true,
         quality: 0.8,
-        videoQuality: ImagePicker.VideoQuality?.High || 1, // Use enum if available, fallback to number
-        videoMaxDuration: 30, // Limit video to 30 seconds
+        videoQuality: ImagePicker.VideoQuality?.High || 1,
+        videoMaxDuration: 30,
         allowsEditing: false,
       });
 
@@ -249,7 +316,6 @@ export default function CreatePostScreen() {
         setSelectedMedia(prev => [...prev, ...newMedia]);
         console.log('Media picked successfully:', newMedia.length, 'items');
 
-        // Show success feedback
         Alert.alert(
           'Success',
           `${newMedia.length} media item(s) added to your post!`,
@@ -261,7 +327,6 @@ export default function CreatePostScreen() {
     } catch (error) {
       console.error('Error picking media:', error);
 
-      // Handle specific error types
       if (error.message?.includes('permission')) {
         Alert.alert(
           'Permission Error',
@@ -282,20 +347,6 @@ export default function CreatePostScreen() {
     setViewingMedia(media);
   };
 
-  // Helper function to convert URI to File/Blob for FormData
-  const createFileFromUri = async (uri: string, name: string, type: string) => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      // Create a File-like object
-      return new File([blob], name, { type });
-    } catch (error) {
-      console.error('Error creating file from URI:', error);
-      throw error;
-    }
-  };
-  // Updated handleSubmit function
   const handleSubmit = async () => {
     try {
       // Validation
@@ -329,17 +380,21 @@ export default function CreatePostScreen() {
         formData.append('content', postText.trim());
       }
 
-      // ✅ Process and add media files (React Native safe version)
+      // Process and add media files
       if (selectedMedia.length > 0) {
         for (let i = 0; i < selectedMedia.length; i++) {
           const media = selectedMedia[i];
 
           try {
+            // Skip existing media that hasn't changed (starts with 'existing_')
+            if (media.id.startsWith('existing_') && isEditMode) {
+              continue;
+            }
+
             const fileExtension = media.mediaType === 'video' ? 'mp4' : 'jpg';
             const mimeType = media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
             const fileName = `media_${Date.now()}_${i}.${fileExtension}`;
 
-            // ✅ Append valid React Native format file
             formData.append('media[]', {
               uri: media.uri,
               name: fileName,
@@ -362,11 +417,22 @@ export default function CreatePostScreen() {
         formData.append('media_url', '');
       }
 
-      // Call the mutation
-      createPostMutation.mutate({
-        data: formData,
-        token,
-      });
+      // Call appropriate mutation based on mode
+      if (isEditMode && postId) {
+        console.log('🔄 Updating post with ID:', postId);
+        updatePostMutation();
+        // updatePostMutation.mutate({
+        //   postId,
+        //   data: formData,
+        //   token,
+        // });
+      } else {
+        console.log('✨ Creating new post');
+        createPostMutation.mutate({
+          data: formData,
+          token,
+        });
+      }
 
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -378,13 +444,14 @@ export default function CreatePostScreen() {
     }
   };
 
-
-  if (loading) {
+  // Show loading state while fetching post data in edit mode
+  if (loading || (isEditMode && isLoadingPost)) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
-        {/* <StatusBar barStyle="dark-content" backgroundColor="#fff" /> */}
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading gallery...</Text>
+          <Text style={styles.loadingText}>
+            {isEditMode ? 'Loading post data...' : 'Loading gallery...'}
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -393,7 +460,6 @@ export default function CreatePostScreen() {
   if (permissionStatus !== MediaLibrary.PermissionStatus.GRANTED && Platform.OS !== 'web') {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
-        {/* <StatusBar barStyle="dark-content" backgroundColor="#fff" /> */}
         <View style={styles.permissionContainer}>
           <Text style={styles.permissionTitle}>Permission Required</Text>
           <Text style={styles.permissionText}>
@@ -406,10 +472,11 @@ export default function CreatePostScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
-      {/* <StatusBar barStyle="dark-content" backgroundColor="#fff" /> */}
       <Header
         onSubmit={handleSubmit}
+        // || updatePostMutation.isPending
         isLoading={createPostMutation.isPending}
+        isEditMode={isEditMode}
       />
       <UserSection postText={postText} onTextChange={setPostText} />
       <SelectedMedia
@@ -436,7 +503,6 @@ export default function CreatePostScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,

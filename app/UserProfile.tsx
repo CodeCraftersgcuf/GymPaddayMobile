@@ -16,6 +16,7 @@ import FollowersBottomSheet, { User } from '@/components/Social/post/FollowersBo
 import FollowingBottomSheet from '@/components/Social/post/FollowingBottomSheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { images } from '@/constants';
+import { useLocalSearchParams } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
@@ -71,7 +72,8 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState('posts');
   const [followers, setFollowers] = useState<User[]>(followersData);
   const [following, setFollowing] = useState<User[]>(followingData);
-
+  const { user_id } = useLocalSearchParams<{ user_id?: any }>();
+  console.log('User ID:', user_id);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
   const followingSheetRef = useRef<BottomSheet>(null);
@@ -144,8 +146,8 @@ export default function ProfileScreen() {
   const renderPostGrid = () => (
     <View style={styles.gridContainer}>
       {postImages.map((image, index) => (
-        <TouchableOpacity 
-          key={index} 
+        <TouchableOpacity
+          key={index}
           style={styles.gridItem}
           onPress={() => handleMediaPress(index)}
           activeOpacity={0.8}
@@ -214,7 +216,7 @@ export default function ProfileScreen() {
             </View>
             }
             {true && <View style={styles.actionButtons}>
-              <TouchableOpacity onPress={()=>router.push('/EditProfile')} style={styles.followButton}>
+              <TouchableOpacity onPress={() => router.push('/EditProfile')} style={styles.followButton}>
                 <Text style={styles.followButtonText}>Edit Profile</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/UserListing')} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>

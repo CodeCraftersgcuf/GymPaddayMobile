@@ -63,7 +63,7 @@ export default function TransactionsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, dark ? styles.containerDark : styles.containerLight]}>
-      <Header title="Transactions" showBackButton={true} onBackPress={() => {}} />
+      <Header title="Transactions" showBackButton={true} onBackPress={() => { }} />
 
       <SummaryCard
         leftLabel="Total Deposits"

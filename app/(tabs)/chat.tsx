@@ -18,9 +18,20 @@ import { fetchConnectedUsers } from '@/utils/queries/chat';
 import * as SecureStore from 'expo-secure-store';
 
 export default function Chat() {
+
+  
   const router = useRouter();
   const { dark } = useTheme();
   const { users } = useMessages();
+  // Example: Delay showing the search bar for 500ms after mount
+  // React.useEffect(() => {
+  //   const timeout = setTimeout(() => {
+  //     // You can perform any action here after 500ms
+  //     // For example, focus the search bar or trigger an animation
+  //     router.push('/messageChat');
+  //   }, 500);
+  //   return () => clearTimeout(timeout);
+  // }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSocialModal, setShowSocialModal] = useState(false);

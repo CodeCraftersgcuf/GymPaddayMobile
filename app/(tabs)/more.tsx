@@ -15,11 +15,16 @@ import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
-
 import * as SecureStore from 'expo-secure-store';
+import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+
 
 
 export default function More() {
+  const [fontsLoaded] = useFonts({
+      Caveat_400Regular,
+      Caveat_700Bold,
+    });
   const { dark, setScheme } = useTheme();
   const [balance] = useState(250000);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
@@ -146,7 +151,7 @@ export default function More() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
-          <Text style={[styles.headerTitle, { fontFamily: 'CustomFont', }]}>Wallet</Text>
+          <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Wallet</Text>
           <Image source={{ uri: profileImage }} style={styles.headerProfileImage} />
         </ThemedView>
 
