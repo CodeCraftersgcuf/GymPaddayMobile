@@ -95,8 +95,8 @@ export default function ItemDetailsScreen() {
     console.log("Listing Datass:", listingData);
 
     // Base API URL
-    const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
-
+    // const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
+    const API_BASE_URL = 'https://gympaddy.hmstech.xyz/storage/';
     // Extract the actual data from the API response
     const listing = listingData?.data;
 
@@ -115,6 +115,7 @@ export default function ItemDetailsScreen() {
         listing?.user?.profile_picture_url ||
         'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg';
 
+        console.log("Seller Image:", sellerImage);
     // Prepare other fields
     const title = listing?.title || '...';
     const price = listing?.price ? `N${listing.price}` : '';

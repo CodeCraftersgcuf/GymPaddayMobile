@@ -117,7 +117,9 @@ export default function MarketplaceScreen() {
     others: 'others',
   };
 
-  const BASE_STORAGE_URL = 'http://192.168.175.151:8000/storage/';
+  // const BASE_STORAGE_URL = 'http://192.168.175.151:8000/storage/';
+  const BASE_STORAGE_URL = 'https://gympaddy.hmstech.xyz/storage/';
+
 
   const apiListings = Array.isArray(data?.data)
     ? data.data.map((item: any) => {
