@@ -31,45 +31,45 @@ const Login = () => {
   const route = useRouter();
   const { dark } = useTheme();
 
- const mutation = useMutation({
-  mutationFn: loginUser,
-  onSuccess: async (data) => {
-    console.log("🎉 Login Success:", data);
+  const mutation = useMutation({
+    mutationFn: loginUser,
+    onSuccess: async (data) => {
+      console.log("🎉 Login Success:", data);
 
-    if (data?.access_token) {
-      // ✅ Save token securely
-      await SecureStore.setItemAsync("auth_token", data.access_token);
-      await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
+      if (data?.access_token) {
+        // ✅ Save token securely
+        await SecureStore.setItemAsync("auth_token", data.access_token);
+        await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
 
-      Toast.show({
-        type: "success",
-        text1: "Login Successful",
-        text2: `Welcome back, ${data.user?.fullname || 'user'}!`,
-      });
+        Toast.show({
+          type: "success",
+          text1: "Login Successful",
+          text2: `Welcome back, ${data.user?.fullname || 'user'}!`,
+        });
 
-      route.push("/(tabs)");
-    } else {
+        route.push("/(tabs)");
+      } else {
+        Toast.show({
+          type: "error",
+          text1: "Login Failed",
+          text2: "Invalid response from server.",
+        });
+      }
+    },
+    onError: (error: any) => {
+      console.error("❌ Login Error:", error);
       Toast.show({
         type: "error",
         text1: "Login Failed",
-        text2: "Invalid response from server.",
+        text2: error?.message || "Something went wrong",
       });
-    }
-  },
-  onError: (error: any) => {
-    console.error("❌ Login Error:", error);
-    Toast.show({
-      type: "error",
-      text1: "Login Failed",
-      text2: error?.message || "Something went wrong",
-    });
-  },
-});
+    },
+  });
 
-const handleLogin = (values: { email: string; password: string }) => {
-  console.log("Login Data:", values);
-  mutation.mutate({ data: values });
-};
+  const handleLogin = (values: { email: string; password: string }) => {
+    console.log("Login Data:", values);
+    mutation.mutate({ data: values });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -213,8 +213,12 @@ const handleLogin = (values: { email: string; password: string }) => {
                     >
                       <ThemeText style={styles.registerText}>Register</ThemeText>
                     </Link>
-                    <Link
+                    {/* <Link
                       href={"/AgoraCallScreen"}
+                      style={{ paddingVertical: 15, borderRadius: 10 }}
+                    > */}
+                    <Link
+                      href={"/(tabs)"}
                       style={{ paddingVertical: 15, borderRadius: 10 }}
                     >
                       <ThemeText style={styles.registerText}>Login</ThemeText>

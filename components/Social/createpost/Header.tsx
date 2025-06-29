@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 
 interface HeaderProps {
@@ -21,7 +21,7 @@ export default function Header({ onSubmit, isLoading = false, isEditMode = false
         onPress={() => router.back()}
         disabled={isLoading}
       >
-        <Ionicons name="chevron-left" size={24} color={dark ? '#fff' : '#000'} />
+        <Ionicons name="chevron-back" size={24} color={dark ? '#fff' : '#000'} />
       </TouchableOpacity>
 
       <Text style={[styles.headerTitle, { color: dark ? '#fff' : '#000' }]}>

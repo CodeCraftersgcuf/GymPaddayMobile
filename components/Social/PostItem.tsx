@@ -17,6 +17,8 @@ import ThemeText from "../ThemedText";
 import { useTheme } from "@/contexts/themeContext";
 import { dummyImage } from "@/constants/help";
 import PostDetailBottomsheet from "./PostDetailBottomsheet";
+import { formatDistanceToNow } from 'date-fns';
+
 import { useRouter } from "expo-router";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
 
@@ -100,7 +102,10 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
     setCurrentIndex(newIndex);
   };
-
+  const formatTimestamp = (timestamp) => {
+    const postDate = new Date(timestamp);
+    return `${formatDistanceToNow(postDate)} ago`; // "20 minutes ago"
+  };
   return (
     <View style={styles.postContainer}>
       {/* Header */}
@@ -110,10 +115,10 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
             <Image source={{ uri: post.user.profile_picture }} style={styles.profileImage} />
             <View>
               <ThemeText style={styles.username}>{post.user.username}</ThemeText>
-              <View style={{ flexDirection: 'row', alignItems: 'center',gap:5 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <Text style={styles.time}>Lagos, Nigeria</Text>
                 <Text style={styles.time}>•</Text>
-                <Text style={styles.time}>{post.timestamp}</Text>
+                <Text style={styles.time}>{formatTimestamp(post.timestamp)}</Text>
               </View>
             </View>
           </View>

@@ -63,10 +63,14 @@
     "typescript": "~5.8.3"
   },
   "expo": {
-    "plugins": ["react-native-agora"],
+    "plugins": [
+      "react-native-agora"
+    ],
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["react-native-agora"]
+        "exclude": [
+          "react-native-agora"
+        ]
       }
     }
   },

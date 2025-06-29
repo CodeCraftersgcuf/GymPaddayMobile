@@ -11,10 +11,14 @@ interface props {
     BottomIndex: any;
     setbottomIndex: (data: any) => void;
     type: string;
+    idCan : {
+        userId: any;
+        postId: any;
+    } | {};
 }
 
 
-const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, type }) => {
+const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, type,idCan }) => {
     const bottomSheetRef = useRef<BottomSheet>(null);
     const { dark } = useTheme();
 
@@ -61,7 +65,7 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
                 }}
             >
                 {type != 'userpost' ?
-                    <UserPostDetail /> :
+                    <UserPostDetail idCan={idCan} /> :
                     <ViewpostDetail />
                 }
             </BottomSheetView>

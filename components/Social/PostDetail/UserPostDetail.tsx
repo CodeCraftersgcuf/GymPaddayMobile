@@ -7,7 +7,12 @@ import ThemeText from '@/components/ThemedText'
 import { useRouter } from 'expo-router'
 import BoostAdModal from '../Boost/BoostAdModal'
 
-const UserPostDetail = () => {
+const UserPostDetail: React.FC<{
+  idCan: {
+    userId: any;
+    postId: any;
+  }
+}> = ({idCan}) => {
   const router = useRouter();
   const { dark } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
@@ -27,7 +32,7 @@ const UserPostDetail = () => {
     console.log('clicked!!')
   }
   const hanldeEditPost = () => {
-    router.push({ pathname: '/createpost', params: { postId: 12 } })
+    router.push({ pathname: '/createpost', params: { postId: idCan.postId } })
   }
   const handleDeletePost = () => {
     Alert.alert('Post deleted');

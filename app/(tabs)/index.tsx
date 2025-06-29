@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  ActivityIndicator, // <-- add this
 } from 'react-native';
 
 
@@ -24,14 +25,78 @@ import PostDetailBottomsheet from '@/components/Social/PostDetailBottomsheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 
+import { useQuery } from '@tanstack/react-query';
+import { getUserPosts } from '@/utils/queries/posts';
+import * as SecureStore from 'expo-secure-store';
+// LoadingIndicator component
+function LoadingIndicator({ text = "Loading..." }) {
+  const { dark } = useTheme();
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: dark ? '#000' : '#fff' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ActivityIndicator size="large" color="#ff0000" />
+      <Text style={{ color: dark ? '#fff' : '#000', fontSize: 18, marginTop: 16 }}>{text}</Text>
+    </View>
+  );
+}
+
 export default function SocialFeedScreen() {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [currentComments, setCurrentComments] = useState<any[]>([]);
   const [currentPostId, setCurrentPostId] = useState<number | null>(null);
+  const [idCan, setidCan] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const { dark } = useTheme();
   const route = useRouter();
+  const [posts, setPosts] = useState<PostData[]>([]);
 
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['userPosts'],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token found');
+      const response = await getUserPosts(token);
+      return response; // ← this will be in `data`
+    },
+  });
+
+  useEffect(() => {
+    if (data && data.data) {
+      const postsArray = data.data; // ← this is the array of posts
+
+      const formatted = postsArray.map((post: any) => ({
+        id: post.id,
+        user: {
+          id: post.user?.id,
+          username: post.user?.username,
+          profile_picture: post.user?.profile_picture_url,
+        },
+        content: post.content || post.title || '',
+        imagesUrl: post.media
+          ?.filter((m: any) => m.media_type === 'image')
+          .map((m: any) => m.url) || [],
+        videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
+        timestamp: post.created_at,
+        likes_count: post.likes?.length || 0,
+        comments_count: post.comments?.length || 0,
+        view_count: 0,
+        share_count: 0,
+        recent_comments: post.comments?.slice(0, 2).map((comment: any) => ({
+          id: comment.id,
+          user: {
+            username: comment.user?.username || 'Unknown',
+            profile_picture: comment.user?.profile_picture_url || '',
+          },
+          text: comment.content || '',
+        })) || [],
+      }));
+
+      console.log('✅ Formatted posts', formatted);
+      setPosts(formatted);
+    }
+  }, [data]);
+
+ 
 
   const handleCommentPress = (comments: any[], postId: number) => {
     setCurrentComments(comments);
@@ -39,11 +104,9 @@ export default function SocialFeedScreen() {
     setCommentModalVisible(true);
   };
 
-  const handleCloseComments = () => {
-    setCommentModalVisible(false);
-  };
+  const handleCloseComments = () => setCommentModalVisible(false);
+
   const handleAddComment = (text: string, postId: number) => {
-    // Create new comment
     const newComment = {
       id: Math.random().toString(),
       userId: 'current-user-id',
@@ -59,76 +122,69 @@ export default function SocialFeedScreen() {
   };
 
   const handleStartLive = () => {
-    route.push('/goLive')
-    console.log('Start live streaming');
+    route.push('/goLive');
   };
 
   const handleCreatePost = () => {
-    console.log('Create new post');
-    // route.push('/create-post');
     route.push('/createpost');
   };
+
   const [BottomIndex, setBottomIndex] = useState(-1);
   const [PostType, setPostType] = useState('ViewerPost');
+
   const handleMenu = (userId: any, postId: any) => {
     setPostType(userId == 100 ? 'userpost' : 'ViewerPost');
     setBottomIndex(1);
+    setidCan({ userId, postId });
     console.log('click bottom sheet', userId, postId);
-  }
+  };
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      console.log('Refreshing feed...');
-      // Here you would typically:
-      // 1. Fetch new posts from API
-      // 2. Fetch new stories from API
-      // 3. Update state with fresh data
-      
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
+   // Show loading indicator while user posts are loading
+  if (isLoading) {
+    return <LoadingIndicator text="Loading posts..." />;
+  }
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-        {/* Header */}
         <TabHeader
           title="Socials"
           admin={{ profile: "https://randomuser.me/api/portraits/men/45.jpg", userId: '12345' }}
           notificationID="notif123"
         />
 
-        <ScrollView 
-          style={{ flex: 1 }} 
+        <ScrollView
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#ff0000']} // Android
-              tintColor={'#ff0000'} // iOS
-              title="Pull to refresh" // iOS
-              titleColor={dark ? '#ffffff' : '#000000'} // iOS
+              colors={['#ff0000']}
+              tintColor={'#ff0000'}
+              title="Pull to refresh"
+              titleColor={dark ? '#ffffff' : '#000000'}
             />
           }
         >
           {/* Stories */}
           <StoryContainer stories={mockStories} />
 
-          {/* Posts */}
+          {/* Real Posts from API */}
           <PostContainer
-            posts={mockPosts}
+            posts={posts}
             onCommentPress={handleCommentPress}
             handleMenu={handleMenu}
           />
         </ScrollView>
 
-        {/* Comments Bottom Sheet */}
         <CommentsBottomSheet
           visible={commentModalVisible}
           comments={currentComments}
@@ -142,14 +198,17 @@ export default function SocialFeedScreen() {
           onCreatePost={handleCreatePost}
         />
       </SafeAreaView>
+
       <PostDetailBottomsheet
         BottomIndex={BottomIndex}
         setbottomIndex={setBottomIndex}
         type={PostType}
+        idCan={idCan}
       />
     </GestureHandlerRootView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

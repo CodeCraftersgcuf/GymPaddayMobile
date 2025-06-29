@@ -39,6 +39,7 @@ export interface GalleryMedia {
 export default function CreatePostScreen() {
   const { postId } = useLocalSearchParams<{ postId?: string }>();
   const isEditMode = Boolean(postId);
+  console.log("is Edit mode ", isEditMode);
 
   const [galleryMedia, setGalleryMedia] = useState<GalleryMedia[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<GalleryMedia[]>([]);
