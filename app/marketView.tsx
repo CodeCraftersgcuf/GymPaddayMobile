@@ -21,7 +21,8 @@ import { useTheme } from '@/contexts/themeContext';
 import { useQuery } from '@tanstack/react-query';
 import { getMarketplaceListingById } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
-
+import { useMutation } from '@tanstack/react-query';
+import { sendChatMessage } from '@/utils/mutations/chat';
 
 interface RelatedItem {
     id: string;
@@ -77,49 +78,49 @@ export default function ItemDetailsScreen() {
     React.useEffect(() => {
         SecureStore.getItemAsync('auth_token').then(setToken);
     }, []);
-  const {
-    data: listingData,
-    isLoading,
-    isError,
-    error,
-} = useQuery({
-    queryKey: ['marketplace-listing', id, token],
-    queryFn: async () => {
-        if (!token || !id) throw new Error('No auth');
-        return getMarketplaceListingById(Number(id), token); // ✅ Correct order
-    },
-    enabled: !!token && !!id,
-});
+    const {
+        data: listingData,
+        isLoading,
+        isError,
+        error,
+    } = useQuery({
+        queryKey: ['marketplace-listing', id, token],
+        queryFn: async () => {
+            if (!token || !id) throw new Error('No auth');
+            return getMarketplaceListingById(Number(id), token); // ✅ Correct order
+        },
+        enabled: !!token && !!id,
+    });
 
-console.log("Listing Data:", listingData);
+    console.log("Listing Datass:", listingData);
 
-  // Base API URL
-const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
+    // Base API URL
+    const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
 
-// Extract the actual data from the API response
-const listing = listingData?.data;
+    // Extract the actual data from the API response
+    const listing = listingData?.data;
 
-// Prepare images from API
-const images =
-    Array.isArray(listing?.media_urls) && listing.media_urls.length > 0
-        ? listing.media_urls.map((url: string) =>
-              url.startsWith('http') ? url : API_BASE_URL + url
-          )
-        : [
-              'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg',
-          ];
+    // Prepare images from API
+    const images =
+        Array.isArray(listing?.media_urls) && listing.media_urls.length > 0
+            ? listing.media_urls.map((url: string) =>
+                url.startsWith('http') ? url : API_BASE_URL + url
+            )
+            : [
+                'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg',
+            ];
 
-// Prepare seller image
-const sellerImage =
-    listing?.user?.profile_picture_url ||
-    'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg';
+    // Prepare seller image
+    const sellerImage =
+        listing?.user?.profile_picture_url ||
+        'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg';
 
-// Prepare other fields
-const title = listing?.title || '...';
-const price = listing?.price ? `N${listing.price}` : '';
-const location = listing?.location || '';
-const description = listing?.description || '';
-const sellerName = listing?.user?.name || 'User';
+    // Prepare other fields
+    const title = listing?.title || '...';
+    const price = listing?.price ? `N${listing.price}` : '';
+    const location = listing?.location || '';
+    const description = listing?.description || '';
+    const sellerName = listing?.user?.name || 'User';
 
 
     // Loading and error handling
@@ -146,10 +147,19 @@ const sellerName = listing?.user?.name || 'User';
         router.back();
     };
 
-    const handleSendMessage = () => {
-        if (message.trim()) {
-            // Handle sending message
-            setMessage('');
+    const handleSendMessage = async () => {
+        if (message.trim() && listing?.sender_id && listing?.receiver_id && token) {
+            try {
+                await sendChatMessage({
+                    sender_id: listing.sender_id,
+                    receiver_id: listing.receiver_id,
+                    message,
+                }, token);
+                console.log("Message sent successfully");
+                setMessage('');
+            } catch (err) {
+                console.error("Failed to send message:", err);
+            }
         }
     };
 
