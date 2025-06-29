@@ -19,6 +19,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import CategoryBottomSheet from '@/components/market/CategoryBottomSheet';
 import LocationBottomSheet from '@/components/market/LocationBottomSheet';
 import { useTheme } from '@/contexts/themeContext';
+import { useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { updateMarketplaceListing } from '@/utils/mutations/marketplace'; // You need to implement these if not present
 
 
 //Code Related to the integration
@@ -68,6 +71,14 @@ export default function AddListingScreen() {
     const categoryBottomSheetRef = useRef<BottomSheet>(null);
     const locationBottomSheetRef = useRef<BottomSheet>(null);
     const [isSending, setIsSending] = useState(false);
+    const params = useLocalSearchParams();
+const listingId = params?.listing_id;
+const isEditMode = !!listingId;
+const { data: listingData, isLoading: isListingLoading } = useQuery({
+  queryKey: ['marketplace-listing', listingId],
+  queryFn: () => getMarketplaceListingById(listingId),
+  enabled: isEditMode,
+});
 
 
     const [formData, setFormData] = useState({
@@ -178,7 +189,7 @@ export default function AddListingScreen() {
     };
 
     const handlePostListing = async () => {
-        if (isSending) return; // prevent duplicate taps
+        if (isSending) return;
 
         // Validate form
         if (!formData.productName.trim()) {
@@ -228,17 +239,30 @@ export default function AddListingScreen() {
                 return;
             }
 
-            await createListingMutation.mutateAsync({
+            if (isEditMode) {
+              // Update
+              await updateMarketplaceListing({
+                id: listingId,
                 data: form,
                 token,
-            });
-
-            Toast.show({
+              });
+              Toast.show({
+                type: 'success',
+                text1: 'Listing updated successfully!',
+              });
+            } else {
+              // Create
+              await createListingMutation.mutateAsync({
+                data: form,
+                token,
+              });
+              Toast.show({
                 type: 'success',
                 text1: 'Listing posted successfully!',
-            });
+              });
+            }
             setTimeout(() => {
-                router.back();
+              router.back();
             }, 500);
         } catch (error: any) {
             Toast.show({
@@ -251,6 +275,24 @@ export default function AddListingScreen() {
         }
     };
 
+    React.useEffect(() => {
+      if (isEditMode && listingData) {
+        setFormData({
+          productName: listingData.product_name || '',
+          category: Object.keys(categoryMap).find(key => categoryMap[key] === listingData.category_id) || '',
+          description: listingData.description || '',
+          price: String(listingData.price || ''),
+          location: listingData.location || '',
+        });
+        setImages(
+          (listingData.images || []).map((uri: string, idx: number) => ({
+            id: idx + 1,
+            uri,
+          }))
+        );
+      }
+    }, [isEditMode, listingData]);
+
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -261,7 +303,9 @@ export default function AddListingScreen() {
                     <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                         <Icon name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: theme.text }]}>New Listing</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>
+  {isEditMode ? 'Edit Listing' : 'New Listing'}
+</Text>
                     <View style={styles.headerRight} />
                 </View>
 
@@ -423,7 +467,7 @@ export default function AddListingScreen() {
                         disabled={isSending}
                     >
                         <Text style={styles.postButtonText}>
-                            {isSending ? 'Sending...' : 'Post Listing'}
+                          {isSending ? (isEditMode ? 'Updating...' : 'Sending...') : (isEditMode ? 'Update Listing' : 'Post Listing')}
                         </Text>
                     </TouchableOpacity>
 

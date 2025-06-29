@@ -1,35 +1,51 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
-
-import { router } from 'expo-router';
-import { AntDesign } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons'
 import { useTheme } from '@/contexts/themeContext';
 
 interface HeaderProps {
   onSubmit: () => void;
+  isLoading?: boolean;
+  isEditMode?: boolean;
 }
 
-export default function Header({ onSubmit }: HeaderProps) {
-  const {dark} = useTheme();
-  const handleBackPress = () => {
-    router.back();
-  };
+export default function Header({ onSubmit, isLoading = false, isEditMode = false }: HeaderProps) {
+  const router = useRouter();
+  const { dark } = useTheme();
 
   return (
-    <View style={[styles.header,{borderBottomColor:dark ? '#212121' : '#eee',}]}>
-      <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-        <AntDesign name='left' size={24} color={dark ? 'white' :"#333"} />
+    <View style={[styles.header, { backgroundColor: dark ? '#1a1a1a' : '#fff' }]}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => router.back()}
+        disabled={isLoading}
+      >
+        <Ionicons name="chevron-left" size={24} color={dark ? '#fff' : '#000'} />
       </TouchableOpacity>
-      
-      <Text style={[styles.title,{color:dark ? 'white' :"#333"}]}>Create Post</Text>
-      
-      <TouchableOpacity style={styles.postButton} onPress={onSubmit}>
-        <Text style={styles.postButtonText}>Post</Text>
+
+      <Text style={[styles.headerTitle, { color: dark ? '#fff' : '#000' }]}>
+        {isEditMode ? 'Edit Post' : 'New Post'}
+      </Text>
+
+      <TouchableOpacity
+        style={[
+          styles.shareButton,
+          {
+            backgroundColor: isLoading ? '#ccc' : '#007AFF',
+            opacity: isLoading ? 0.6 : 1
+          }
+        ]}
+        onPress={onSubmit}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={styles.shareButtonText}>
+            {isEditMode ? 'Update' : 'Share'}
+          </Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -43,25 +59,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    
-    // backgroundColor: '#fff',
+    borderBottomColor: '#E1E8ED',
   },
   backButton: {
     padding: 8,
-    marginLeft: -8,
   },
-  title: {
+  headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
   },
-  postButton: {
-    backgroundColor: '#ff3333',
-    paddingHorizontal: 20,
+  shareButton: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  postButtonText: {
+  shareButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

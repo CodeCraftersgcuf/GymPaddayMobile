@@ -23,6 +23,8 @@ import ThemedView from '@/components/ThemedView';
 import { useQuery } from '@tanstack/react-query';
 import { getMarketplaceListings } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
+import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+
 
 
 interface ListingItem {
@@ -45,6 +47,10 @@ export default function MarketplaceScreen() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
   const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
+  const [fontsLoaded] = useFonts({
+    Caveat_400Regular,
+    Caveat_700Bold,
+  });
 
   React.useEffect(() => {
     (async () => {
@@ -169,7 +175,7 @@ export default function MarketplaceScreen() {
   const handleItemPress = (item: any) => {
     router.push({
       pathname: '/marketView',
-      params: { id: item.id.toString() }, // always pass params as strings
+      params: { id: item.toString() }, // always pass params as strings
     });
   };
 
@@ -177,7 +183,7 @@ export default function MarketplaceScreen() {
   const renderListingItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.listingCard, { backgroundColor: theme.cardBackground }]}
-      onPress={() => handleItemPress(item)}
+      onPress={() => handleItemPress(item.id)}
     >
       <Image source={{ uri: item.image }} style={styles.listingImage} />
       {item.isTopAd && (
@@ -224,12 +230,14 @@ export default function MarketplaceScreen() {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.headerBackground }]}>
         <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Marketplace</Text>
+          <Text style={[styles.headerTitle,{fontFamily: 'Caveat_400Regular',}]}>Marketplace</Text>
           <View style={styles.headerRight}>
+            <TouchableOpacity onPress={()=>handleItemPress(12)} style={styles.notificationButton}>
             <Image
               source={{ uri: profileImage }}
               style={styles.profileImage}
             />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.notificationButton}>
               <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -364,7 +372,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '300',
     color: '#FFFFFF',
-    fontStyle: 'italic',
+    // fontStyle: 'italic',
   },
   headerRight: {
     flexDirection: 'row',
