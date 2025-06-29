@@ -39,7 +39,7 @@ export interface GalleryMedia {
 export default function CreatePostScreen() {
   const { postId } = useLocalSearchParams<{ postId?: string }>();
   const isEditMode = Boolean(postId);
-  
+
   const [galleryMedia, setGalleryMedia] = useState<GalleryMedia[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<GalleryMedia[]>([]);
   const [postText, setPostText] = useState('');
@@ -47,33 +47,25 @@ export default function CreatePostScreen() {
   const [loading, setLoading] = useState(true);
   const [viewingMedia, setViewingMedia] = useState<GalleryMedia | null>(null);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-  
+
   const { dark } = useTheme();
   const router = useRouter();
-
+  const  tokenn = async ()=>{
+    const token = await SecureStore.getItemAsync('auth_token');
+    return token;
+  }
   // Fetch existing post data if in edit mode
   const { data: existingPost, isLoading: isLoadingPost } = useQuery({
     queryKey: ['post', postId],
-    queryFn: () => getPostById(postId!),
+    queryFn: () => getPostById(parseInt(postId), tokenn()),
     enabled: isEditMode && !!postId,
-    onSuccess: (data) => {
-      console.log('✅ Existing post loaded:', data);
-    },
-    onError: (error) => {
-      console.error('❌ Error loading post:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error Loading Post',
-        text2: 'Failed to load post data for editing',
-      });
-    }
   });
 
   // Populate form with existing post data
   useEffect(() => {
     if (isEditMode && existingPost && !initialDataLoaded) {
       setPostText(existingPost.content || existingPost.title || '');
-      
+
       // Convert existing media to GalleryMedia format
       if (existingPost.media && existingPost.media.length > 0) {
         const existingMedia: GalleryMedia[] = existingPost.media.map((mediaItem: any, index: number) => ({
@@ -86,7 +78,7 @@ export default function CreatePostScreen() {
         }));
         setSelectedMedia(existingMedia);
       }
-      
+
       setInitialDataLoaded(true);
       console.log('📝 Form populated with existing post data');
     }
@@ -112,27 +104,26 @@ export default function CreatePostScreen() {
   });
 
   // Update post mutation
-  const updatePostMutation = ()=>{
-    console.log('📝 Updating Post...')
-  }
-  // const updatePostMutation = useMutation({
-  //   mutationFn: ({ postId, data, token }: { postId: string; data: FormData; token: string }) => 
-  //     updatePost(postId, data, token),
-  //   onSuccess: (data) => {
-  //     console.log('🎉 Post Updated Successfully:', data);
-  //     Toast.show({
-  //       type: 'success',
-  //       text1: 'Post Updated!',
-  //       text2: 'Your post has been updated successfully',
-  //       visibilityTime: 500,
-  //     });
-  //     setTimeout(() => router.back(), 600);
-  //   },
-  //   onError: (error: any) => {
-  //     console.error('❌ Post Update Error:', error);
-  //     handleMutationError(error, 'Failed to Update Post');
-  //   },
-  // });
+  // const updatePostMutation = ()=>{
+  //   console.log('📝 Updating Post...')
+  // }
+  const updatePostMutation = useMutation({
+    mutationFn: updatePost,
+    onSuccess: (data) => {
+      console.log('🎉 Post Updated Successfully:', data);
+      Toast.show({
+        type: 'success',
+        text1: 'Post Updated!',
+        text2: 'Your post has been updated successfully',
+        visibilityTime: 500,
+      });
+      setTimeout(() => router.back(), 600);
+    },
+    onError: (error: any) => {
+      console.error('❌ Post Update Error:', error);
+      handleMutationError(error, 'Failed to Update Post');
+    },
+  });
 
   const handleMutationError = (error: any, defaultMessage: string) => {
     if (error?.response) {
@@ -420,12 +411,12 @@ export default function CreatePostScreen() {
       // Call appropriate mutation based on mode
       if (isEditMode && postId) {
         console.log('🔄 Updating post with ID:', postId);
-        updatePostMutation();
-        // updatePostMutation.mutate({
-        //   postId,
-        //   data: formData,
-        //   token,
-        // });
+        // updatePostMutation();
+        updatePostMutation.mutate({
+          postId,
+          data: formData,
+          token,
+        });
       } else {
         console.log('✨ Creating new post');
         createPostMutation.mutate({

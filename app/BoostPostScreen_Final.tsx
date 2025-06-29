@@ -52,6 +52,7 @@ const BoostSuccessScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginTop: 30, // Adjusted for header height
     },
     content: {
         flex: 1,

@@ -238,7 +238,7 @@ export default function MarketplaceScreen() {
               style={styles.profileImage}
             />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.notificationButton}>
+            <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notification')}>
               <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>

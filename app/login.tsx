@@ -214,7 +214,7 @@ const handleLogin = (values: { email: string; password: string }) => {
                       <ThemeText style={styles.registerText}>Register</ThemeText>
                     </Link>
                     <Link
-                      href={"/(tabs)"}
+                      href={"/AgoraCallScreen"}
                       style={{ paddingVertical: 15, borderRadius: 10 }}
                     >
                       <ThemeText style={styles.registerText}>Login</ThemeText>

@@ -155,7 +155,9 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
     container: {
         flex: 1,
+        marginTop: 30,
     },
+
     content: {
         flex: 1,
         paddingHorizontal: 16,

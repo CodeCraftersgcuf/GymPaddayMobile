@@ -34,7 +34,7 @@ export default function NotificationsScreen() {
             dark ? styles.containerDark : styles.containerLight
         ]}>
             <Header
-                title={'Transactions'}
+                title={'Notifications'}
                 showBackButton={true}
                 onBackPress={() => { }}
             />
@@ -52,6 +52,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginTop: 30, // Adjusted for header height
     },
     containerLight: {
         backgroundColor: '#F9FAFB',

@@ -52,7 +52,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
         )}
         {children}
         {notificationID && (
-          <Pressable onPress={() => console.log(`Notification ID: ${notificationID}`)}>
+          <Pressable onPress={() => router.push('/notification')}>
             <ThemedView style={themeStyles.notificationView}>
               <Image
                 source={images.bellIcon}

@@ -144,6 +144,10 @@ const API_ENDPOINTS = {
       Delete: (id: number) => API_DOMAIN + `/user/tickets/${id}`,
     },
     VIDEO_CALLS: {
+      Token: API_DOMAIN + "/video-call/token",
+      StartCall: API_DOMAIN + "/video-call/start",
+      EndCall: API_DOMAIN + "/video-call/end",
+      CallHistory: API_DOMAIN + "/user/video-calls/history",
       List: API_DOMAIN + "/user/video-calls",
       Create: API_DOMAIN + "/user/video-calls",
       Show: (id: number) => API_DOMAIN + `/user/video-calls/${id}`,

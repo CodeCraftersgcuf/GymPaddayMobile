@@ -16,7 +16,13 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.hamzabilal.gym"
+      "package": "com.hamzabilal.gym",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET",
+        "MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -34,7 +40,10 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-audio",
+      "expo-video",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
@@ -42,9 +51,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4ebd22be-d38e-4d78-a7a0-9bfe0127d4f4"
+        "projectId": "f9bae889-75c9-45f7-9788-f04f7f5551a1"
       }
     },
-    "owner": "hamzabilal"
+    "owner": "abudev"
   }
 }

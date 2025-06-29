@@ -70,6 +70,14 @@ export default function MessageChat() {
     enabled: !!conversation_id,
   });
 
+  console.log("Fetched messages:", data);
+
+  const firstMessage = data?.messages?.[0];
+
+  const senderImage = firstMessage?.sender?.profile_picture_url || '';
+  const receiverImage = firstMessage?.receiver?.profile_picture_url || '';
+  const receiverName = firstMessage?.receiver?.fullname || 'User';
+
   // Transform fetched data
   const messages = data?.messages?.map((msg: any) => {
     return {
@@ -233,18 +241,14 @@ export default function MessageChat() {
       animationType="slide"
     >
       <View style={styles.callScreen}>
-        <Image
-          source={{ uri: user_pic }}
-          style={styles.callBackground}
-        />
+        <Image source={{ uri: receiverImage }} style={styles.callBackground} />
+
         <View style={styles.callOverlay} />
 
         <SafeAreaView style={styles.callContainer}>
           <View style={styles.smallVideoContainer}>
-            <Image
-              source={{ uri: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg' }}
-              style={styles.smallVideo}
-            />
+            <Image source={{ uri: senderImage }} style={styles.smallVideo} />
+
           </View>
 
           <View style={styles.callControls}>
@@ -280,13 +284,10 @@ export default function MessageChat() {
         <View style={styles.voiceCallScreen}>
           <SafeAreaView style={styles.voiceCallContainer}>
             <View style={styles.voiceCallContent}>
-              <Image
-                source={{ uri: user_pic }}
-                style={styles.voiceCallAvatar}
-              />
-              <Text style={styles.voiceCallName}>
-                {user_name || 'User'}
-              </Text>
+              <Image source={{ uri: receiverImage }} style={styles.voiceCallAvatar} />
+               
+              <Text style={styles.voiceCallName}>{receiverName}</Text>
+
               <Text style={styles.voiceCallStatus}>Calling....</Text>
             </View>
 
@@ -341,7 +342,7 @@ export default function MessageChat() {
         )}
 
         {!isLoading && (
-        // {true && (
+          // {true && (
           <>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -396,7 +397,7 @@ export default function MessageChat() {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={()=>hanldeViewProfile(12)} style={styles.viewProfileButton}>
+              <TouchableOpacity onPress={() => hanldeViewProfile(12)} style={styles.viewProfileButton}>
                 <Text style={styles.viewProfileText}>View Profile</Text>
               </TouchableOpacity>
             </View>
