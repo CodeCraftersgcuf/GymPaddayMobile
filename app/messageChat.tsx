@@ -26,9 +26,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
+import { useAgoraCall } from './AgoraCallScreen';
 
+import AgoraVideoView from 'react-native-agora';
+
+import { RenderModeType } from 'react-native-agora';
 
 const { width, height } = Dimensions.get('window');
+import { RtcSurfaceView } from 'react-native-agora';
 
 
 export default function MessageChat() {
@@ -71,6 +76,7 @@ export default function MessageChat() {
   });
 
   console.log("Fetched messages:", data);
+  // const receiverId=1;
 
   const firstMessage = data?.messages?.[0];
 
@@ -234,82 +240,89 @@ export default function MessageChat() {
     </Modal>
   );
 
-  // Video Call Screen Component
-  const VideoCallScreen = () => (
-    <Modal
-      visible={showVideoCall}
-      animationType="slide"
-    >
-      <View style={styles.callScreen}>
+
+
+  // 🟢 Video Call Screen Component
+  const VideoCallScreen = () => {
+    const { joined, localUid, remoteUid, endCall, channelName } = useAgoraCall({
+      receiverId: Number(user_id),
+      callType: 'video',
+      onCallEnded: () => setShowVideoCall(false),
+    });
+
+   return (
+  <Modal visible={showVideoCall} animationType="slide">
+    <View style={styles.callScreen}>
+      {joined && remoteUid !== null ? (
+        <RtcSurfaceView
+          style={styles.callBackground}
+          channelId={channelName}
+          uid={remoteUid}
+          renderMode={RenderModeType.RenderModeHidden}
+        />
+      ) : (
         <Image source={{ uri: receiverImage }} style={styles.callBackground} />
+      )}
 
-        <View style={styles.callOverlay} />
+      <View style={styles.callOverlay} />
 
-        <SafeAreaView style={styles.callContainer}>
-          <View style={styles.smallVideoContainer}>
-            <Image source={{ uri: senderImage }} style={styles.smallVideo} />
+      <SafeAreaView style={styles.callContainer}>
+        {joined && localUid !== null ? (
+          <RtcSurfaceView
+            style={styles.smallVideo}
+            channelId={channelName}
+            uid={localUid}
+            renderMode={RenderModeType.RenderModeHidden}
+          />
+        ) : (
+          <Image source={{ uri: senderImage }} style={styles.smallVideo} />
+        )}
 
-          </View>
-
-          <View style={styles.callControls}>
-            <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-              <Image source={images.liveClose} style={{ width: "100%", height: '100%' }} />
-              {/* <Icon name="close" size={24} color="#fff" /> */}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.muteButton}>
-              <Image source={images.livecamera} style={{ width: "100%", height: '100%' }} />
-              {/* <MaterialIcons name="mic-off" size={24} color="#fff" /> */}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.speakerButton}>
-              <Image source={images.liveaudio} style={{ width: "100%", height: '100%' }} />
-              {/* <MaterialIcons name="volume-up" size={24} color="#fff" /> */}
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </View>
-    </Modal>
-  );
-
-  // Voice Call Screen Component
-  const VoiceCallScreen = () => (
-    <Modal
-      visible={showVoiceCall}
-      animationType="slide"
-    >
-      <LinearGradient
-        // 'linear-gradient(135deg, #FF3B30 0%, #8E44AD 100%)'
-        colors={['#FF3B30', '#8E44AD']}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.voiceCallScreen}>
-          <SafeAreaView style={styles.voiceCallContainer}>
-            <View style={styles.voiceCallContent}>
-              <Image source={{ uri: receiverImage }} style={styles.voiceCallAvatar} />
-               
-              <Text style={styles.voiceCallName}>{receiverName}</Text>
-
-              <Text style={styles.voiceCallStatus}>Calling....</Text>
-            </View>
-
-            <View style={styles.callControls}>
-              <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-                <Image source={images.liveClose} style={{ width: "100%", height: '100%' }} />
-                {/* <Icon name="close" size={24} color="#fff" /> */}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.muteButton}>
-                {/* <MaterialIcons name="mic-off" size={24} color="#fff" /> */}
-                <Image source={images.livecamera} style={{ width: "100%", height: '100%' }} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.speakerButton}>
-                <Image source={images.liveaudio} style={{ width: "100%", height: '100%' }} />
-                {/* <MaterialIcons name="volume-up" size={24} color="#fff" /> */}
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
+        <View style={styles.callControls}>
+          <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+            <Image source={images.liveClose} style={styles.iconStyle} />
+          </TouchableOpacity>
         </View>
-      </LinearGradient>
-    </Modal>
-  );
+      </SafeAreaView>
+    </View>
+  </Modal>
+);
+
+  };
+
+  // 🟢 Voice Call Screen Component
+  const VoiceCallScreen = () => {
+    const { joined, endCall } = useAgoraCall({
+      receiverId: Number(user_id),
+      callType: 'voice',
+      onCallEnded: () => setShowVoiceCall(false),
+    });
+
+    return (
+      <Modal visible={showVoiceCall} animationType="slide">
+        <LinearGradient colors={['#FF3B30', '#8E44AD']} style={{ flex: 1 }}>
+          <View style={styles.voiceCallScreen}>
+            <SafeAreaView style={styles.voiceCallContainer}>
+              <View style={styles.voiceCallContent}>
+                <Image source={{ uri: receiverImage }} style={styles.voiceCallAvatar} />
+                <Text style={styles.voiceCallName}>{receiverName}</Text>
+                <Text style={styles.voiceCallStatus}>
+                  {joined ? 'Connected' : 'Calling...'}
+                </Text>
+              </View>
+              <View style={styles.callControls}>
+                <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+                  <Image source={images.liveClose} style={styles.iconStyle} />
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </View>
+        </LinearGradient>
+      </Modal>
+    );
+  };
+
+
 
   const otherUser = data?.messages?.length
     ? (data.messages.find((m: any) => m.direction === 'received')?.sender
@@ -445,10 +458,11 @@ export default function MessageChat() {
             </View>
           </>
         )}
-
-        {/* Modals */}
+        
         <VideoCallPopup />
-        <VideoCallScreen />
+        {/* Modals */}
+        {showVideoCall && <VideoCallScreen />}
+        {showVoiceCall && <VoiceCallScreen />}
         <VoiceCallScreen />
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -458,6 +472,11 @@ export default function MessageChat() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  iconStyle: {
+    width: 30,
+    height: 30,
+    tintColor: '#fff', // Optional
   },
   header: {
     flexDirection: 'row',
