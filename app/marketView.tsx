@@ -304,7 +304,7 @@ export default function ItemDetailsScreen() {
                 </View>
 
                 {/* Recent Listings */}
-                <View style={styles.section}>
+                {/* <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Listings</Text>
                     <FlatList
                         data={relatedItems}
@@ -314,7 +314,7 @@ export default function ItemDetailsScreen() {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.relatedList}
                     />
-                </View>
+                </View> */}
             </ScrollView>
         </SafeAreaView>
     );

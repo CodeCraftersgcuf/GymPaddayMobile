@@ -24,6 +24,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
+
 const PostAudienceScreen: React.FC = () => {
     const { dark } = useTheme();
     const isDark = dark;
@@ -40,6 +41,7 @@ const PostAudienceScreen: React.FC = () => {
     const [location, setLocation] = useState<string>('');
     // Get post_id from route params
     let { post_id } = params || {};
+    console.log("Post Audience Screen post_id:", post_id);
 
     const handleNext = () => {
         // Use a valid route path and pass audience as an array if required

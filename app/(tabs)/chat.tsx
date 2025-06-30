@@ -149,7 +149,14 @@ export default function Chat() {
       <ThemedView style={styles.content} darkColor={dark ? '#000' : 'white'}>
         <Header onBack={() => router.back()} onOpenSocials={() => setShowSocialModal(true)} />
         <SearchBar query={searchQuery} onChange={setSearchQuery} />
-        <AvatarList users={apiUsers} onAvatarPress={handleAvatarPress} />
+        {/* Show loading indicator while users are loading */}
+        {isLoading ? (
+          <View style={{ paddingVertical: 24 }}>
+            <ActivityIndicator size="large" color={dark ? 'white' : 'black'} />
+          </View>
+        ) : (
+          <AvatarList users={apiUsers} onAvatarPress={handleAvatarPress} />
+        )}
 
         <ThemedView style={styles.conversationsWrapper} darkColor={dark ? '#202020' : 'white'}>
           {isLoading ? (

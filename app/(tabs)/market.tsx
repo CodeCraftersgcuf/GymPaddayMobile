@@ -181,13 +181,35 @@ export default function MarketplaceScreen() {
     });
   };
 
+  // Add this helper component for image loading indicator
+  function ImageWithLoading({ source, style, ...props }) {
+    const [loading, setLoading] = useState(true);
+    return (
+      <View style={[style, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
+        <Image
+          source={source}
+          style={[StyleSheet.absoluteFill, style]}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          {...props}
+        />
+        {loading && (
+          <ActivityIndicator
+            size="small"
+            color="#FF0000"
+            style={{ position: 'absolute' }}
+          />
+        )}
+      </View>
+    );
+  }
 
   const renderListingItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.listingCard, { backgroundColor: theme.cardBackground }]}
       onPress={() => handleItemPress(item.id)}
     >
-      <Image source={{ uri: item.image }} style={styles.listingImage} />
+      <ImageWithLoading source={{ uri: item.image }} style={styles.listingImage} />
       {item.isTopAd && (
         <View style={styles.topAdBadge}>
           <Text style={styles.topAdText}>Top Ad</Text>
@@ -199,7 +221,7 @@ export default function MarketplaceScreen() {
         </Text>
         <Text style={styles.listingPrice}>{item.price}</Text>
         <TouchableOpacity onPress={() => router.push('/marketView')} style={styles.sellerInfo}>
-          <Image
+          <ImageWithLoading
             source={{ uri: item.sellerAvatar || dummyImage }}
             style={styles.sellerAvatar}
           />
@@ -455,7 +477,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '500',
     textAlign: 'center',
   },

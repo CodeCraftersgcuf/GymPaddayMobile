@@ -11,7 +11,8 @@ import {
   Keyboard,
   Platform,
   KeyboardAvoidingView,
-  FlatList
+  FlatList,
+  ActivityIndicator
 } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import CommentItem from './CommentItem';
@@ -34,6 +35,8 @@ interface CommentsBottomSheetProps {
   postId: number | null;
   onClose: () => void;
   onAddComment?: (text: string, postId: number) => void;
+  loading?: boolean; // <-- add this
+
 }
 
 const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
@@ -41,7 +44,9 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   comments,
   postId,
   onClose,
-  onAddComment
+  onAddComment,
+  loading = false // <-- default to false
+
 }) => {
   const { dark } = useTheme();
   const [newComment, setNewComment] = React.useState('');
@@ -98,111 +103,114 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const inputBackgroundColor = dark ? '#333333' : '#F0F0F0';
   const borderColor = dark ? '#333333' : '#E0E0E0';
 
-  return (
+ return (
+  <Animated.View
+    style={[
+      styles.overlay,
+      {
+        opacity: fadeAnim,
+        backgroundColor: dark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)'
+      }
+    ]}
+  >
+    <TouchableOpacity
+      style={styles.backdropTouchable}
+      activeOpacity={1}
+      onPress={onClose}
+    />
+
     <Animated.View
       style={[
-        styles.overlay,
+        styles.bottomSheet,
         {
-          opacity: fadeAnim,
-          backgroundColor: dark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)'
+          backgroundColor,
+          transform: [
+            {
+              translateY: slideAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [300, 0]
+              })
+            }
+          ]
         }
       ]}
     >
-      <TouchableOpacity
-        style={styles.backdropTouchable}
-        activeOpacity={1}
-        onPress={onClose}
-      />
-
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            backgroundColor,
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [300, 0]
-                })
-              }
-            ]
-          }
-        ]}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoidContainer}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardAvoidContainer}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-        >
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: borderColor }]}>
-            <Text style={[styles.headerTitle, { color: textColor }]}>Comments</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Image source={images.CreatePlus} style={{ height: 20, width: 20 ,transform:[{rotate:'45deg'}]}}  tintColor={textColor} />
-            </TouchableOpacity>
-          </View>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: borderColor }]}>
+          <Text style={[styles.headerTitle, { color: textColor }]}>Comments</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Image source={images.CreatePlus} style={{ height: 20, width: 20, transform: [{ rotate: '45deg' }] }} tintColor={textColor} />
+          </TouchableOpacity>
+        </View>
 
-          {/* Comments List */}
-          <ScrollView
-            ref={scrollViewRef}
+        {/* Comments List or Loader */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={textColor} style={{ marginVertical: 30 }} />
+            <Text style={{ color: textColor, textAlign: 'center' }}>Loading comments...</Text>
+          </View>
+        ) : (
+          <FlatList
             style={styles.commentsList}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <FlatList
-              data={comments}
-              keyExtractor={(item, index) => `${item.id}-${index}`}
-              renderItem={({ item }) => (
-                <CommentItem comment={item} darkMode={dark} />
-              )}
-              ListEmptyComponent={
-                <View style={styles.noComments}>
-                  <Text style={[styles.noCommentsText, { color: textColor }]}>
-                    No comments yet. Be the first to comment!
-                  </Text>
-                </View>
-              }
-              contentContainerStyle={{ flexGrow: 1 }}
-              scrollEnabled={false}
-            />
-            <View style={styles.bottomPadding} />
-          </ScrollView>
+            data={comments}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
+            renderItem={({ item }) => (
+              <CommentItem comment={item} darkMode={dark} />
+            )}
+            ListEmptyComponent={
+              <View style={styles.noComments}>
+                <Text style={[styles.noCommentsText, { color: textColor }]}>
+                  No comments yet. Be the first to comment!
+                </Text>
+              </View>
+            }
+            contentContainerStyle={{ flexGrow: 1 }}
+            scrollEnabled={false}
+          />
+        )}
 
-          {/* Input Area */}
-          <View style={[styles.inputContainer, { backgroundColor, borderTopColor: borderColor }]}>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: inputBackgroundColor,
-                  color: textColor,
-                  borderColor: borderColor
-                }
-              ]}
-              placeholder="Type a message"
-              placeholderTextColor={dark ? '#999999' : '#777777'}
-              value={newComment}
-              onChangeText={setNewComment}
-              multiline
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                {
-                  backgroundColor:  dark ? '#333333' : '#DDDDDD',
-                }
-              ]}
-              onPress={handleSendComment}
-              disabled={!newComment.trim()}
-            >
-              <Image source={images.notifcationIcon} style={{ height: 20, width: 20 }} />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Animated.View>
+        <View style={styles.bottomPadding} />
+
+        {/* Input Area */}
+        <View style={[styles.inputContainer, { backgroundColor, borderTopColor: borderColor }]}>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: inputBackgroundColor,
+                color: textColor,
+                borderColor: borderColor
+              }
+            ]}
+            placeholder="Type a message"
+            placeholderTextColor={dark ? '#999999' : '#777777'}
+            value={newComment}
+            onChangeText={setNewComment}
+            multiline
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: dark ? '#333333' : '#DDDDDD',
+              }
+            ]}
+            onPress={handleSendComment}
+            disabled={!newComment.trim()}
+          >
+            <Image source={images.notifcationIcon} style={{ height: 20, width: 20 }} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </Animated.View>
-  );
+  </Animated.View>
+);
+
 };
 
 const styles = StyleSheet.create({
@@ -270,7 +278,7 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     borderTopWidth: 1,
-    marginBottom:20,
+    marginBottom: 20,
   },
   input: {
     flex: 1,
@@ -289,6 +297,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 10,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120, // or whatever fits your design
+  },
+
 });
 
 export default CommentsBottomSheet;

@@ -12,10 +12,14 @@ const UserPostDetail: React.FC<{
     userId: any;
     postId: any;
   }
-}> = ({idCan}) => {
+}> = ({ idCan }) => {
   const router = useRouter();
   const { dark } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
+
+  console.log("Post Id in UserPostDetail:", idCan.postId);
+
+  const post_id = idCan.postId; // Assuming postId is passed as a prop
 
   const handleOpenModal = () => {
     setModalVisible(true);
@@ -32,7 +36,8 @@ const UserPostDetail: React.FC<{
     console.log('clicked!!')
   }
   const hanldeEditPost = () => {
-    router.push({ pathname: '/createpost', params: { postId: idCan.postId } })
+    // router.push({ pathname: '/createpost', params: { postId: idCan.postId } })
+    router.push("/createpost");
   }
   const handleDeletePost = () => {
     Alert.alert('Post deleted');
@@ -79,6 +84,7 @@ const UserPostDetail: React.FC<{
         visible={modalVisible}
         onClose={handleCloseModal}
         dark={dark}
+        post_id={post_id}
       />
     </>
   )

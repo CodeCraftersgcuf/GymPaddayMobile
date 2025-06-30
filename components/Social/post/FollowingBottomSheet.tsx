@@ -24,10 +24,24 @@ interface FollowingBottomSheetProps {
   dark?: boolean;
   onFollowToggle: (userId: string, isFollowing: boolean) => void;
   onClose: () => void;
+  loading?: boolean;
+  emptyText?: string;
 }
 
 const FollowingBottomSheet = forwardRef<BottomSheet, FollowingBottomSheetProps>(
-  ({ users, title, count, dark = true, onFollowToggle, onClose }, ref) => {
+  (
+    {
+      users,
+      title,
+      count,
+      dark = true,
+      onFollowToggle,
+      onClose,
+      loading = false,
+      emptyText = "No following found.",
+    },
+    ref
+  ) => {
     const snapPoints = useMemo(() => ['90%'], []);
 
     const theme = {
@@ -92,13 +106,23 @@ const FollowingBottomSheet = forwardRef<BottomSheet, FollowingBottomSheetProps>(
           </View>
 
           {/* Users List */}
-          <FlatList
-            data={users}
-            renderItem={renderUserItem}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
-          />
+          {loading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 16 }}>Loading...</Text>
+            </View>
+          ) : users.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 16 }}>{emptyText}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={users}
+              renderItem={renderUserItem}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.listContainer}
+            />
+          )}
         </BottomSheetView>
       </BottomSheet>
     );

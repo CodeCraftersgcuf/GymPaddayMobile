@@ -39,9 +39,9 @@ interface ImageSlot {
 
 const categoryMap: Record<string, number> = {
     gym: 1,
-    supplement: 4,
-    wears: 5,
-    others: 6,
+    supplement: 2,
+    wears: 3,
+    others: 4,
 };
 
 const categories = [

@@ -10,7 +10,11 @@ import {
   FlatList,
   Dimensions,
   Share,
-  Pressable
+  Pressable,
+  ActivityIndicator,
+  Platform,
+  PermissionsAndroid,
+  Alert,
 } from "react-native";
 import ThemedView from "../ThemedView";
 import ThemeText from "../ThemedText";
@@ -21,6 +25,13 @@ import { formatDistanceToNow } from 'date-fns';
 
 import { useRouter } from "expo-router";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
+import { useQuery } from "@tanstack/react-query";
+import { getLikenDislikePost } from "@/utils/queries/socialMedia";
+import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
+
+
 
 const { width, height } = Dimensions.get("window");
 
@@ -48,6 +59,7 @@ interface PostItemProps {
 const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu }) => {
   const { dark } = useTheme();
   const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -58,6 +70,37 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
 
+
+  useEffect(() => {
+    SecureStore.getItemAsync('auth_token').then(setToken);
+  }, []);
+
+  const {
+    data: likeData,
+    refetch: toggleLike,
+    isFetching: likeLoading,
+  } = useQuery({
+    queryKey: ['like-post', post.id, token],
+    queryFn: () => {
+      if (!token) throw new Error('No token');
+      return getLikenDislikePost(post.id, token);
+    },
+    enabled: false, // only run when triggered by user
+  });
+
+  useEffect(() => {
+    // Update local state from server after like/dislike
+    if (likeData) {
+      if (likeData.message === 'Disliked') {
+        setIsLiked(false);
+        setLikesCount((prev) => prev - 1);
+      } else {
+        setIsLiked(true);
+        setLikesCount((prev) => prev + 1);
+      }
+    }
+    // Optionally, handle other cases (e.g., error handling)
+  }, [likeData]);
   // Extract images from post
   const imagesUrl = post.imagesUrl;
 
@@ -65,9 +108,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
     setImagesData(imagesUrl);
   }, [post]);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
+  const handleLike = async () => {
+    if (likeLoading || !token) return;
+    await toggleLike(); // this will call the API and update likeData
   };
 
   const handlePress = () => {
@@ -106,6 +149,53 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
     const postDate = new Date(timestamp);
     return `${formatDistanceToNow(postDate)} ago`; // "20 minutes ago"
   };
+
+  // Share post content and first image
+  const handleShare = async () => {
+    try {
+      let message = post.content || '';
+      if (post.imagesUrl && post.imagesUrl.length > 0) {
+        message += `\n${post.imagesUrl[0]}`;
+      }
+      await Share.share({
+        message,
+        url: post.imagesUrl && post.imagesUrl.length > 0 ? post.imagesUrl[0] : undefined,
+        title: 'Check out this post!',
+      });
+    } catch (error) {
+      Alert.alert('Share Error', 'Failed to share post.');
+      console.error('Share error:', error);
+    }
+  };
+
+  // Download image to device gallery
+  const handleDownload = async () => {
+    try {
+      if (!post.imagesUrl || post.imagesUrl.length === 0) {
+        Alert.alert('No image', 'No image to download.');
+        return;
+      }
+      const imageUrl = post.imagesUrl[0];
+      // Ask for permission if needed
+      if (Platform.OS === 'android') {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Please allow media library access to save images.');
+          return;
+        }
+      }
+      const fileUri = FileSystem.cacheDirectory + imageUrl.split('/').pop();
+      const downloadResumable = FileSystem.createDownloadResumable(imageUrl, fileUri);
+      const { uri } = await downloadResumable.downloadAsync();
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      await MediaLibrary.createAlbumAsync('Download', asset, false);
+      Alert.alert('Downloaded', 'Image saved to your gallery.');
+    } catch (error) {
+      Alert.alert('Download Error', 'Failed to download image.');
+      console.error('Download error:', error);
+    }
+  };
+
   return (
     <View style={styles.postContainer}>
       {/* Header */}
@@ -130,7 +220,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
       </View>
 
       {/* Content */}
-      <ThemeText style={styles.content}>{post.content}</ThemeText>
+      {/* <ThemeText style={styles.content}>{post.content}</ThemeText> */}
 
       {/* Image Grid */}
       {ImagesData && ImagesData.length > 0 && (
@@ -173,31 +263,35 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
       {/* Post Actions */}
       <View style={styles.actions}>
         <ThemedView darkColor="transparent" style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionItem}>
-            <Image source={images.ConnectIcons} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
+          <TouchableOpacity onPress={handleLike} style={styles.actionItem} disabled={likeLoading}>
+            <Image
+              source={images.ConnectIcons}
+              tintColor={isLiked ? 'red' : dark ? 'white' : 'black'}
+              style={{ width: 25, height: 25 }}
+            />
             <ThemeText style={styles.actionText}>{likesCount}</ThemeText>
+            {likeLoading && <ActivityIndicator size="small" color="#ff4444" style={{ marginLeft: 8 }} />}
           </TouchableOpacity>
+
 
           <TouchableOpacity style={styles.actionItem} onPress={handlePress}>
             <Image source={images.comment} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
             <ThemeText style={styles.actionText}>{post.recent_comments.length}</ThemeText>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
             <Image source={images.Share} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
-            <ThemeText style={styles.actionText}>100</ThemeText>
+            <ThemeText style={styles.actionText}></ThemeText>
           </TouchableOpacity>
         </ThemedView>
         <ThemedView darkColor="transparent">
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={handleDownload}>
             <Image source={images.downloadIcon} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
           </TouchableOpacity>
         </ThemedView>
       </View>
       <ThemedView darkColor="transparent" style={{ marginTop: 10 }}>
-        <ThemeText>
-          Lorem ipsum dolor sit amet consectetur adipisicing elit. Eligendi, repellendus?
-        </ThemeText>
+        <ThemeText style={styles.content}>{post.content}</ThemeText>
       </ThemedView>
 
       {/* Full-Screen Image Slider Modal */}

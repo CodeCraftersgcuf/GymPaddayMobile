@@ -40,6 +40,9 @@ const Login = () => {
         // ✅ Save token securely
         await SecureStore.setItemAsync("auth_token", data.access_token);
         await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
+        await SecureStore.setItemAsync("user_id", data.user.id.toString());
+
+        console.log("User data saved:", data.user);
 
         Toast.show({
           type: "success",
