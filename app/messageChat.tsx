@@ -34,6 +34,7 @@ import { RenderModeType } from 'react-native-agora';
 
 const { width, height } = Dimensions.get('window');
 import { RtcSurfaceView } from 'react-native-agora';
+import VoiceCallScreenT from '@/components/VoiceCallScreen';
 
 
 export default function MessageChat() {
@@ -59,7 +60,12 @@ export default function MessageChat() {
   const getToken = async () => {
     return await SecureStore.getItemAsync('auth_token');
   };
+  const getUserData = async () => {
+    return await SecureStore.getItemAsync('user_data');
+    console.log("User data:", user_id);
+    };
 
+    
   // Fetch messages from backend (removing mockMessages)
   const {
     data,
@@ -74,8 +80,14 @@ export default function MessageChat() {
     },
     enabled: !!conversation_id,
   });
+  const [incomingCall, setIncomingCall] = useState<null | {
+    channel_name: string;
+    type: 'voice' | 'video';
+    receiver_id: number;
+    caller_id: number;
+  }>(null);
 
-  console.log("Fetched messages:", data);
+  // console.log("Fetched messages:", data);
   // const receiverId=1;
 
   const firstMessage = data?.messages?.[0];
@@ -124,14 +136,79 @@ export default function MessageChat() {
   useEffect(() => {
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
   }, [messages.length]);
+  useEffect(() => {
+    const pollIncomingCall = setInterval(async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/incoming-call', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const { call } = await res.json();
+        console.log('Incoming call:', call);
+        if (call && call.status === 'initiated' && call.channel_name) {
+          if (call.type === 'voice') {
+            setIncomingCall({
+              channel_name: call.channel_name,
+              type: call.type,
+              receiver_id: call.caller_id, // 👈 this is important
+            });
+            setShowVoiceCall(true); // this will open your existing VoiceCallScreen
+          } else if (call.type === 'video') {
+            setShowVideoCall(true);
+          }
+        }
+      } catch (error) {
+        console.log('Incoming call polling failed', error);
+      }
+    }, 3000); // poll every 3s
+
+    return () => clearInterval(pollIncomingCall);
+  }, []);
 
   const handleVideoCall = () => {
     setShowVideoCallPopup(true);
   };
+  const [channelName, setChannelName] = useState('');
 
-  const handleVoiceCall = () => {
+const handleVoiceCall = async () => {
+  try {
+    const receiverId = user_id; // 👈 the person being called
+    const channelName = `call_${Date.now()}_${receiverId}`; // unique per call
+    const token = await getToken(); // ⬅️ use your stored bearer token
+
+    // 1. Notify backend that call is starting
+    const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        receiver_id: receiverId,
+        channel_name: channelName,
+        type: 'voice',
+      }),
+    });
+    console.log('Call start response:', response);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Call start failed');
+    }
+
+    // 2. Save channel name and show call screen
+    setChannelName(channelName);
     setShowVoiceCall(true);
-  };
+
+  } catch (err) {
+    console.error('Voice call error:', err);
+    Alert.alert('Call Error', err.message);
+  }
+};
+
 
   const proceedVideoCall = () => {
     setShowVideoCallPopup(false);
@@ -250,77 +327,77 @@ export default function MessageChat() {
       onCallEnded: () => setShowVideoCall(false),
     });
 
-   return (
-  <Modal visible={showVideoCall} animationType="slide">
-    <View style={styles.callScreen}>
-      {joined && remoteUid !== null ? (
-        <RtcSurfaceView
-          style={styles.callBackground}
-          channelId={channelName}
-          uid={remoteUid}
-          renderMode={RenderModeType.RenderModeHidden}
-        />
-      ) : (
-        <Image source={{ uri: receiverImage }} style={styles.callBackground} />
-      )}
+    return (
+      <Modal visible={showVideoCall} animationType="slide">
+        <View style={styles.callScreen}>
+          {joined && remoteUid !== null ? (
+            <RtcSurfaceView
+              style={styles.callBackground}
+              channelId={channelName}
+              uid={remoteUid}
+              renderMode={RenderModeType.RenderModeHidden}
+            />
+          ) : (
+            <Image source={{ uri: receiverImage }} style={styles.callBackground} />
+          )}
 
-      <View style={styles.callOverlay} />
+          <View style={styles.callOverlay} />
 
-      <SafeAreaView style={styles.callContainer}>
-        {joined && localUid !== null ? (
-          <RtcSurfaceView
-            style={styles.smallVideo}
-            channelId={channelName}
-            uid={localUid}
-            renderMode={RenderModeType.RenderModeHidden}
-          />
-        ) : (
-          <Image source={{ uri: senderImage }} style={styles.smallVideo} />
-        )}
+          <SafeAreaView style={styles.callContainer}>
+            {joined && localUid !== null ? (
+              <RtcSurfaceView
+                style={styles.smallVideo}
+                channelId={channelName}
+                uid={localUid}
+                renderMode={RenderModeType.RenderModeHidden}
+              />
+            ) : (
+              <Image source={{ uri: senderImage }} style={styles.smallVideo} />
+            )}
 
-        <View style={styles.callControls}>
-          <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-            <Image source={images.liveClose} style={styles.iconStyle} />
-          </TouchableOpacity>
+            <View style={styles.callControls}>
+              <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+                <Image source={images.liveClose} style={styles.iconStyle} />
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
-      </SafeAreaView>
-    </View>
-  </Modal>
-);
+      </Modal>
+    );
 
   };
 
   // 🟢 Voice Call Screen Component
-  const VoiceCallScreen = () => {
-    const { joined, endCall } = useAgoraCall({
-      receiverId: Number(user_id),
-      callType: 'voice',
-      onCallEnded: () => setShowVoiceCall(false),
-    });
+  // const VoiceCallScreen = () => {
+  //   const { joined, endCall } = useAgoraCall({
+  //     receiverId: Number(user_id),
+  //     callType: 'voice',
+  //     onCallEnded: () => setShowVoiceCall(false),
+  //   });
 
-    return (
-      <Modal visible={showVoiceCall} animationType="slide">
-        <LinearGradient colors={['#FF3B30', '#8E44AD']} style={{ flex: 1 }}>
-          <View style={styles.voiceCallScreen}>
-            <SafeAreaView style={styles.voiceCallContainer}>
-              <View style={styles.voiceCallContent}>
-                <Image source={{ uri: receiverImage }} style={styles.voiceCallAvatar} />
-                <Text style={styles.voiceCallName}>{receiverName}</Text>
-                <Text style={styles.voiceCallStatus}>
-                  {joined ? 'Connected' : 'Calling...'}
-                </Text>
-              </View>
-              <View style={styles.callControls}>
-                <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-                  <Image source={images.liveClose} style={styles.iconStyle} />
-                </TouchableOpacity>
-              </View>
-            </SafeAreaView>
-          </View>
-        </LinearGradient>
-      </Modal>
-    );
-  };
+  //   return (
+  //     <Modal visible={showVoiceCall} animationType="slide">
+  //       <LinearGradient colors={['#FF3B30', '#8E44AD']} style={{ flex: 1 }}>
+  //         <View style={styles.voiceCallScreen}>
+  //           <SafeAreaView style={styles.voiceCallContainer}>
+  //             <View style={styles.voiceCallContent}>
+  //               <Image source={{ uri: receiverImage }} style={styles.voiceCallAvatar} />
+  //               <Text style={styles.voiceCallName}>{receiverName}</Text>
+  //               <Text style={styles.voiceCallStatus}>
+  //                 {joined ? 'Connected' : 'Calling...'}
+  //               </Text>
+  //             </View>
+  //             <View style={styles.callControls}>
+  //               <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+  //                 <Image source={images.liveClose} style={styles.iconStyle} />
+  //               </TouchableOpacity>
+  //             </View>
+  //           </SafeAreaView>
+  //         </View>
+  //       </LinearGradient>
+  //     </Modal>
+  //   );
+  // };
 
 
 
@@ -341,6 +418,37 @@ export default function MessageChat() {
     }, 3000);
     return () => clearInterval(interval);
   }, [refetch]);
+  const renderCallScreen = () => {
+    if (incomingCall?.type === 'voice' && showVoiceCall) {
+      return (
+        <VoiceCallScreenT
+          receiverId={incomingCall.caller_id}
+          channelName={incomingCall.channel_name}
+          uid={12345}
+          onCallEnded={() => {
+            setShowVoiceCall(false);
+            setIncomingCall(null);
+          }}
+        />
+      );
+    }
+
+    if (showVoiceCall) {
+      return (
+        <VoiceCallScreenT
+          receiverId={Number(user_id)}
+          channelName={channelName}
+          onCallEnded={() => setShowVoiceCall(false)}
+        />
+      );
+    }
+
+    if (showVideoCall) {
+      return <VideoCallScreen />;
+    }
+
+    return null;
+  };
 
   return (
     <KeyboardAvoidingView
@@ -352,6 +460,17 @@ export default function MessageChat() {
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
+        )}
+
+        {incomingCall && (
+          <VoiceCallScreenT
+            receiverId={incomingCall?.caller_id}
+            channelName={incomingCall.channel_name}
+            onCallEnded={() => {
+              setShowVoiceCall(false);
+              setIncomingCall(null);
+            }}
+          />
         )}
 
         {!isLoading && (
@@ -458,12 +577,13 @@ export default function MessageChat() {
             </View>
           </>
         )}
-        
+
         <VideoCallPopup />
         {/* Modals */}
         {showVideoCall && <VideoCallScreen />}
-        {showVoiceCall && <VoiceCallScreen />}
-        <VoiceCallScreen />
+        {/* {showVoiceCall && <VoiceCallScreen />} */}
+        {/* <VoiceCallScreen /> */}
+        {renderCallScreen()}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

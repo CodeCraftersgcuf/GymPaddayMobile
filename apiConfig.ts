@@ -149,7 +149,7 @@ const API_ENDPOINTS = {
     VIDEO_CALLS: {
       LiveVideoCallToken: API_DOMAIN + "/video-call/live-token",
       Token: API_DOMAIN + "/video-call/token",
-      StartCall: API_DOMAIN + "/video-call/start",
+      StartCall: API_DOMAIN + "/user/start-call",
       EndCall: API_DOMAIN + "/video-call/end",
       CallHistory: API_DOMAIN + "/user/video-calls/history",
       List: API_DOMAIN + "/user/video-calls",

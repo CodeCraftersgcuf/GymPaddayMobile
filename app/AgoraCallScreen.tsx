@@ -24,10 +24,15 @@ export function useAgoraCall({
   receiverId,
   callType = 'video',
   onCallEnded,
+    channelName: providedChannelName,
+
 }: {
   receiverId: number;
   callType?: 'video' | 'voice';
   onCallEnded?: () => void;
+    channelName?: string; // <-- added here
+
+
 }) {
   const [joined, setJoined] = useState(false);
   const [callId, setCallId] = useState<number | null>(null);
@@ -85,7 +90,7 @@ export function useAgoraCall({
       }
 
       const uid = Math.floor(Math.random() * 100000);
-      const channel = `call_${receiverId}`;
+const channel = providedChannelName || `call_${receiverId}`;
       setChannelName(channel);
       setLocalUid(uid);
 

@@ -39,7 +39,7 @@ export default function ConversationList({
   onRefresh,
 }: Props) {
   const { dark } = useTheme();
-  console.log("Conversations:", conversations);
+  // console.log("Conversations:", conversations);
 
   const formatMessageTime = (date: Date) =>
     isToday(date) ? format(date, 'h:mm a') : format(date, 'MMM d');
