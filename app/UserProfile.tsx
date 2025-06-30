@@ -161,26 +161,32 @@ export default function ProfileScreen() {
     textSecondary: dark ? '#999999' : '#666666',
     border: dark ? '#333333' : '#e0e0e0',
   };
-
-  const renderPostGrid = () => (
-    <View style={styles.gridContainer}>
-      {postImages.map((image, index) => (
+const renderPostGrid = () => (
+  <View style={styles.gridContainer}>
+    {data?.posts?.map((post, postIndex) =>
+      post.media.map((mediaItem, mediaIndex) => (
         <TouchableOpacity
-          key={index}
+          key={`${postIndex}-${mediaIndex}`}
           style={styles.gridItem}
-          onPress={() => handleMediaPress(index)}
+          onPress={() => handleMediaPress(postIndex)}
           activeOpacity={0.8}
         >
-          <Image source={{ uri: image }} style={styles.gridImage} />
-          {activeTab === 'videos' && (
+          <Image
+            source={{ uri: mediaItem.url }}
+            style={styles.gridImage}
+            resizeMode="cover"
+          />
+          {mediaItem.media_type === 'video' && (
             <View style={styles.playButton}>
               <Icon name="play" size={24} color="#ffffff" />
             </View>
           )}
         </TouchableOpacity>
-      ))}
-    </View>
-  );
+      ))
+    )}
+  </View>
+);
+
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -190,7 +196,7 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Icon name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Adewale's Profile</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>{}</Text>
           <TouchableOpacity onPress={openBottomSheet}>
             <Icon name="ellipsis-vertical" size={24} color={theme.text} />
           </TouchableOpacity>
@@ -199,24 +205,24 @@ export default function ProfileScreen() {
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Profile Info */}
           <View style={styles.profileSection}>
-            <Image source={{ uri: profileData.avatar }} style={styles.avatar} />
-            <Text style={[styles.name, { color: theme.text }]}>{profileData.name}</Text>
+            <Image source={{ uri: data?.user?.profile_picture_url }} style={styles.avatar} />
+            <Text style={[styles.name, { color: theme.text }]}>{data?.user.username}</Text>
             <Text style={[styles.bio, { color: theme.textSecondary }]}>{profileData.bio}</Text>
 
             {/* Stats */}
             <View style={[styles.statsContainer, { backgroundColor: theme.secondary }]}>
               <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>{profileData.posts}</Text>
+                <Text style={[styles.statNumber, { color: theme.text }]}>{data?.post_count}</Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Posts</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <TouchableOpacity style={styles.statItem} onPress={openFollowersSheet}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>{profileData.followers.toLocaleString()}</Text>
+                <Text style={[styles.statNumber, { color: theme.text }]}>{data?.followers_count.toLocaleString()}</Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
               </TouchableOpacity>
               <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <TouchableOpacity style={styles.statItem} onPress={openFollowingSheet}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>{profileData.following}</Text>
+                <Text style={[styles.statNumber, { color: theme.text }]}>{data?.post_count}</Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
               </TouchableOpacity>
             </View>
@@ -457,6 +463,10 @@ const styles = StyleSheet.create({
     height: imageSize,
     margin: 2.5,
     position: 'relative',
+    borderColor: '#333333',
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   gridImage: {
     width: '100%',
