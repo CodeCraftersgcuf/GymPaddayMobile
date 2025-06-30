@@ -8,7 +8,6 @@ export const createComment = async ({
   data: {
     post_id: number;
     content: string;
-    parent_id?: number | null;
   };
   token: string;
 }) => {

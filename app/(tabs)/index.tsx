@@ -28,6 +28,10 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getUserPosts } from '@/utils/queries/posts';
 import * as SecureStore from 'expo-secure-store';
+import { getPostComments } from '@/utils/queries/comments';
+import { useMutation } from '@tanstack/react-query';
+import { createComment } from '@/utils/mutations/comments';
+
 // LoadingIndicator component
 function LoadingIndicator({ text = "Loading..." }) {
   const { dark } = useTheme();
@@ -59,6 +63,43 @@ export default function SocialFeedScreen() {
       return response; // ← this will be in `data`
     },
   });
+
+  // Query for comments (enabled only when modal visible and postId set)
+  const {
+    data: commentData,
+    isLoading: isLoadingComments,
+    refetch: refetchComments,
+  } = useQuery({
+    queryKey: ['postComments', currentPostId],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+
+      if (!token || !currentPostId) throw new Error('No token or postId');
+      return getPostComments(token, currentPostId);
+    },
+    enabled: !!currentPostId && commentModalVisible,
+  });
+  console.log("The Comments Data:", commentData);
+
+  const {
+    mutate: addComment,
+    isPending: isAddingComment,
+    error: addCommentError
+  } = useMutation({
+    mutationFn: async ({ text, postId }) => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error("No token");
+      return createComment({
+        data: { post_id: postId, content: text },
+        token
+      });
+    },
+    onSuccess: async (res, variables) => {
+      // Optionally: refetch comments after adding
+      await refetchComments();
+    }
+  });
+
 
   useEffect(() => {
     if (data && data.data) {
@@ -96,30 +137,39 @@ export default function SocialFeedScreen() {
     }
   }, [data]);
 
- 
+
 
   const handleCommentPress = (comments: any[], postId: number) => {
-    setCurrentComments(comments);
     setCurrentPostId(postId);
     setCommentModalVisible(true);
+    refetchComments();
   };
 
-  const handleCloseComments = () => setCommentModalVisible(false);
+  const handleCloseComments = () => {
+    setCommentModalVisible(false);
+    setCurrentPostId(null);
+  };
 
   const handleAddComment = (text: string, postId: number) => {
-    const newComment = {
-      id: Math.random().toString(),
-      userId: 'current-user-id',
-      username: 'You',
-      profileImage: 'https://randomuser.me/api/portraits/men/45.jpg',
-      text: text,
-      timestamp: '1 min',
-      likes: 0,
-      replies: []
-    };
-    setCurrentComments(prevComments => [...prevComments, newComment]);
+    // Call the mutation
+    addComment({ text, postId });
+    // Optionally optimistic update: (uncomment if you want the comment to appear instantly)
+    // setCurrentComments(prev => [
+    //   ...prev,
+    //   {
+    //     id: Math.random().toString(),
+    //     userId: 'current-user-id',
+    //     username: 'You',
+    //     profileImage: 'https://randomuser.me/api/portraits/men/45.jpg',
+    //     text,
+    //     timestamp: new Date().toISOString(),
+    //     likes: 0,
+    //     replies: []
+    //   }
+    // ]);
     console.log('Adding comment to post:', postId, text);
   };
+
 
   const handleStartLive = () => {
     route.push('/goLive');
@@ -145,10 +195,34 @@ export default function SocialFeedScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-   // Show loading indicator while user posts are loading
+  // Show loading indicator while user posts are loading
   if (isLoading) {
     return <LoadingIndicator text="Loading posts..." />;
   }
+
+  const handleHidePost = () => {
+    console.log('Hiding post:', idCan);
+    setBottomIndex(-1); // Close the bottom sheet
+
+    if (idCan.postId) {
+      setPosts(prev => prev.filter(p => p.id !== idCan.postId));
+      setBottomIndex(-1); // Close the bottom sheet
+    }
+  };
+  const mapApiCommentsToInternal = (apiComments: any[]): Comment[] => {
+    return (apiComments || []).map((item) => ({
+      id: item.id.toString(),
+      userId: item.user?.id?.toString() || '',
+      username: item.user?.username || 'Unknown',
+      profileImage: item.user?.profile_picture_url || '',
+      text: item.content || '',
+      timestamp: item.created_at,
+      likes: 0,
+      replies: mapApiCommentsToInternal(item.replies || [])
+    }));
+  };
+
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
@@ -187,11 +261,13 @@ export default function SocialFeedScreen() {
 
         <CommentsBottomSheet
           visible={commentModalVisible}
-          comments={currentComments}
+          comments={mapApiCommentsToInternal(commentData)}
           postId={currentPostId}
           onClose={handleCloseComments}
           onAddComment={handleAddComment}
+          loading={isLoadingComments || isAddingComment}
         />
+
 
         <FloatingActionButton
           onStartLive={handleStartLive}
@@ -204,6 +280,9 @@ export default function SocialFeedScreen() {
         setbottomIndex={setBottomIndex}
         type={PostType}
         idCan={idCan}
+        onHidePost={handleHidePost}
+        onClose={() => setBottomIndex(-1)} // pass this
+
       />
     </GestureHandlerRootView>
   );

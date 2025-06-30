@@ -51,7 +51,30 @@ export default function MediaViewer() {
   const params = useLocalSearchParams();
   const initialIndex = parseInt(params.index as string) || 0;
   const mediaType = params.type as string || 'posts';
-  
+
+  // Get media data from params if available (from API)
+  let mediaData: { uri: string; type: 'image' | 'video'; media_type?: string }[] = [];
+
+  if (Array.isArray(params.mediaArray)) {
+    // If mediaArray is passed as a param (stringified), parse it
+    try {
+      mediaData = JSON.parse(params.mediaArray as string);
+    } catch {
+      mediaData = [];
+    }
+  } else if (params.url && params.media_type) {
+    // If only a single media is passed
+    mediaData = [{ uri: params.url as string, type: params.media_type as 'image' | 'video', media_type: params.media_type as string }];
+  } else {
+    // fallback to dummy data for dev
+    mediaData = mediaType === 'videos'
+      ? postVideos.map((uri, index) => ({
+          uri,
+          type: index < 3 ? 'video' : 'image'
+        }))
+      : postImages.map(uri => ({ uri, type: 'image' as const }));
+  }
+
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList>(null);
 
@@ -63,18 +86,12 @@ export default function MediaViewer() {
     textSecondary: dark ? '#999999' : '#666666',
   };
 
-  // Prepare media data based on type
-  const mediaData: MediaItem[] = mediaType === 'videos' 
-    ? postVideos.map((uri, index) => ({
-        uri,
-        type: index < 3 ? 'video' : 'image' // First 3 are videos for demo
-      }))
-    : postImages.map(uri => ({ uri, type: 'image' as const }));
-
-  const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => {
+  const renderMediaItem = ({ item, index }: { item: any; index: number }) => {
+    // Prefer media_type if present, else fallback to type
+    const type = item.media_type || item.type;
     return (
       <View style={styles.mediaContainer}>
-        {item.type === 'image' ? (
+        {type === 'image' ? (
           <Image 
             source={{ uri: item.uri }} 
             style={styles.mediaImage}
@@ -189,6 +206,7 @@ export default function MediaViewer() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop:30,
   },
   header: {
     flexDirection: 'row',

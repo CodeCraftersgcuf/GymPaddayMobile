@@ -4,34 +4,55 @@ import { images } from '@/constants'
 import ThemedView from '@/components/ThemedView'
 import { useTheme } from '@/contexts/themeContext'
 import ThemeText from '@/components/ThemedText'
+import { TouchableOpacity } from 'react-native';
 
-const ViewpostDetail = () => {
+// Accept onHide and onReport as props
+interface ViewpostDetailProps {
+    onHide?: () => void;
+    onReport?: () => void;
+    onClose?: () => void; // accept
+
+}
+
+const ViewpostDetail: React.FC<ViewpostDetailProps> = ({ onHide, onReport, onClose }) => {
     const { dark } = useTheme();
     const handleClick = () => {
         console.log('clicked!!')
     }
+    const handleFollow = () => {
+        // ...follow logic
+        if (onClose) onClose();
+    };
+    const handleHide = () => {
+        if (onHide) onHide();
+        if (onClose) onClose();
+    };
+    const handleReport = () => {
+        if (onReport) onReport();
+        if (onClose) onClose();
+    };
     const Options = [
         {
             icon: images.followIcon,
             title: 'Follow User',
-            handleFunction: handleClick,
+            handleFunction: handleFollow,
         },
         {
             icon: images.eysIcon,
             title: 'Hide Post',
-            handleFunction: handleClick,
+            handleFunction: handleHide,
         },
         {
             icon: images.reportIcons,
             title: 'Report post',
-            handleFunction: handleClick,
+            handleFunction: handleReport,
         },
     ]
     return (
         <View style={{ gap: 20 }}>
-            {
-                Options.map((item, index) => (
-                    <ThemedView darkColor='#252525' key={index} style={[{ flexDirection: 'row', gap: 10 }]}>
+            {Options.map((item, index) => (
+                <TouchableOpacity key={index} onPress={item.handleFunction}>
+                    <ThemedView darkColor='#252525' style={[{ flexDirection: 'row', gap: 10 }]}>
                         <Image source={item.icon} style={{ width: 25, height: 25 }} tintColor={item.title == 'Repost post' ? 'red' : dark ? 'white' : 'black'} />
                         <ThemeText
                             lightColor={item.title == 'Repost post' ? 'red' : 'black'}
@@ -40,8 +61,8 @@ const ViewpostDetail = () => {
                             {item.title}
                         </ThemeText>
                     </ThemedView>
-                ))
-            }
+                </TouchableOpacity>
+            ))}
         </View>
     )
 }

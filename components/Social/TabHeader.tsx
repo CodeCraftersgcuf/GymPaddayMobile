@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Pressable, Image } from 'react-native';
 import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
@@ -6,6 +6,10 @@ import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
 import { useRouter } from 'expo-router';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+
+
+import * as SecureStore from 'expo-secure-store';
+
 
 interface TabHeaderProps {
   title: string;
@@ -22,13 +26,39 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
 
   const { dark } = useTheme();
   const router = useRouter();
+  const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
+
+  const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
+
   const hanldeViewProfile = (id: any) => {
-    router.push({
-      pathname: '/UserProfile',
-      params: { user_id: id },
-    })
+    // router.push({
+    //   pathname: '/UserProfile',
+    //   params: { user_id: id },
+    // })
+
+    router.push('/EditProfile');
   }
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          if (userData.profile_picture_url) {
+            setProfileImage(userData.profile_picture_url);
+          } else {
+            setProfileImage(defatulImage); // fallback to prop
+          }
+        } else {
+          setProfileImage(defatulImage); // fallback to prop
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setProfileImage(defatulImage); // fallback to prop
+      }
+    })();
+  }, []);
   const themeStyles = StyleSheet.create({
     notificationView: {
       backgroundColor: dark ? '#212121' : '#e5e5e5',
@@ -47,7 +77,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
       <ThemedView style={styles.alignCenter}>
         {admin?.profile && (
           <Pressable onPress={() => hanldeViewProfile(admin.userId ?? 12)}>
-            <Image source={{ uri: admin.profile }} style={styles.UserImage} />
+            <Image source={{ uri: profileImage }} style={styles.UserImage} />
           </Pressable>
         )}
         {children}

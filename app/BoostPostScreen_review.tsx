@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -19,6 +19,14 @@ import { useTheme } from '@/contexts/themeContext';
 import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
 
+
+//Code Related to the integration
+import { useMutation } from '@tanstack/react-query';
+import { createBoostedPost } from '@/utils/mutations/posts';
+import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
+
+
 // If you have a type for your navigation stack, use that instead of `any`
 type RootStackParamList = {
     ReviewAd: {
@@ -34,16 +42,23 @@ type RootStackParamList = {
 const ReviewAdScreen: React.FC = () => {
     const { dark } = useTheme();
     const isDark = dark;
-    const theme = isDark ? colors.dark : colors.light;
-    // Use Expo Router's useLocalSearchParams to get params
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    // @ts-ignore
-    const route = useRouter();
-    // Get params from the route using useLocalSearchParams from expo-router
+    const [token, setToken] = useState<string | null>(null);
 
+    const theme = isDark ? colors.dark : colors.light;
+    const route = useRouter();
     const params = useLocalSearchParams();
+
     // audience is expected as an array: [selectedGender, minAge, maxAge, budget, duration, location, post_id]
-    const audienceArray = params.audience as unknown as (string | number)[];
+    // If passed as a string (comma-separated), split it
+    let audienceArray: (string | number)[] = [];
+    if (Array.isArray(params.audience)) {
+        audienceArray = params.audience as (string | number)[];
+    } else if (typeof params.audience === 'string') {
+        audienceArray = params.audience.split(',');
+    }
+
+    console.log("ReviewAdScreen audienceArray:", audienceArray);
+
     const [
         selectedGender = '',
         minAge = '',
@@ -63,9 +78,54 @@ const ReviewAdScreen: React.FC = () => {
         location,
         post_id,
     };
+    const getToken = async () => {
+        const storedToken = await SecureStore.getItemAsync('auth_token');
+        setToken(storedToken);
+    };
+    useEffect(() => {
+        getToken();
+    }, []);
+
+
+    const boostMutation = useMutation({
+        mutationFn: async () => {
+            if (!token) throw new Error('No auth token');
+            // Prepare correct data for createBoostedPost
+            // post_id must be a number
+            const id = Number(audience.post_id);
+            const data = {
+                amount: Number(audience.budget),
+                duration: Number(audience.duration),
+                location: audience.location || null,
+                age_min: Number(audience.minAge) || null,
+                age_max: Number(audience.maxAge) || null,
+                gender: (audience.selectedGender || '').toLowerCase() as "all" | "male" | "female" | null,
+            };
+            return await createBoostedPost({ id, data, token });
+        },
+        onSuccess: (res) => {
+            Toast.show({
+                type: 'success',
+                text1: 'Boosted!',
+                text2: 'Your post has been boosted successfully',
+                visibilityTime: 500,
+            });
+            setTimeout(() => {
+                route.push('/BoostPostScreen_Final');
+            }, 500);
+        },
+        onError: (error: any) => {
+            Toast.show({
+                type: 'error',
+                text1: 'Boost Failed',
+                text2: error?.message || 'Failed to boost post',
+                visibilityTime: 2000,
+            });
+        }
+    });
 
     const handleBoostPost = () => {
-        route.push('/BoostPostScreen_Final');
+        boostMutation.mutate();
     };
 
     const ReviewItem = ({
@@ -127,7 +187,12 @@ const ReviewAdScreen: React.FC = () => {
                 </View>
             </ScrollView>
 
-            <Button title="Boost Post" onPress={handleBoostPost} isDark={isDark} />
+            <Button
+                title={boostMutation.isPending ? "Boosting..." : "Boost Post"}
+                onPress={handleBoostPost}
+                isDark={isDark}
+                disabled={boostMutation.isPending}
+            />
         </View>
     );
 };

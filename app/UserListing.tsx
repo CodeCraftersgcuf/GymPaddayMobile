@@ -16,6 +16,13 @@ import { useTheme } from '@/contexts/themeContext';
 const { width } = Dimensions.get('window');
 const itemWidth = (width - 30) / 2;
 
+import { useQuery } from '@tanstack/react-query';
+import { getMarketplaceListingsByUser } from '@/utils/queries/marketplace';
+import * as SecureStore from 'expo-secure-store';
+import { useLocalSearchParams } from 'expo-router';
+
+
+
 // const dark = true; // You can change this to toggle theme
 
 const listingData = [
@@ -77,6 +84,29 @@ const listingData = [
 
 export default function ListingsScreen() {
     const { dark } = useTheme();
+    const { user_id } = useLocalSearchParams();
+    const userIdNum = user_id ? parseInt(user_id as string, 10) : null;
+    const [token, setToken] = useState<string | null>(null);
+
+    // Fetch token from SecureStore on mount
+    React.useEffect(() => {
+        SecureStore.getItemAsync('auth_token').then(t => setToken(t));
+    }, []);
+
+    // Fetch marketplace listings for user when token & userIdNum are available
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['user-marketplace-listings', userIdNum, token],
+        queryFn: () =>
+            userIdNum && token
+                ? getMarketplaceListingsByUser(userIdNum, token)
+                : Promise.resolve(null),
+        enabled: !!userIdNum && !!token,
+    });
+
+    console.log("Fetched data:", data);
+    // Build array to map for UI (fallback to [] if no data)
+    const apiListingData = data?.listings || [];
+
     const theme = {
         background: dark ? '#000000' : '#ffffff',
         secondary: dark ? '#181818' : '#f5f5f5',
@@ -85,17 +115,62 @@ export default function ListingsScreen() {
         border: dark ? '#333333' : '#e0e0e0',
     };
 
-    const renderListingItem = (item: typeof listingData[0]) => (
-        <TouchableOpacity key={item.id} style={[styles.listingItem, { backgroundColor: theme.secondary }]}>
-            <Image source={{ uri: item.image }} style={styles.listingImage} />
+    // Loader or error message
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: theme.text }}>Loading...</Text>
+            </SafeAreaView>
+        );
+    }
+    if (isError) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: 'red' }}>Failed to load listings.</Text>
+            </SafeAreaView>
+        );
+    }
+    const handleItemPress = (item: any) => {
+        router.push({
+            pathname: '/marketView',
+            params: { id: item.toString() }, // always pass params as strings
+        });
+    };
+
+    // Adjusted renderListingItem to use API structure
+    const renderListingItem = (item: any) => (
+        <TouchableOpacity key={item.id} style={[styles.listingItem, { backgroundColor: theme.secondary }]} onPress={() => handleItemPress(item.id)}>
+            <Image
+                source={{
+                    uri: item.media_urls?.[0]
+                        ? (item.media_urls[0].startsWith('http')
+                            ? item.media_urls[0]
+                            : `https://gympaddy.hmstech.xyz/storage/${item.media_urls[0]}`
+                        )
+                        : 'https://via.placeholder.com/300x200?text=No+Image',
+                }}
+                style={styles.listingImage}
+            />
             <View style={styles.listingContent}>
-                <Text style={[styles.listingTitle, { color: theme.text }]}>{item.title}</Text>
-                <Text style={styles.listingPrice}>{item.price}</Text>
+                <Text style={[styles.listingTitle, { color: theme.text }]} numberOfLines={1}>
+                    {item.title}
+                </Text>
+                <Text style={styles.listingPrice}>₦{item.price}</Text>
                 <View style={styles.sellerInfo}>
-                    <Image source={{ uri: item.sellerAvatar }} style={styles.sellerAvatar} />
+                    <Image
+                        source={{
+                            uri: item.user?.profile_picture_url ||
+                                'https://via.placeholder.com/40x40?text=User',
+                        }}
+                        style={styles.sellerAvatar}
+                    />
                     <View style={styles.sellerDetails}>
-                        <Text style={[styles.sellerName, { color: theme.textSecondary }]}>{item.seller}</Text>
-                        <Text style={[styles.timeAgo, { color: theme.textSecondary }]}>{item.timeAgo}</Text>
+                        <Text style={[styles.sellerName, { color: theme.textSecondary }]}>
+                            {item.user?.username || 'Unknown'}
+                        </Text>
+                        <Text style={[styles.timeAgo, { color: theme.textSecondary }]}>
+                            {item.location}
+                        </Text>
                     </View>
                 </View>
             </View>
@@ -109,24 +184,32 @@ export default function ListingsScreen() {
                 <TouchableOpacity onPress={() => router.back()}>
                     <Icon name="chevron-back" size={24} color={theme.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Adewale's Listings</Text>
+                <Text style={[styles.headerTitle, { color: theme.text }]}>Listings</Text>
                 <TouchableOpacity>
-                    <Icon name="ellipsis-vertical" size={24} color={theme.text} />
+                    {/* <Icon name="ellipsis-vertical" size={24} color={theme.text} /> */}
                 </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.listingsGrid}>
-                    {listingData.map(renderListingItem)}
+                    {apiListingData.length === 0 ? (
+                        <Text style={{ color: theme.textSecondary, textAlign: 'center', width: '100%', marginTop: 40 }}>
+                            No listings found.
+                        </Text>
+                    ) : (
+                        apiListingData.map(renderListingItem)
+                    )}
                 </View>
             </ScrollView>
         </SafeAreaView>
     );
 }
 
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginTop: 30,
     },
     header: {
         flexDirection: 'row',

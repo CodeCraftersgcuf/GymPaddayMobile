@@ -63,14 +63,16 @@ interface BoostAdModalProps {
   visible: boolean;
   onClose: () => void;
   dark: boolean;
+  post_id: any; // Assuming post_id is passed as a prop
 }
 
-const BoostAdModal: React.FC<BoostAdModalProps> = ({ visible, onClose, dark }) => {
+const BoostAdModal: React.FC<BoostAdModalProps> = ({ visible, onClose, dark , post_id}) => {
+  console.log("BoostAdModal post_id:", post_id);
   const styles = createStyles(dark);
   const route = useRouter();
   const onProceed = () => {
     route.push({pathname :'/BoostPostScreen_audience',params: {
-      post_id: '123', // Replace with actual post_id from props, state, or context
+      post_id: post_id, // Replace with actual post_id from props, state, or context
     }});
   };  
 

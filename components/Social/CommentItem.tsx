@@ -2,6 +2,9 @@ import { images } from '@/constants';
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 
+
+import { formatDistanceToNow, parseISO } from 'date-fns';
+
 interface Comment {
   id: string;
   userId: string;
@@ -24,7 +27,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
   const subtextColor = darkMode ? '#AAAAAA' : '#777777';
   const accentColor = '#3B82F6';
   const replyPadding = isReply ? 40 : 0;
-  console.log("Replies : ",comment.replies)
+  console.log("Replies : ", comment.replies)
 
   return (
     <View style={[styles.commentContainer, { marginLeft: replyPadding }]}>
@@ -36,7 +39,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
               {comment.username}
             </Text>
             <Text style={[styles.timestamp, { color: subtextColor }]}>
-              {comment.timestamp}
+              {formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}
             </Text>
           </View>
           <Text style={[styles.commentText, { color: textColor }]}>
