@@ -178,7 +178,7 @@ export default function LiveStreamingPlayer({ token, channelName, uid, role }: P
                 : 'Camera status: pending...'}
             </Text>
             <RtcSurfaceView
-              canvas={{ uid: localUid, renderMode: 1 }}
+              canvas={{ uid: 0, renderMode: 1 }}
               style={{ flex: 1, backgroundColor: cameraWorking === 'ok' ? '#000' : '#600' }}
               onLayout={() => {
                 if (!previewActive) {
