@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+
+
+//Code related to the integration
+import { useMutation } from '@tanstack/react-query';
+import { getLiveVideoCallToken } from '@/utils/mutations/video';
+import * as SecureStore from 'expo-secure-store';
+
+import LiveStreamingPlayer from './LiveStreamingPlayer';
 
 interface LiveStreamingViewProps {
   dark: boolean;
@@ -47,6 +55,20 @@ export default function LiveStreamingView({ dark, onEndLive, onThreeDotsPress }:
     },
   ]);
 
+  const fetchLiveVideoCallToken = useMutation({
+    mutationFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token found');
+      return await getLiveVideoCallToken({ channel_name: 'live_stream', uid: 12345, role: 'host' }, token);
+    },
+    onSuccess: (data) => {
+      console.log('Live video call token fetched successfully:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching live video call token:', error);
+    },
+  });
+
   useEffect(() => {
     // Simulate new messages coming in
     const interval = setInterval(() => {
@@ -62,22 +84,26 @@ export default function LiveStreamingView({ dark, onEndLive, onThreeDotsPress }:
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    fetchLiveVideoCallToken.mutate();
+  }, []);
+
   return (
     <View style={[styles.container, { backgroundColor: dark ? '#000000' : '#FFFFFF' }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity>
-          <MaterialIcons 
-            name="arrow-back" 
-            size={24} 
-            color={dark ? '#FFFFFF' : '#000000'} 
+          <MaterialIcons
+            name="arrow-back"
+            size={24}
+            color={dark ? '#FFFFFF' : '#000000'}
           />
         </TouchableOpacity>
-        
+
         <Text style={[styles.title, { color: dark ? '#FFFFFF' : '#000000' }]}>
           Live Streaming
         </Text>
-        
+
         {/* <TouchableOpacity onPress={onThreeDotsPress}>
           <MaterialIcons 
             name="more-vert" 
@@ -89,46 +115,21 @@ export default function LiveStreamingView({ dark, onEndLive, onThreeDotsPress }:
 
       {/* Live Stream View */}
       <View style={styles.streamContainer}>
-        <ImageBackground
-          source={{ uri: 'https://images.pexels.com/photos/268533/pexels-photo-268533.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }}
-          style={styles.streamView}
-          imageStyle={styles.streamImage}
-        >
-          {/* Flip Camera Button */}
-          <TouchableOpacity style={styles.flipCamera}>
-            <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+        <View style={styles.streamContainer}>
+          {fetchLiveVideoCallToken.isPending && (
+            <ActivityIndicator size="large" color="#FF0000" />
+          )}
 
-          {/* Chat Messages */}
-          <View style={styles.chatContainer}>
-            <ScrollView 
-              style={styles.chatScroll}
-              showsVerticalScrollIndicator={false}
-            >
-              {messages.map((msg) => (
-                <View key={msg.id} style={styles.chatMessage}>
-                  <View style={styles.chatAvatar}>
-                    <Text style={styles.avatarText}>{msg.avatar}</Text>
-                  </View>
-                  <View style={styles.chatContent}>
-                    <Text style={styles.chatUser}>{msg.user}</Text>
-                    <View style={styles.messageRow}>
-                      <Text style={styles.chatText}>{msg.message}</Text>
-                      {msg.isGift && (
-                        <View style={styles.giftContainer}>
-                          <Text style={styles.giftIcon}>🎁</Text>
-                          <View style={styles.giftBadge}>
-                            <Text style={styles.giftCount}>x{msg.giftCount}</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </ImageBackground>
+          {fetchLiveVideoCallToken.data && (
+            <LiveStreamingPlayer
+              token={fetchLiveVideoCallToken.data.token}
+              channelName="live_stream"
+              uid={12345}
+              role="host"
+            />
+          )}
+        </View>
+
       </View>
 
       {/* Control Buttons */}
@@ -136,7 +137,7 @@ export default function LiveStreamingView({ dark, onEndLive, onThreeDotsPress }:
         <TouchableOpacity style={styles.endLiveButton} onPress={onEndLive}>
           <Text style={styles.endLiveButtonText}>End Live</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.viewAudienceButton}>
           <Text style={[styles.viewAudienceButtonText, { color: dark ? '#FFFFFF' : '#000000' }]}>
             View Audience
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
     // paddingTop: 50,
   },
   header: {
-    position:'relative',
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   title: {
-    position:'absolute',
+    position: 'absolute',
     left: "50%",
     transform: [{ translateX: -30 }],
     fontSize: 18,

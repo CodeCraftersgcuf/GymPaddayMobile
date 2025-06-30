@@ -18,6 +18,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { images } from '@/constants';
 import { useLocalSearchParams } from 'expo-router';
 
+
+//Code Related to the integration
+import { useQuery } from '@tanstack/react-query';
+import { fetchUserProfile } from '@/utils/queries/profile';
+import * as SecureStore from 'expo-secure-store';
+
+
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
 
@@ -77,6 +84,18 @@ export default function ProfileScreen() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
   const followingSheetRef = useRef<BottomSheet>(null);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['userProfile', user_id],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token found');
+      return await fetchUserProfile(token, Number(user_id));
+    },
+    enabled: !!user_id,
+  });
+
+  console.log("User Profile Data:", data);
 
   const snapPoints = useMemo(() => ['25%', '50%'], []);
 
@@ -316,6 +335,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop: 30,
   },
   header: {
     flexDirection: 'row',

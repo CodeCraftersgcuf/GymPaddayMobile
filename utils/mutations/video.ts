@@ -4,7 +4,13 @@ import { API_ENDPOINTS } from "../../apiConfig";
 interface GetTokenPayload {
   channel_name: string;
   uid: number;
+  role?: 'host' | 'audience';
 }
+
+export const getLiveVideoCallToken = async (data: GetTokenPayload, token: string) => {
+  console.log("Fetching live video call token with data:", data);
+  return await apiCall(API_ENDPOINTS.USER.VIDEO_CALLS.LiveVideoCallToken, "POST", data, token);
+};
 
 export const getVideoToken = async (data: GetTokenPayload, token: string) => {
   console.log("Fetching video token with data:", data);

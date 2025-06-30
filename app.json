@@ -1,5 +1,6 @@
 {
   "expo": {
+    "jsEngine": "jsc",
     "name": "terescrow-frontend",
     "slug": "gym",
     "version": "1.0.0",

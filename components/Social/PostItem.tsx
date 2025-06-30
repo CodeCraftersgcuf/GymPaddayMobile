@@ -110,7 +110,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
     <View style={styles.postContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/UserProfile')}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push({ pathname: '/UserProfile', params: { user_id: post.user.id.toString() } })}>
           <View style={styles.headerLeft}>
             <Image source={{ uri: post.user.profile_picture }} style={styles.profileImage} />
             <View>

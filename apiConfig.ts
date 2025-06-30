@@ -18,7 +18,8 @@ const API_ENDPOINTS = {
     Delete: (id: number) => API_DOMAIN + `/personal-access-tokens/${id}`,
   },
   USER: {
-    PROFILE:{
+    PROFILE: {
+      PROFILE: (userId: number) => `${API_DOMAIN}/user/userDetails/${userId}`,
       EditProfile: API_DOMAIN + "/user/edit-profile",
     },
     POSTS: {
@@ -146,6 +147,7 @@ const API_ENDPOINTS = {
       Delete: (id: number) => API_DOMAIN + `/user/tickets/${id}`,
     },
     VIDEO_CALLS: {
+      LiveVideoCallToken: API_DOMAIN + "/video-call/live-token",
       Token: API_DOMAIN + "/video-call/token",
       StartCall: API_DOMAIN + "/video-call/start",
       EndCall: API_DOMAIN + "/video-call/end",
