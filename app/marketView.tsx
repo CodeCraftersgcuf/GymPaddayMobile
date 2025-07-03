@@ -23,6 +23,7 @@ import { getMarketplaceListingById } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { useMutation } from '@tanstack/react-query';
 import { sendChatMessage } from '@/utils/mutations/chat';
+import Toast from 'react-native-toast-message';
 
 interface RelatedItem {
     id: string;
@@ -157,8 +158,18 @@ export default function ItemDetailsScreen() {
                     message,
                 }, token);
                 console.log("Message sent successfully");
+                Toast.show({
+                    type: 'success',
+                    text1: 'Message Sent',
+                    text2: 'Your message has been sent successfully.',
+                });
                 setMessage('');
             } catch (err) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Message Failed',
+                    text2: 'Failed to send your message. Please try again.',
+                });
                 console.error("Failed to send message:", err);
             }
         }
@@ -271,13 +282,13 @@ export default function ItemDetailsScreen() {
                     <View style={styles.quickActions}>
                         <TouchableOpacity
                             style={styles.quickActionButton}
-                            onPress={() => handleQuickMessage('Is it available')}
+                            onPress={() => handleQuickMessage(`Hi ${sellerName}  , is this item ${title} available?`)}
                         >
                             <Text style={styles.quickActionText}>Is it available</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.quickActionButton}
-                            onPress={() => handleQuickMessage('What is the last price')}
+                            onPress={() => handleQuickMessage(`Hi ${title}, can you lower the price?`)}
                         >
                             <Text style={styles.quickActionText}>What is the last price</Text>
                         </TouchableOpacity>

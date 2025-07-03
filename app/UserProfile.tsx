@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,10 @@ import { useLocalSearchParams } from 'expo-router';
 
 
 //Code Related to the integration
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import * as SecureStore from 'expo-secure-store';
-import { getFollowerList, getFollowingList } from '@/utils/queries/socialMedia';
+import { followUnfollowUser, getFollowerList, getFollowingList } from '@/utils/queries/socialMedia';
 
 
 const { width } = Dimensions.get('window');
@@ -44,28 +44,29 @@ const profileData = {
 
 
 // Sample followers data
-const followersData: User[] = [
-  { id: '1', name: 'Adewale', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '2', name: 'Sasha', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-  { id: '3', name: 'Walexy mo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-  { id: '4', name: 'AAKCW C12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '5', name: 'Samba simo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '6', name: 'Racket 123', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '7', name: 'Biling 23_', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '8', name: 'LAQWX12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '9', name: 'Asder', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '10', name: 'Friday', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '11', name: 'Chris23345', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-];
+// const followersData: User[] = [
+//   { id: '1', name: 'Adewale', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '2', name: 'Sasha', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
+//   { id: '3', name: 'Walexy mo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
+//   { id: '4', name: 'AAKCW C12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '5', name: 'Samba simo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '6', name: 'Racket 123', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '7', name: 'Biling 23_', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '8', name: 'LAQWX12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '9', name: 'Asder', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '10', name: 'Friday', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '11', name: 'Chris23345', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+// ];
 
-// Sample following data
-const followingData: User[] = [
-  { id: '1', name: 'Adewale', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '2', name: 'Sasha', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-  { id: '3', name: 'Walexy mo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-  { id: '4', name: 'AAKCW C12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-  { id: '5', name: 'Samba simo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-];
+// // Sample following data
+// const followingData: User[] = [
+//   { id: '1', name: 'Adewale', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '2', name: 'Sasha', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
+//   { id: '3', name: 'Walexy mo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
+//   { id: '4', name: 'AAKCW C12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+//   { id: '5', name: 'Samba simo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
+// ];
+
 
 // Helper to filter media by type
 function getMediaByType(posts, type: 'image' | 'video') {
@@ -90,10 +91,26 @@ export default function ProfileScreen() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
   const followingSheetRef = useRef<BottomSheet>(null);
-
+  const [authUser, setAuthUser] = useState<any>(null);
   const { user_id } = useLocalSearchParams<{ user_id?: any }>();
   console.log('User ID:', user_id);
+  const queryClient = useQueryClient();
 
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token');
+      return await followUnfollowUser(Number(user_id), token);
+    },
+    onSuccess: () => {
+      console.log('Follow/Unfollow successful');
+      queryClient.invalidateQueries({ queryKey: ['followers', user_id] });
+      queryClient.invalidateQueries({ queryKey: ['userProfile', user_id] });
+    },
+    onError: (error) => {
+      console.error('Error following/unfollowing user:', error);
+    },
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ['userProfile', user_id],
     queryFn: async () => {
@@ -103,7 +120,22 @@ export default function ProfileScreen() {
     },
     enabled: !!user_id,
   });
+  const getUserData = async () => {
+    return await SecureStore.getItemAsync('user_data');
+    // console.log("User data:", user_id);
+  };
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const userData = await getUserData();
+      if (userData) {
+        setAuthUser(JSON.parse(userData));
+      }
+      console.log("Fetched User Data:", userData);
+    };
 
+    fetchUserData();
+    console.log("Auth User Data:", authUser);
+  }, []);
   // Fetch followers and following from API
   const {
     data: followersApiData,
@@ -132,26 +164,35 @@ export default function ProfileScreen() {
     },
     enabled: !!user_id,
   });
+  console.log("follower List is ", followersApiData);
+const mapApiUsers = (
+  arr: any[],
+  listType: 'followers' | 'following'
+): User[] =>
+  (arr || []).map((item: any) => {
+    const user = listType === 'followers' ? item.follower : item.followed;
 
-  // Map API data to User[] structure
-  const mapApiUsers = (arr: any[]): User[] =>
-    (arr || []).map((item: any) => ({
-      id: item.id?.toString() ?? '',
-      name: item.username || item.name || 'Unknown',
-      avatar: item.profile_picture_url || item.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
-      isFollowing: !!item.is_following,
-    }));
+    return {
+      id: user?.id?.toString() ?? '',
+      name: user?.username || user?.name || 'Unknown',
+      avatar:
+        user?.profile_picture_url ||
+        user?.avatar ||
+        'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+      isFollowing: !!user?.is_following_back, // use backend value directly
+    };
+  });
 
-  // Use API data if available, else fallback to dummy data
-  const followers = followersApiData && Array.isArray(followersApiData)
-    ? mapApiUsers(followersApiData)
-    : followersData;
+
+
+const followers = Array.isArray(followersApiData)
+  ? mapApiUsers(followersApiData, 'followers')
+  : [];
 
   const following = followingApiData && Array.isArray(followingApiData)
     ? mapApiUsers(followingApiData)
-    : followingData;
+    : [];
 
-  console.log("User Profile Data:", data);
 
   const snapPoints = useMemo(() => ['25%', '50%'], []);
 
@@ -230,34 +271,31 @@ export default function ProfileScreen() {
     textSecondary: dark ? '#999999' : '#666666',
     border: dark ? '#333333' : '#e0e0e0',
   };
-  const renderPostGrid = () => (
-    <View style={styles.gridContainer}>
-      {data?.posts?.map((post, postIndex) =>
-        post.media.map((mediaItem, mediaIndex) => (
-          <TouchableOpacity
-            key={`${postIndex}-${mediaIndex}`}
-            style={styles.gridItem}
-            onPress={() => handleMediaPress(postIndex)}
-            activeOpacity={0.8}
-          >
-            <Image
-              source={{ uri: mediaItem.url }}
-              style={styles.gridImage}
-              resizeMode="cover"
-            />
-            {mediaItem.media_type === 'video' && (
-              <View style={styles.playButton}>
-                <Icon name="play" size={24} color="#ffffff" />
-              </View>
-            )}
-          </TouchableOpacity>
-        ))
-      )}
-    </View>
-  );
-
-
-  // Show loading indicator while fetching user profile data
+  // const renderPostGrid = () => (
+  //   <View style={styles.gridContainer}>
+  //     {data?.posts?.map((post, postIndex) =>
+  //       post.media.map((mediaItem, mediaIndex) => (
+  //         <TouchableOpacity
+  //           key={`${postIndex}-${mediaIndex}`}
+  //           style={styles.gridItem}
+  //           onPress={() => handleMediaPress(postIndex)}
+  //           activeOpacity={0.8}
+  //         >
+  //           <Image
+  //             source={{ uri: mediaItem.url }}
+  //             style={styles.gridImage}
+  //             resizeMode="cover"
+  //           />
+  //           {mediaItem.media_type === 'video' && (
+  //             <View style={styles.playButton}>
+  //               <Icon name="play" size={24} color="#ffffff" />
+  //             </View>
+  //           )}
+  //         </TouchableOpacity>
+  //       ))
+  //     )}
+  //   </View>
+  // );
   if (isLoading) {
     return (
       <GestureHandlerRootView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
@@ -266,12 +304,9 @@ export default function ProfileScreen() {
       </GestureHandlerRootView>
     );
   }
-
-  // Filtered media for tabs
   const imageMedia = getMediaByType(data?.posts, 'image');
   const videoMedia = getMediaByType(data?.posts, 'video');
 
-  // Render grid for selected tab, with empty state
   const renderMediaGrid = () => {
     const mediaArray = activeTab === 'posts' ? imageMedia : videoMedia;
     if (!mediaArray.length) {
@@ -345,41 +380,44 @@ export default function ProfileScreen() {
             <View style={[styles.statsContainer, { backgroundColor: theme.secondary }]}>
               <View style={styles.statItem}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>
-                  {typeof data?.post_count === 'number'
-                    ? data.post_count
-                    : Array.isArray(data?.posts)
-                      ? data.posts.length
-                      : 0}
+                  {data?.post_count}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Posts</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <TouchableOpacity style={styles.statItem} onPress={openFollowersSheet}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>
-                  {Array.isArray(followers) && followers.length > 0
-                    ? followers.length.toLocaleString()
-                    : '0'}
+                  {data?.followers_count}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
-               
+
               </TouchableOpacity>
               <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <TouchableOpacity style={styles.statItem} onPress={openFollowingSheet}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>
-                  {Array.isArray(following) && following.length > 0
-                    ? following.length.toLocaleString()
-                    : '0'}
+                  {data?.following_count}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
-               
+
               </TouchableOpacity>
             </View>
 
             {/* Action Buttons */}
-            {false && <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.followButton}>
-                <Text style={styles.followButtonText}>Follow</Text>
+            {authUser && authUser?.id != user_id && <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.followButton}
+                onPress={() => followMutation.mutate()}
+                disabled={followMutation.isPending}
+              >
+                {followMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.followButtonText}>
+                    {data?.is_following ? 'Unfollow' : 'Follow'}
+                  </Text>
+                )}
               </TouchableOpacity>
+
               <TouchableOpacity style={[styles.messageButton, { backgroundColor: theme.secondary }]}>
                 <Text style={[styles.messageButtonText, { color: theme.text }]}>Message</Text>
               </TouchableOpacity>
@@ -388,7 +426,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             }
-            {true && <View style={styles.actionButtons}>
+            {authUser && authUser?.id == user_id && <View style={styles.actionButtons}>
               <TouchableOpacity onPress={() => router.push('/EditProfile')} style={styles.followButton}>
                 <Text style={styles.followButtonText}>Edit Profile</Text>
               </TouchableOpacity>

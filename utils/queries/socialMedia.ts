@@ -103,7 +103,7 @@ export const getFollowerList = async (
   token: string
 ): Promise<any> => {
   return await apiCall(
-    API_ENDPOINTS.USER.FOLLOWS.FollowerList(id),
+    API_ENDPOINTS.USER.FOLLOWS.Show(id),
     "GET",
     undefined,
     token
@@ -119,4 +119,20 @@ export const getFollowingList = async (
     undefined,
     token
   );
+};
+export const followUnfollowUser = async (targetUserId: number, token: string) => {
+  const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/follow-unfollow/${targetUserId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error?.message || 'Failed to follow/unfollow user');
+  }
+
+  return await res.json();
 };

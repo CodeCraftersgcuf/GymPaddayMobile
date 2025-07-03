@@ -308,6 +308,7 @@ export default function DepositPaymentTab() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginTop: 10,
         // backgroundColor: '#F8F9FA',
     },
     scrollContent: {
@@ -321,7 +322,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: 20,
         paddingBottom: 20,
-        marginBottom: 10
+        marginBottom: 10,
+        marginTop: 30,
     },
     backButton: {
         padding: 4,

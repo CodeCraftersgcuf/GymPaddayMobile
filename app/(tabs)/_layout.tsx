@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
-import { Image, StyleSheet, View } from 'react-native';
+import { router, Tabs } from 'expo-router';
+import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,7 +32,7 @@ export default function TabLayout() {
             left: 20,
             right: 20,
             borderRadius: 15,
-            height:70,
+            height: 70,
             elevation: 5,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
@@ -52,7 +52,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Socials',
-            tabBarIcon: ({ color, size ,focused}) => (
+            tabBarIcon: ({ color, size, focused }) => (
               <View
                 style={{
                   width: 55,
@@ -92,18 +92,26 @@ export default function TabLayout() {
           name="live"
           options={{
             tabBarLabelStyle: { display: 'none' },
-            tabBarIcon: ({ color, size }) => (
-              <LinearGradient
-                colors={["#FF0000", "#0000FF"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.liveIconContainer}
+            tabBarButton: (props) => (
+              <TouchableOpacity
+                {...props}
+                onPress={() => {
+                  router.push('/goLive'); // 👈 Navigates to goLive screen
+                }}
               >
-                <Image source={images.CreateVideo} style={{ width: size, height: size, tintColor: 'white' }} />
-              </LinearGradient>
+                <LinearGradient
+                  colors={['#FF0000', '#0000FF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.liveIconContainer}
+                >
+                  <Image source={images.CreateVideo} style={{ width: 24, height: 24, tintColor: 'white' }} />
+                </LinearGradient>
+              </TouchableOpacity>
             ),
           }}
         />
+
         <Tabs.Screen
           name="chat"
           options={{

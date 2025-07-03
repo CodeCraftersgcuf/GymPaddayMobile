@@ -10,7 +10,7 @@ interface PostContainerProps {
 }
 
 const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,handleMenu }) => {
-  console.log("PostContainer posts:", posts);
+  // console.log("PostContainer posts:", posts);
   return (
     <FlatList
       data={posts}

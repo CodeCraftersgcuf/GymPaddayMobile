@@ -224,7 +224,7 @@ const Login = () => {
                       href={"/(tabs)"}
                       style={{ paddingVertical: 15, borderRadius: 10 }}
                     >
-                      <ThemeText style={styles.registerText}>Login</ThemeText>
+                      {/* <ThemeText style={styles.registerText}>Login</ThemeText> */}
                     </Link>
                     {/* <Pressable onPress={() => route.push("/(tabs)")}>
                       <ThemeText>Login now</ThemeText>

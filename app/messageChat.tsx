@@ -14,6 +14,7 @@ import {
   Modal,
   Dimensions,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useTheme } from "@/contexts/themeContext";
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -34,7 +35,7 @@ import { RenderModeType } from 'react-native-agora';
 
 const { width, height } = Dimensions.get('window');
 import { RtcSurfaceView } from 'react-native-agora';
-import VoiceCallScreenT from '@/components/VoiceCallScreen';
+import VoiceCallScreenT from '@/app/VoiceCallScreen';
 
 
 export default function MessageChat() {
@@ -47,7 +48,7 @@ export default function MessageChat() {
   const [refreshing, setRefreshing] = useState(false);
   const flatListRef = useRef<FlatList<any>>(null);
   const router = useRouter();
-
+  const [callerUid, setCallerUid] = useState<number | null>(null);
   const theme = {
     background: dark ? '#000000' : '#ffffff',
     secondary: dark ? '#181818' : '#f5f5f5',
@@ -63,9 +64,9 @@ export default function MessageChat() {
   const getUserData = async () => {
     return await SecureStore.getItemAsync('user_data');
     console.log("User data:", user_id);
-    };
+  };
 
-    
+
   // Fetch messages from backend (removing mockMessages)
   const {
     data,
@@ -80,11 +81,17 @@ export default function MessageChat() {
     },
     enabled: !!conversation_id,
   });
+  const [lastCallId, setLastCallId] = useState<number | null>(null);
+
   const [incomingCall, setIncomingCall] = useState<null | {
+    id: number;
+
     channel_name: string;
-    type: 'voice' | 'video';
+    type: 'Voice' | 'video';
     receiver_id: number;
     caller_id: number;
+    receiver_uid: number;
+    caller_uid?: number;
   }>(null);
 
   // console.log("Fetched messages:", data);
@@ -95,7 +102,7 @@ export default function MessageChat() {
   const senderImage = firstMessage?.sender?.profile_picture_url || '';
   const receiverImage = firstMessage?.receiver?.profile_picture_url || '';
   const receiverName = firstMessage?.receiver?.fullname || 'User';
-
+  const [receiverUid, setReceiverUid] = useState<number | null>(null);
   // Transform fetched data
   const messages = data?.messages?.map((msg: any) => {
     return {
@@ -136,78 +143,105 @@ export default function MessageChat() {
   useEffect(() => {
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
   }, [messages.length]);
-  useEffect(() => {
-    const pollIncomingCall = setInterval(async () => {
-      try {
-        const token = await SecureStore.getItemAsync('auth_token');
-        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/incoming-call', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+useEffect(() => {
+  const checkIncomingCall = async () => {
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      const res = await fetch('https://gympaddy.hmstech.xyz/api/user/incoming-call', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-        const { call } = await res.json();
-        console.log('Incoming call:', call);
-        if (call && call.status === 'initiated' && call.channel_name) {
-          if (call.type === 'voice') {
-            setIncomingCall({
-              channel_name: call.channel_name,
-              type: call.type,
-              receiver_id: call.caller_id, // 👈 this is important
-            });
-            setShowVoiceCall(true); // this will open your existing VoiceCallScreen
-          } else if (call.type === 'video') {
-            setShowVideoCall(true);
-          }
+      const { call } = await res.json();
+      console.log('Incoming call:', call);
+
+      if (
+        call &&
+        call.channel_name &&
+        call.status?.toLowerCase() === 'initiated' &&
+        call.id !== lastCallId
+      ) {
+        setLastCallId(call.id);
+        console.log('Incoming call found:', call.id);
+
+        if (call.call_type === 'Voice') {
+          console.log('Incoming call set:', call);
+          console.log('Receiver UID:', call.receiver_uid);
+          setReceiverUid(call.receiver_uid);
+
+          router.push({
+            pathname: '/VoiceCallScreen',
+            params: {
+              receiverId: call.caller_id,
+              uid: call.receiver_uid,
+              type: 'receiver',
+              channelName: call.channel_name,
+            },
+          });
+        } else if (call.call_type === 'video') {
+          setShowVideoCall(true);
         }
-      } catch (error) {
-        console.log('Incoming call polling failed', error);
       }
-    }, 3000); // poll every 3s
+    } catch (error) {
+      console.log('Incoming call check failed', error);
+    }
+  };
 
-    return () => clearInterval(pollIncomingCall);
-  }, []);
+  checkIncomingCall();
+}, []);
+
 
   const handleVideoCall = () => {
     setShowVideoCallPopup(true);
   };
   const [channelName, setChannelName] = useState('');
 
-const handleVoiceCall = async () => {
-  try {
-    const receiverId = user_id; // 👈 the person being called
-    const channelName = `call_${Date.now()}_${receiverId}`; // unique per call
-    const token = await getToken(); // ⬅️ use your stored bearer token
+  const handleVoiceCall = async () => {
+    try {
+      const receiverId = user_id; // 👈 the person being called
+      const channelName = `call_${Date.now()}_${receiverId}`; // unique per call
+      const token = await getToken(); // ⬅️ use your stored bearer token
 
-    // 1. Notify backend that call is starting
-    const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-call', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        receiver_id: receiverId,
-        channel_name: channelName,
-        type: 'voice',
-      }),
-    });
-    console.log('Call start response:', response);
+      // 1. Notify backend that call is starting
+      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-call', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          receiver_id: receiverId,
+          channel_name: channelName,
+          type: 'voice',
+        }),
+      });
+      const callData = await response.json();
+      console.log('Call start response:', callData);
+      setCallerUid(callData?.call?.caller_uid || null);
+      console.log('Caller UID:', callData?.call?.caller_uid);
+      // console.log('Call start response:', response);
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || 'Call start failed');
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Call start failed');
+      }
+
+      router.push({
+        pathname: '/VoiceCallScreen',
+        params: {
+          receiverId: receiverId,
+          uid: callData?.call?.caller_uid,
+          type: 'caller',
+          channelName: channelName,
+        }
+      });
+
+    } catch (err) {
+      console.error('Voice call error:', err);
+      Alert.alert('Call Error', err?.message);
     }
-
-    // 2. Save channel name and show call screen
-    setChannelName(channelName);
-    setShowVoiceCall(true);
-
-  } catch (err) {
-    console.error('Voice call error:', err);
-    Alert.alert('Call Error', err.message);
-  }
-};
+  };
 
 
   const proceedVideoCall = () => {
@@ -419,12 +453,13 @@ const handleVoiceCall = async () => {
     return () => clearInterval(interval);
   }, [refetch]);
   const renderCallScreen = () => {
-    if (incomingCall?.type === 'voice' && showVoiceCall) {
+    if (incomingCall?.type === 'Voice') {
       return (
         <VoiceCallScreenT
           receiverId={incomingCall.caller_id}
+          type="receiver"
           channelName={incomingCall.channel_name}
-          uid={12345}
+          uid={receiverUid}
           onCallEnded={() => {
             setShowVoiceCall(false);
             setIncomingCall(null);
@@ -436,6 +471,8 @@ const handleVoiceCall = async () => {
     if (showVoiceCall) {
       return (
         <VoiceCallScreenT
+          uid={callerUid}
+          type="caller"
           receiverId={Number(user_id)}
           channelName={channelName}
           onCallEnded={() => setShowVoiceCall(false)}
@@ -583,7 +620,7 @@ const handleVoiceCall = async () => {
         {showVideoCall && <VideoCallScreen />}
         {/* {showVoiceCall && <VoiceCallScreen />} */}
         {/* <VoiceCallScreen /> */}
-        {renderCallScreen()}
+        {/* {renderCallScreen()} */}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -692,20 +729,22 @@ const styles = StyleSheet.create({
   messagesContainer: {
     flex: 1,
     padding: 16,
+    marginBottom: 10, // Space for input
   },
   messageBubble: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 14,
+    paddingBottom: 4,
     alignItems: 'flex-end',
   },
   sentBubble: {
     justifyContent: 'flex-end',
-    flexDirection: 'row-reverse', // avatar on the right
+    flexDirection: 'row-reverse',
 
   },
   receivedBubble: {
     justifyContent: 'flex-start',
-    flexDirection: 'row', // avatar on the left
+    flexDirection: 'row',
 
   },
   messageAvatar: {
@@ -742,6 +781,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
+    // marginTop: 10,
     borderTopWidth: 1,
   },
   input: {

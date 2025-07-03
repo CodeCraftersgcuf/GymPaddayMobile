@@ -1,11 +1,11 @@
 {
   "expo": {
     "jsEngine": "hermes",
-    "name": "terescrow-frontend",
+    "name": "GymPaddy",
     "slug": "gym",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -22,7 +22,9 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -52,9 +54,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f9bae889-75c9-45f7-9788-f04f7f5551a1"
+        "projectId": "21de3420-55a3-45a9-965b-e7d2ef7e4bcb"
       }
     },
-    "owner": "abudev"
+    "owner": ""
   }
 }

@@ -88,13 +88,11 @@ export default function ListingsScreen() {
     const userIdNum = user_id ? parseInt(user_id as string, 10) : null;
     const [token, setToken] = useState<string | null>(null);
 
-    // Fetch token from SecureStore on mount
     React.useEffect(() => {
         SecureStore.getItemAsync('auth_token').then(t => setToken(t));
     }, []);
 
-    // Fetch marketplace listings for user when token & userIdNum are available
-    const { data, isLoading, isError } = useQuery({
+    const { data, isLoading, isError,error } = useQuery({
         queryKey: ['user-marketplace-listings', userIdNum, token],
         queryFn: () =>
             userIdNum && token
@@ -104,7 +102,6 @@ export default function ListingsScreen() {
     });
 
     console.log("Fetched data:", data);
-    // Build array to map for UI (fallback to [] if no data)
     const apiListingData = data?.listings || [];
 
     const theme = {
@@ -114,8 +111,6 @@ export default function ListingsScreen() {
         textSecondary: dark ? '#999999' : '#666666',
         border: dark ? '#333333' : '#e0e0e0',
     };
-
-    // Loader or error message
     if (isLoading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
@@ -126,7 +121,7 @@ export default function ListingsScreen() {
     if (isError) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: 'red' }}>Failed to load listings.</Text>
+                <Text style={{ color: 'red' }}>Failed to load listings. {error?.message}</Text>
             </SafeAreaView>
         );
     }
