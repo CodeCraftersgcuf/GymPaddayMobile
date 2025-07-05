@@ -6,6 +6,8 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusTabs } from '@/components/more/ads/StatusTabs';
@@ -17,6 +19,10 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { getAdCampaigns } from '@/utils/queries/adCampaigns';
+import { useMutation } from '@tanstack/react-query';
+import { toggleCampaignStatus } from '@/utils/mutations/toggle';
+import { useQueryClient } from '@tanstack/react-query';
+
 
 interface AdsListScreenProps {
   navigation: {
@@ -37,7 +43,9 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
   };
   const [activeStatus, setActiveStatus] = useState<AdStatus>('all');
   const [selectedType, setSelectedType] = useState<AdType>('all');
+  const [refreshing, setRefreshing] = useState(false);
   const route = useRouter();
+  const queryClient = useQueryClient();
 
   // Fetch Ads from API
   const { data: adsApiData, isLoading, error } = useQuery({
@@ -48,58 +56,65 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
       return await getAdCampaigns(token);
     },
   });
-function getRelativeTime(dateString: string): string {
-  if (!dateString) return '--';
-  const now = new Date();
-  const past = new Date(dateString);
-  const diffMs = now.getTime() - past.getTime();
+  function getRelativeTime(dateString: string): string {
+    if (!dateString) return '--';
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffMs = now.getTime() - past.getTime();
 
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds} sec ago`;
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return `${seconds} sec ago`;
 
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} min ago`;
 
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
 
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
 
-  // For anything older, just show the date
-  return past.toLocaleDateString();
-}
+    // For anything older, just show the date
+    return past.toLocaleDateString();
+  }
 
   console.log("The data from API:", adsApiData);
   // Map API data to Ad[]
-  const ads: Ad[] = Array.isArray(adsApiData)
-    ? adsApiData.map((item) => {
-        const firstMedia =
-          Array.isArray(item.post?.media) && item.post.media.length > 0
-            ? item.post.media[0].url
-            : '';
-        return {
-          id: String(item.id),
-          title: item.title ?? '',
-          price: item.budget ?? '',  // fallback if not in API
-          image: typeof firstMedia === 'string' ? firstMedia : '', // never null/undefined
-          status: item.status ?? '',
-          type: item.type === 'boost_post' ? 'social' : 'marketplace',
-                  timestamp: item.created_at ? getRelativeTime(item.created_at) : '--',
+ const ads: Ad[] = Array.isArray(adsApiData)
+  ? adsApiData.map((item) => {
+      let status = item.status ?? '';
+      // Map backend "active" to frontend "running"
+      if (status === 'active') status = 'running';
 
-          reach: item.reach ?? 0,
-          impressions: item.impressions ?? 0,
-          costPerClick: item.costPerClick ?? '',
-          amountSpent: item.amountSpent ?? '',
-          dateCreated: item.created_at
-            ? new Date(item.created_at).toLocaleString()
-            : '--',
-          endDate: item.endDate
-            ? new Date(item.endDate).toLocaleString()
-            : '--',
-        };
-      })
-    : [];
+      let imageUrl = '';
+      if (item.type === 'boost_post' && Array.isArray(item.post?.media) && item.post.media.length > 0) {
+        imageUrl = item.post.media[0].url; // Already a full URL
+      } else if (item.type === 'boost_listing' && Array.isArray(item.listing?.media) && item.listing.media.length > 0) {
+        const url = item.listing.media[0].url;
+        imageUrl = url.startsWith('http')
+          ? url
+          : `https://gympaddy.hmstech.xyz/storage/${url}`;
+      }
+
+      return {
+        id: String(item.id),
+        title: item.title ?? '',
+        price: item.budget ?? '',
+        image: imageUrl,
+        status, // <-- Use the mapped status here
+        type: item.type === 'boost_post' ? 'social' : 'marketplace',
+        timestamp: item.created_at ? getRelativeTime(item.created_at) : '--',
+
+        reach: item.reach ?? 0,
+        impressions: item.impressions ?? 0,
+        costPerClick: item.costPerClick ?? '',
+        amountSpent: item.amountSpent ?? '',
+        dateCreated: item.created_at ? new Date(item.created_at).toLocaleString() : '--',
+        endDate: item.endDate ? new Date(item.endDate).toLocaleString() : '--',
+      };
+    })
+  : [];
+
 
   // Filter Ads
   const filteredAds = ads.filter(ad => {
@@ -111,13 +126,84 @@ function getRelativeTime(dateString: string): string {
     return statusMatch && typeMatch;
   });
 
-  const handleEdit = (ad: Ad) => {
-    console.log('Edit ad:', ad.id);
+ const handleEdit = (ad: Ad) => {
+  const isEditable = true;
+  const boostType = ad.type === "marketplace" ? "listing" : "post";
+
+  // Find the original API response object for more backend fields
+  const originalItem =
+    Array.isArray(adsApiData) &&
+    adsApiData.find((item) => String(item.id) === ad.id);
+
+  if (!originalItem) {
+    alert("Ad not found in the source data.");
+    return;
+  }
+  console.log("Editing ad:", ad.id, "Original item:", originalItem);
+
+  // Use a single editor screen for both types
+ route.push({
+  pathname: "/BoostPostScreen_audience",
+  params: {
+    isEditable,
+    boostType,
+    campaignId: ad.id,
+    campaign: JSON.stringify(originalItem), // <-- Always send as string!
+    listing: originalItem.listing ? JSON.stringify(originalItem.listing) : null,
+    post: originalItem.post ? JSON.stringify(originalItem.post) : null,
+  },
+});
+};
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({
+      id,
+      action,
+      token
+    }: {
+      id: number;
+      action: 'pause' | 'resume';
+      token: string;
+    }) => {
+      return await toggleCampaignStatus({ id, action, token });
+    },
+    onSuccess: (data) => {
+      console.log("Toggle status response:", data);
+      // Optionally show a toast/snackbar here
+      // Refetch the ad campaigns to update UI
+      queryClient.invalidateQueries(['ad-campaigns']);
+    },
+    onError: (error: any) => {
+      // Optionally show a toast/snackbar here
+      alert(error?.message || 'Failed to toggle status');
+    }
+  });
+
+  const handleToggleStatus = async (ad: Ad) => {
+    try {
+      // 1. Get auth token
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) {
+        alert("No auth token found");
+        return;
+      }
+
+      // 2. Decide what action to send based on current status
+      // You can add more logic if you want for paused/resumed states
+      let action: 'pause' | 'resume' = 'pause';
+      if (ad.status === 'pending' || ad.status === 'running' || ad.status === 'active') {
+        action = 'pause'; // Will pause
+      } else if (ad.status === 'paused' || ad.status === 'closed') {
+        action = 'resume'; // Will resume (if your backend supports it)
+      }
+
+      // 3. Trigger the mutation
+      toggleStatusMutation.mutate({ id: Number(ad.id), action, token });
+    } catch (e) {
+      alert('Unexpected error: ' + e?.toString());
+    }
   };
 
-  const handleToggleStatus = (ad: Ad) => {
-    // For real app: Call mutation, then refetch
-  };
 
   const handleDelete = (ad: Ad) => {
     // For real app: Call delete mutation, then refetch
@@ -150,6 +236,13 @@ function getRelativeTime(dateString: string): string {
     </View>
   );
 
+  // Pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries(['ad-campaigns']);
+    setRefreshing(false);
+  };
+
   // Loading and Error states
   if (isLoading) {
     return (
@@ -160,7 +253,8 @@ function getRelativeTime(dateString: string): string {
           justifyContent: 'center',
           alignItems: 'center',
         }]}>
-        <Text style={{ color: colors.text }}>Loading ads...</Text>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.text, marginTop: 16, fontSize: 16 }}>Loading ads...</Text>
       </SafeAreaView>
     );
   }
@@ -218,6 +312,16 @@ function getRelativeTime(dateString: string): string {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmptyState}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+              title="Pull to refresh"
+              titleColor={colors.text}
+            />
+          }
         />
       </View>
     </SafeAreaView>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -26,26 +26,137 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
 const PostAudienceScreen: React.FC = () => {
-    const { dark } = useTheme();
-    const isDark = dark;
-    const route = useRouter();
-    const params = useLocalSearchParams();
-    const theme = isDark ? colors.dark : colors.light;
-    const bottomSheetRef = useRef<BottomSheet>(null);
+  const { dark } = useTheme();
+  const isDark = dark;
+  const route = useRouter();
+  const params = useLocalSearchParams();
+  const theme = isDark ? colors.dark : colors.light;
+  const bottomSheetRef = useRef<BottomSheet>(null);
 
-    const [selectedGender, setSelectedGender] = useState<'All' | 'Male' | 'Female'>('All');
-    const [minAge, setMinAge] = useState<number>(18);
-    const [maxAge, setMaxAge] = useState<number>(65);
-    const [budget, setBudget] = useState<number>(2000);
-    const [duration, setDuration] = useState<number>(20);
-    const [location, setLocation] = useState<string>('');
-    // Get post_id from route params
-    let { post_id } = params || {};
-    console.log("Post Audience Screen post_id:", post_id);
-    const postId = post_id;
+  console.log("Raw params from useLocalSearchParams:", params);
 
+  const {
+    isEditable = false,
+    boostType = '',
+    campaign: rawCampaign = null,
+    listing: rawListing = null,
+    post: rawPost = null,
+    post_id,
+    image,
+  } = params || {};
+
+  // Parse campaign, listing, post if needed
+  let campaign = rawCampaign;
+  try {
+    if (rawCampaign && typeof rawCampaign === "string") {
+      campaign = JSON.parse(rawCampaign);
+    }
+  } catch (err) {
+    console.warn("Could not parse campaign param:", rawCampaign, err);
+  }
+
+  let listing = rawListing;
+  try {
+    if (rawListing && typeof rawListing === "string") {
+      listing = JSON.parse(rawListing);
+    }
+  } catch (err) {
+    console.warn("Could not parse listing param:", rawListing, err);
+  }
+
+  let post = rawPost;
+  try {
+    if (rawPost && typeof rawPost === "string") {
+      post = JSON.parse(rawPost);
+    }
+  } catch (err) {
+    console.warn("Could not parse post param:", rawPost, err);
+  }
+
+  console.log("Decoded campaign:", campaign);
+  console.log("Decoded listing:", listing);
+  console.log("Decoded post:", post);
+
+  // Helpers
+  function safe(val: any, fallback: any) {
+    return val !== undefined && val !== null ? val : fallback;
+  }
+  function normalizeGender(val: string | undefined): 'All' | 'Male' | 'Female' {
+    if (!val) return 'All';
+    const v = (val || '').toString().toLowerCase();
+    if (v === 'male') return 'Male';
+    if (v === 'female') return 'Female';
+    return 'All';
+  }
+
+  const isEdit = !!isEditable && !!campaign;
+  console.log("isEditable:", isEditable, "isEdit:", isEdit);
+
+  const initialAudience = isEdit
+    ? {
+        gender: normalizeGender(safe(campaign.gender, 'all')),
+        minAge: safe(campaign.age_min, 18),
+        maxAge: safe(campaign.age_max, 65),
+        budget: safe(
+          campaign.daily_budget && Number(campaign.daily_budget) > 0 ? campaign.daily_budget : undefined,
+          safe(campaign.budget, 2000)
+        ),
+        duration: safe(campaign.duration, 20),
+        location: safe(campaign.location, ''),
+      }
+    : {
+        gender: 'All',
+        minAge: 18,
+        maxAge: 65,
+        budget: 2000,
+        duration: 20,
+        location: '',
+      };
+
+  console.log("Initial audience (prefill values):", initialAudience);
+
+  // State hooks
+  const [selectedGender, setSelectedGender] = useState<'All' | 'Male' | 'Female'>(initialAudience.gender);
+  const [minAge, setMinAge] = useState<number>(initialAudience.minAge);
+  const [maxAge, setMaxAge] = useState<number>(initialAudience.maxAge);
+  const [budget, setBudget] = useState<number>(initialAudience.budget);
+  const [duration, setDuration] = useState<number>(initialAudience.duration);
+  const [location, setLocation] = useState<string>(initialAudience.location);
+
+  // Remove the effect that resets state on every campaign change (prevents user edits from being overwritten)
+  // useEffect(() => {
+  //   if (isEdit) {
+  //     setSelectedGender(normalizeGender(safe(campaign.gender, 'all')));
+  //     setMinAge(safe(campaign.age_min, 18));
+  //     setMaxAge(safe(campaign.age_max, 65));
+  //     setBudget(
+  //       safe(
+  //         campaign.daily_budget && Number(campaign.daily_budget) > 0 ? campaign.daily_budget : undefined,
+  //         safe(campaign.budget, 2000)
+  //       )
+  //     );
+  //     setDuration(safe(campaign.duration, 20));
+  //     setLocation(safe(campaign.location, ''));
+  //   }
+  // }, [isEdit, campaign]);
+
+  useEffect(() => {
+    console.log("Audience state changed", {
+      selectedGender,
+      minAge,
+      maxAge,
+      budget,
+      duration,
+      location,
+    });
+  }, [selectedGender, minAge, maxAge, budget, duration, location]);
+
+    // 6. Compose post/campaign id and isMarket flag
+    const postId = post_id || (isEdit ? campaign.id : undefined);
+    const isMarket = image ? true : boostType === 'listing';
+
+    // 7. Navigation
     const handleNext = () => {
-        // Use a valid route path and pass audience as an array if required
         route.push({
             pathname: '/BoostPostScreen_review',
             params: {
@@ -57,7 +168,11 @@ const PostAudienceScreen: React.FC = () => {
                     duration,
                     location,
                     postId,
+                    isMarket
                 ],
+                isEditable,
+                boostType,
+                campaignId: postId,
             },
         });
     };
@@ -82,17 +197,17 @@ const PostAudienceScreen: React.FC = () => {
                     onBack={() => route.back()}
                     isDark={isDark}
                 />
-    
+
                 <ProgressBar progress={50} isDark={isDark} />
-    
+
                 <ScrollView style={styles.content}>
                     <Text style={[styles.subtitle, { color: theme.text }]}>
                         Get your post across several audiences
                     </Text>
-    
+
+                    {/* Location */}
                     <View style={styles.section}>
                         <View style={[styles.locationContainer, { backgroundColor: theme.surface }]}>
-                            {/* <Text style={[styles.sectionTitle, { color: theme.text }]}>Location</Text> */}
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <TextInput
                                     style={[styles.locationText, { color: theme.text, flex: 1 }]}
@@ -101,11 +216,11 @@ const PostAudienceScreen: React.FC = () => {
                                     value={location}
                                     onChangeText={setLocation}
                                 />
-                                {/* <Icon name="keyboard-arrow-down" size={24} color={theme.textSecondary} /> */}
                             </View>
                         </View>
                     </View>
-    
+
+                    {/* Age */}
                     <View style={styles.section}>
                         <Text style={[styles.sectionTitle, { color: theme.text }]}>
                             Age - Minimum is 18, Maximum is 65
@@ -129,7 +244,8 @@ const PostAudienceScreen: React.FC = () => {
                             />
                         </View>
                     </View>
-    
+
+                    {/* Gender */}
                     <View style={styles.section}>
                         <Text style={[styles.sectionTitle, { color: theme.text }]}>Gender</Text>
                         {['All', 'Male', 'Female'].map((gender) => (
@@ -142,7 +258,8 @@ const PostAudienceScreen: React.FC = () => {
                             />
                         ))}
                     </View>
-    
+
+                    {/* Budget & Duration */}
                     <View style={styles.section}>
                         <View style={styles.budgetHeader}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>
@@ -152,7 +269,7 @@ const PostAudienceScreen: React.FC = () => {
                                 <Icon name="edit" size={24} color={theme.text} />
                             </TouchableOpacity>
                         </View>
-    
+
                         <CustomSlider
                             label="Daily Budget"
                             value={budget}
@@ -162,7 +279,7 @@ const PostAudienceScreen: React.FC = () => {
                             isDark={isDark}
                             formatValue={formatCurrency}
                         />
-    
+
                         <CustomSlider
                             label="Duration"
                             value={duration}
@@ -174,13 +291,13 @@ const PostAudienceScreen: React.FC = () => {
                         />
                     </View>
                 </ScrollView>
-    
+
                 <Button
                     title="Next"
                     onPress={handleNext}
                     isDark={isDark}
                 />
-    
+
                 <EditBudgetBottomSheet
                     ref={bottomSheetRef}
                     isDark={isDark}
@@ -192,6 +309,7 @@ const PostAudienceScreen: React.FC = () => {
         </GestureHandlerRootView>
     );
 };
+
 
 type Styles = {
     container: ViewStyle;

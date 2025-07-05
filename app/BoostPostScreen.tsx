@@ -1,46 +1,53 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ViewStyle, TextStyle } from 'react-native';
-import { colors } from '@/components/Social/Boost/colors'; // Adjusted import path to '@/components/Social/Boost/colors' as per your preference
+import { colors } from '@/components/Social/Boost/colors';
 import Header from '@/components/Social/Boost/Header';
 import ProgressBar from '@/components/Social/Boost/ProgressBar';
 import PostPreview from '@/components/Social/Boost/PostPreview';
 import Button from '@/components/Social/Boost/Button';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '@/contexts/themeContext';
-import { useRouter } from 'expo-router';
-
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const BoostPostScreen: React.FC = () => {
-  const {dark} = useTheme();
-  const isDark = dark ;
+  const { dark } = useTheme();
+  const isDark = dark;
   const theme = isDark ? colors.dark : colors.light;
   const router = useRouter();
 
-  // Example: Replace with actual post_id from props, state, or context
-  const post_id = '123'; 
+  // Get id and image from navigation params
+  const params = useLocalSearchParams();
+  const post_id = params.id;
+  const image = params.image;
+
+  // For debug
+  console.log('BoostPostScreen params:', { post_id, image });
 
   const handleNext = () => {
-    router.push({ pathname: '/BoostPostScreen_audience', params: { post_id } });
+    router.push({
+      pathname: '/BoostPostScreen_audience',
+      params: { post_id, image }
+    });
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Header 
-        title="Boost Post" 
-        onBack={() => router.back()} 
+      <Header
+        title="Boost Post"
+        onBack={() => router.back()}
         isDark={isDark}
       />
-      
+
       <ProgressBar progress={25} isDark={isDark} />
-      
+
       <ScrollView style={styles.content}>
         <Text style={[styles.subtitle, { color: theme.text }]}>
           Boost your post to reach more audience
         </Text>
-        
-        <PostPreview isDark={isDark} />
+
+        {/* Pass both image and id to PostPreview */}
+        <PostPreview isDark={isDark} image={image} id={post_id} />
       </ScrollView>
-      
+
       <Button
         title="Next"
         onPress={handleNext}

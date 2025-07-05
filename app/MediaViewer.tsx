@@ -139,9 +139,9 @@ export default function MediaViewer() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.moreButton}>
+        {/* <TouchableOpacity style={styles.moreButton}>
           <Icon name="ellipsis-vertical" size={24} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Media Viewer */}

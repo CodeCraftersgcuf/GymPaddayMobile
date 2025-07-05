@@ -78,6 +78,9 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/ad-insights/${id}`,
     },
     MARKETPLACE_LISTINGS: {
+      BoostListing: (id: number) =>
+        API_DOMAIN + `/user/marketplace-listings/${id}/boost`,
+
       UserList: (id: number) =>
         API_DOMAIN + `/user/marketplace-listings/user/${id}`,
       List: API_DOMAIN + "/user/marketplace-listings",
@@ -164,6 +167,16 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/video-calls/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/video-calls/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/video-calls/${id}`,
+    },
+    TOGGLE: {
+      Campaign: (id: number) =>
+        API_DOMAIN + `/user/campaigns/${id}/toggle-status`,
+    },
+    BOOST: {
+      UpdateMarketplace: (id: number) =>
+        API_DOMAIN + `/user/campaigns/${id}/update-listing`,
+      UpdatePost: (id: number) =>
+        API_DOMAIN + `/user/campaigns/${id}/update-post`,
     },
   },
 };

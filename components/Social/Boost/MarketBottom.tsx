@@ -10,13 +10,13 @@ import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
 
 interface props {
-    BottomIndex: any;
-    setbottomIndex: (data: any) => void;
-    onBoost: () => void; // add this prop
+    selectedItem: { id: number, image: string } | null;
+    setSelectedItem: (data: any) => void;
+    onBoost: () => void;
 }
 
 
-const MarketBottom: React.FC<props> = ({ BottomIndex, setbottomIndex, onBoost }) => {
+const MarketBottom: React.FC<props> = ({ selectedItem, setSelectedItem, onBoost }) => {
     const bottomSheetRef = useRef<BottomSheet>(null);
     const router = useRouter();
     const { dark } = useTheme();
@@ -24,24 +24,40 @@ const MarketBottom: React.FC<props> = ({ BottomIndex, setbottomIndex, onBoost })
     const handleClick = () => {
         console.log('clicked!!')
     }
-    const hanldeBoost = () => {
-        onBoost(true);
-        console.log('click')
-        setbottomIndex(-1);
-    }
+    const handleBoost = () => {
+        console.log("Boosting post with ID:", selectedItem?.id
+            , "and image:", selectedItem?.image
+        );
+        if (!selectedItem) return;
+        router.push({
+            pathname: '/BoostPostScreen',
+            params: {
+                id: selectedItem.id,
+                image: selectedItem.image,
+            },
+        });
+        setSelectedItem(null); // close bottom sheet
+    };
+
+    const handleDelete = () => {
+        if (!selectedItem) return;
+        // Implement delete logic with selectedItem.id
+        // e.g., call an API or open a confirmation modal
+        setSelectedItem(null); // close bottom sheet
+    };
 
     const Options = [
         {
             icon: Icons.BoostIcon,
-            title: 'Boost Post',
-            handleFunction: ()=>router.push('/BoostPostScreen'), // use parent handler
+            title: 'Boost Listing',
+            handleFunction: handleBoost,
         },
         {
             icon: Icons.DeleteIcon,
             title: 'Delete Post',
-            handleFunction: handleClick,
+            handleFunction: handleDelete,
         },
-    ]
+    ];
 
     const handleSheetChanges = useCallback((index: number) => {
         console.log('handleSheetChanges', index);
@@ -51,8 +67,8 @@ const MarketBottom: React.FC<props> = ({ BottomIndex, setbottomIndex, onBoost })
             <BottomSheet
                 ref={bottomSheetRef}
                 snapPoints={['20%']}
-                index={BottomIndex}
-                onClose={() => setbottomIndex(-1)}
+                index={selectedItem ? 0 : -1}
+                onClose={() => setSelectedItem(null)}
                 onChange={handleSheetChanges}
                 enablePanDownToClose
                 backgroundStyle={{

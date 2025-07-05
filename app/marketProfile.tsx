@@ -11,6 +11,7 @@ import {
     StatusBar,
     ImageSourcePropType,
     FlatList,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
@@ -67,9 +68,11 @@ const ProfileScreen: React.FC = () => {
     const router = useRouter();
     const [username, setUsername] = useState<string | null>(null);
     const [BottomIndex, setBottomIndex] = useState(-1);
-    const handleMenu = (userId: any, postId: any) => {
-        setBottomIndex(1);
-        console.log('click bottom sheet', userId, postId);
+    const [selectedItem, setSelectedItem] = useState<{ id: number, image: string } | null>(null);
+
+    const handleMenu = (id: number, image: string) => {
+        setSelectedItem({ id, image });
+        console.log('click bottom sheet', id, image);
     };
     const [activeFilter, setActiveFilter] = useState<string>('All');
     const filters: string[] = ['All', 'Pending', 'Running', 'Closed'];
@@ -173,7 +176,8 @@ const ProfileScreen: React.FC = () => {
     if (isLoading) {
         return (
             <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
-                <Text style={{ color: theme.text }}>Loading listings...</Text>
+                <ActivityIndicator size="large" color="#FF0000" />
+                <Text style={{ color: theme.text, marginTop: 16, fontSize: 16 }}>Loading listings...</Text>
             </SafeAreaView>
         );
     }
@@ -184,9 +188,12 @@ const ProfileScreen: React.FC = () => {
             </SafeAreaView>
         );
     }
-
     const renderItem = ({ item }: { item: Item }) => (
-        <View style={[styles.itemCard, { backgroundColor: theme.cardBackground }]}>
+        <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.itemCard, { backgroundColor: theme.cardBackground }]}
+            onPress={() => handleMenu(item.id, item.image)}
+        >
             <Image source={{ uri: item.image }} style={styles.itemImage} />
             <View style={styles.itemContent}>
                 <Text style={[styles.itemTitle, { color: theme.text }]}>{item.title}</Text>
@@ -220,8 +227,9 @@ const ProfileScreen: React.FC = () => {
                     </TouchableOpacity>
                 </View>
             </View>
-        </View>
+        </TouchableOpacity>
     );
+
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -280,21 +288,29 @@ const ProfileScreen: React.FC = () => {
                         ))}
                     </View>
                     <View style={styles.itemsContainer}>
-                        <FlatList
-                            data={filteredItems}
-                            renderItem={renderItem}
-                            keyExtractor={(item) => item.id.toString()}
-                            numColumns={2}
-                            scrollEnabled={false}
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ gap: 16 }}
-                        />
+                        {filteredItems.length === 0 ? (
+                            <View style={{ alignItems: 'center', padding: 40 }}>
+                                <Text style={{ color: theme.textSecondary, fontSize: 16 }}>
+                                    No data found for {activeFilter}
+                                </Text>
+                            </View>
+                        ) : (
+                            <FlatList
+                                data={filteredItems}
+                                renderItem={renderItem}
+                                keyExtractor={(item) => item.id.toString()}
+                                numColumns={2}
+                                scrollEnabled={false}
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ gap: 16 }}
+                            />
+                        )}
                     </View>
                 </ScrollView>
             </SafeAreaView>
             <MarketBottom
-                BottomIndex={BottomIndex}
-                setbottomIndex={setBottomIndex}
+                selectedItem={selectedItem}
+                setSelectedItem={setSelectedItem}
                 onBoost={handleOpenModal}
             />
         </GestureHandlerRootView>

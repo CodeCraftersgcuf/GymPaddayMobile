@@ -23,10 +23,10 @@ import { useLocalSearchParams } from 'expo-router';
 
 //Code Related to the integration
 import { useMutation } from '@tanstack/react-query';
-import { createBoostedPost } from '@/utils/mutations/posts';
+import { createBoostedPost, createBoostedListing } from '@/utils/mutations/posts';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
-
+import { updateBoostedMarketplace, updateBoostedPost } from '@/utils/mutations/boost';
 
 // If you have a type for your navigation stack, use that instead of `any`
 type RootStackParamList = {
@@ -101,8 +101,17 @@ const ReviewAdScreen: React.FC = () => {
         budget = 2000,
         duration = 1,
         location = '',
-        postId = ''
+        postId = '',
+        isMarket = false,   // NEW: 8th param
+        isEditable = false,
+        boostType = '',
+        campaignId = '',
+
     ] = Array.isArray(audienceArray) ? audienceArray : [];
+    // Convert isMarket to boolean in case it arrives as "true"/"false" string
+    const isMarketBool = typeof isMarket === 'string'
+        ? isMarket === 'true'
+        : !!isMarket;
 
     const audience = {
         selectedGender,
@@ -122,27 +131,112 @@ const ReviewAdScreen: React.FC = () => {
     }, []);
 
 
+    //   const boostMutation = useMutation({
+    //   mutationFn: async () => {
+    //     if (!token) throw new Error('No auth token');
+    //     const id = Number(audience.postId);
+    //     const data = {
+    //       amount: Number(audience.budget),
+    //       duration: Number(audience.duration),
+    //       location: audience.location || null,
+    //       age_min: Number(audience.minAge) || null,
+    //       age_max: Number(audience.maxAge) || null,
+    //       gender: (audience.selectedGender || '').toLowerCase() as "all" | "male" | "female" | null,
+    //     };
+
+    //     // This is the ONLY change:
+    //     if (isMarketBool) {
+    //       return await createBoostedListing({ id, data, token });
+    //     } else {
+    //       return await createBoostedPost({ id, data, token });
+    //     }
+    //   },
+    //   onSuccess: (res) => {
+    //     Toast.show({
+    //       type: 'success',
+    //       text1: 'Boosted!',
+    //       text2: 'Your post has been boosted successfully',
+    //       visibilityTime: 500,
+    //     });
+    //     setTimeout(() => {
+    //       route.push('/BoostPostScreen_Final');
+    //     }, 500);
+    //   },
+    //   onError: (error: any) => {
+    //     Toast.show({
+    //       type: 'error',
+    //       text1: 'Boost Failed',
+    //       text2: error?.message || 'Failed to boost post',
+    //       visibilityTime: 2000,
+    //     });
+    //   }
+    // });
+
+    // Convert isEditable param to boolean
+    const isEditableBool =
+        typeof isEditable === 'string'
+            ? isEditable === 'true'
+            : !!isEditable;
+
     const boostMutation = useMutation({
         mutationFn: async () => {
             if (!token) throw new Error('No auth token');
-            // Prepare correct data for createBoostedPost
-            // postId must be a number
             const id = Number(audience.postId);
-            const data = {
-                amount: Number(audience.budget),
-                duration: Number(audience.duration),
-                location: audience.location || null,
-                age_min: Number(audience.minAge) || null,
-                age_max: Number(audience.maxAge) || null,
-                gender: (audience.selectedGender || '').toLowerCase() as "all" | "male" | "female" | null,
-            };
-            return await createBoostedPost({ id, data, token });
+
+            // Always get these from params:
+            const isEditableBool = params.isEditable === true || params.isEditable === 'true';
+            const isMarketBool = params.isMarket === true || params.isMarket === 'true';
+            console.log('Boost Mutation Params:', {
+                isEditableBool,
+                isMarketBool,
+                id,
+                audience,
+                token,
+            });
+
+            if (isEditableBool) {
+                // --- EDIT MODE ---
+                const updateData = {
+                    budget: Math.round(Number(audience.budget)),
+                    duration: Math.round(Number(audience.duration)),
+                    location: audience.location || null,
+                    age_min: Number(audience.minAge) || null,
+                    age_max: Number(audience.maxAge) || null,
+                    gender: (audience.selectedGender || '').toLowerCase(),
+                };
+                // Add ONLY the fields user can edit.
+
+                if (isMarketBool) {
+                    console.log('[EDIT] updateBoostedMarketplace', { id, data: updateData });
+                    return await updateBoostedMarketplace({ id, data: updateData, token });
+                } else {
+                    console.log('[EDIT] updateBoostedPost', { id, data: updateData });
+                    return await updateBoostedPost({ id, data: updateData, token });
+                }
+            } else {
+                // --- CREATE MODE ---
+                const createData = {
+                    amount: Number(audience.budget),
+                    duration: Number(audience.duration),
+                    location: audience.location || null,
+                    age_min: Number(audience.minAge) || null,
+                    age_max: Number(audience.maxAge) || null,
+                    gender: (audience.selectedGender || '').toLowerCase(),
+                };
+                if (isMarketBool) {
+                    console.log('[CREATE] createBoostedListing', { id, data: createData });
+                    return await createBoostedListing({ id, data: createData, token });
+                } else {
+                    console.log('[CREATE] createBoostedPost', { id, data: createData });
+                    return await createBoostedPost({ id, data: createData, token });
+                }
+            }
         },
         onSuccess: (res) => {
             Toast.show({
                 type: 'success',
-                text1: 'Boosted!',
-                text2: 'Your post has been boosted successfully',
+                text1: isEditableBool ? 'Ad updated!' : 'Boosted!',
+                text2: isEditableBool ? 'Your ad has been updated successfully' : 'Your post has been boosted successfully',
                 visibilityTime: 500,
             });
             setTimeout(() => {
@@ -150,14 +244,20 @@ const ReviewAdScreen: React.FC = () => {
             }, 500);
         },
         onError: (error: any) => {
+            let detail = '';
+            if (error?.response?.data?.errors) {
+                detail = Object.values(error.response.data.errors).flat().join('\n');
+            }
             Toast.show({
                 type: 'error',
-                text1: 'Boost Failed',
-                text2: error?.message || 'Failed to boost post',
+                text1: isEditableBool ? 'Update Failed' : 'Boost Failed',
+                text2: detail || error?.message || (isEditableBool ? 'Failed to update ad' : 'Failed to boost post'),
                 visibilityTime: 2000,
             });
         }
     });
+
+
 
     const handleBoostPost = () => {
         boostMutation.mutate();

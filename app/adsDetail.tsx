@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { useRoute } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { router, useRouter } from 'expo-router';
 
 // Integration
 import { useQuery } from '@tanstack/react-query';
@@ -55,11 +55,18 @@ const AdDetailsScreen: React.FC = () => {
   // Unwrap campaign object
   const ad = data?.campaign;
 
-  // Use image from post.media[0].url if exists, fallback to placeholder
-  const imageUrl =
-    Array.isArray(ad?.post?.media) && ad.post.media.length > 0 && ad.post.media[0].url
-      ? ad.post.media[0].url
-      : 'https://placehold.co/600x400?text=No+Image';
+  // Use image from post.media[0].url or listing.media[0].url if exists, fallback to placeholder
+  let imageUrl = 'https://placehold.co/600x400?text=No+Image';
+
+  if (ad?.type === 'boost_post' && Array.isArray(ad?.post?.media) && ad.post.media.length > 0 && ad.post.media[0].url) {
+    imageUrl = ad.post.media[0].url;
+  } else if (ad?.type === 'boost_listing' && Array.isArray(ad?.listing?.media) && ad.listing.media.length > 0 && ad.listing.media[0].url) {
+    const url = ad.listing.media[0].url;
+    imageUrl = url.startsWith('http')
+      ? url
+      : `https://gympaddy.hmstech.xyz/storage/${url}`;
+  }
+
 
   // Metrics, fallback to dummy if not available
   const metrics = [
@@ -105,6 +112,7 @@ const AdDetailsScreen: React.FC = () => {
       </SafeAreaView>
     );
   }
+
   if (error || !ad) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
@@ -148,21 +156,67 @@ const AdDetailsScreen: React.FC = () => {
             }
           ]}
         >
-        <View style={styles.adInfoContent}>
-  <Text style={[styles.adTitle, { color: colors.text }]}>
-    {ad?.title}
-  </Text>
-  <View style={styles.priceAndButtonRow}>
-    <Text style={[styles.adPrice, { color: colors.primary }]}>
-      {ad?.budget ? `₦${ad.budget}` : ''}
-    </Text>
-    <TouchableOpacity
-      style={[styles.viewListingButton, { backgroundColor: colors.primary }]}
-    >
-      <Text style={styles.viewListingText}>View Listing</Text>
-    </TouchableOpacity>
-  </View>
-</View>
+          <View style={styles.adInfoContent}>
+            <Text style={[styles.adTitle, { color: colors.text }]}>
+              {ad?.title}
+            </Text>
+            <View style={styles.priceAndButtonRow}>
+              <Text style={[styles.adPrice, { color: colors.primary }]}>
+                {ad?.budget ? `₦${ad.budget}` : ''}
+              </Text>
+              <TouchableOpacity
+                style={[styles.viewListingButton, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  let mediaArray: Array<{ uri: string; type: 'image' | 'video'; media_type: string }> = [];
+
+                  if (Array.isArray(ad?.post?.media) && ad.post.media.length > 0) {
+                    mediaArray = ad.post.media.map(m => ({
+                      uri: m.url && typeof m.url === "string" ? m.url : imageUrl,
+                      type: m.media_type === "video" ? "video" : "image",
+                      media_type: m.media_type || 'image',
+                    }));
+                  } else {
+                    // Fallback to the same image you show in the details card (imageUrl)
+                    mediaArray = [{
+                      uri: imageUrl,
+                      type: "image",
+                      media_type: "image",
+                    }];
+                  }
+
+                  if (ad?.type === "boost_post") {
+                    router.push({
+                      pathname: "/MediaViewer",
+                      params: {
+                        id: ad?.post?.id,
+                        mediaArray: JSON.stringify(mediaArray),
+                        type: mediaArray[0]?.media_type === "video" ? "videos" : "posts",
+                        index: 0,
+                      }
+                    });
+                  } else if (ad?.type === "boost_listing") {
+                    router.push({
+                      pathname: "/marketView",
+                      params: { id: ad?.listing?.id }
+                    });
+                  } else {
+                    // Fallback to campaign id, but normally this should not run
+                    router.push({
+                      pathname: "/marketView",
+                      params: { id: ad?.id }
+                    });
+                  }
+
+                }}
+              >
+                <Text style={styles.viewListingText}>
+                  {ad?.type === "boost_post" ? "View Post" : "View Listing"}
+                </Text>
+              </TouchableOpacity>
+
+
+            </View>
+          </View>
 
         </View>
 
@@ -316,41 +370,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
   },
- adInfoContent: {
-  width: '100%',
-  padding: 8,
-},
+  adInfoContent: {
+    width: '100%',
+    padding: 8,
+  },
 
-adTitle: {
-  fontSize: 14,
-  fontWeight: '600',
-  marginBottom: 10,
-  flexShrink: 1,
-  flexWrap: 'wrap',
-},
+  adTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 10,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+  },
 
-priceAndButtonRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-},
+  priceAndButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 
-adPrice: {
-  fontSize: 20,
-  fontWeight: '700',
-},
+  adPrice: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
 
-viewListingButton: {
-  paddingHorizontal: 24,
-  paddingVertical: 8,
-  borderRadius: 8,
-  marginLeft: 16, // Add some space between price and button
-},
+  viewListingButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 16, // Add some space between price and button
+  },
 
-viewListingText: {
-  color: '#fff',
-  fontWeight: '600',
-},
+  viewListingText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
 
   metricsCard: {
     marginTop: 24,

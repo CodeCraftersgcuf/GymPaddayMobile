@@ -68,6 +68,7 @@ interface BoostAdModalProps {
 
 const BoostAdModal: React.FC<BoostAdModalProps> = ({ visible, onClose, dark , post_id}) => {
   console.log("BoostAdModal post_id:", post_id);
+  console.log("This is opened");
   const styles = createStyles(dark);
   const route = useRouter();
   const onProceed = () => {

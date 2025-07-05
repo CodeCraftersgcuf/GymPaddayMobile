@@ -194,13 +194,16 @@ export default function MarketplaceScreen() {
   const allListings = filteredListings;
   console.log("topListings", filteredListings)
   const handleItemPress = (item: any) => {
-    // router.push({
-    //   pathname: '/marketView',
-    //   params: { id: item.toString() }, // always pass params as strings
-    // });
+    router.push({
+      pathname: '/marketView',
+      params: { id: item.toString() }, // always pass params as strings
+    });
 
-    router.push("/marketProfile");
+    // router.push("/marketProfile");
   };
+  const handleMarketProfile =()=>{
+    router.push("/marketProfile");
+  }
 
   // Add this helper component for image loading indicator
   function ImageWithLoading({ source, style, ...props }) {
@@ -280,7 +283,7 @@ export default function MarketplaceScreen() {
         <View style={styles.headerTop}>
           <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Marketplace</Text>
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => handleItemPress(12)} style={styles.notificationButton}>
+            <TouchableOpacity onPress={() => handleMarketProfile()} style={styles.notificationButton}>
               <Image
                 source={{ uri: profileImage }}
                 style={styles.profileImage}

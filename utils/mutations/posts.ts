@@ -53,6 +53,50 @@ export const createBoostedPost = async ({
   );
 };
 
+
+export const createBoostedListing = async ({
+  id,
+  data,
+  token,
+}: {
+  id: number;
+  data: {
+    name?: string | null;
+    title?: string | null;
+    content?: string | null;
+    media_url?: string | null;
+    amount: number;
+    daily_budget?: number | null;
+    duration: number;
+    location?: string | null;
+    age_min?: number | null;
+    age_max?: number | null;
+    gender?: "all" | "male" | "female" | null;
+  };
+  token: string;
+}) => {
+  console.log("Creating boosted Listing with data: with id:", id);
+  return await apiCall(
+    API_ENDPOINTS.USER.MARKETPLACE_LISTINGS.BoostListing(id),
+    "POST",
+    {
+      name: data.name ?? null,
+      title: data.title ?? null,
+      content: data.content ?? null,
+      media_url: data.media_url ?? null,
+      budget: data.amount,
+      daily_budget: data.daily_budget ?? null,
+      duration: data.duration,
+      location: data.location ?? null,
+      age_min: data.age_min ?? null,
+      age_max: data.age_max ?? null,
+      gender: data.gender ?? null,
+    },
+    token
+  );
+};
+
+
 export const updatePost = async ({
   id,
   data,
