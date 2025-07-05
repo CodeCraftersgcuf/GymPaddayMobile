@@ -78,6 +78,7 @@ export default function RootLayout() {
             <Stack.Screen name="BoostPostScreen_audience" options={{ headerShown: false }} />
             <Stack.Screen name="userLiveViewMain" options={{ headerShown: false }} />
             <Stack.Screen name="MediaViewer" options={{ headerShown: false }} />
+            <Stack.Screen name="daily-call-screen" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           </Stack>
           <Toast /> {/* ✅ Add this here */}
