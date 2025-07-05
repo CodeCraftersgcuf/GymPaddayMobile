@@ -32,7 +32,7 @@ export const createBoostedPost = async ({
   };
   token: string;
 }) => {
-  console.log("Creating boosted post with data:", data);
+  console.log("Creating boosted post with data: with id:", id);
   return await apiCall(
     API_ENDPOINTS.USER.POSTS.BoostPost(id),
     "POST",

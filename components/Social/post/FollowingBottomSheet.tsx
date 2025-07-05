@@ -1,4 +1,4 @@
-import React, { forwardRef, useMemo, useCallback } from 'react';
+import React, { forwardRef, useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,11 @@ import {
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { Ionicons as Icon } from '@expo/vector-icons';
 
+//Code Related to the integration
+import { followUnfollowUser } from '@/utils/queries/socialMedia';
+import * as SecureStore from 'expo-secure-store';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
 export interface User {
   id: string;
   name: string;
@@ -18,11 +23,12 @@ export interface User {
 }
 
 interface FollowingBottomSheetProps {
+  userId: string
   users: User[];
   title: string;
   count: number;
   dark?: boolean;
-  onFollowToggle: (userId: string, isFollowing: boolean) => void;
+  onFollowToggle: (userId: string, isFollowing: boolean) => void; // unused now, but kept for props shape
   onClose: () => void;
   loading?: boolean;
   emptyText?: string;
@@ -31,19 +37,20 @@ interface FollowingBottomSheetProps {
 const FollowingBottomSheet = forwardRef<BottomSheet, FollowingBottomSheetProps>(
   (
     {
+      userId,
       users,
       title,
       count,
       dark = true,
-      onFollowToggle,
       onClose,
       loading = false,
       emptyText = "No following found.",
     },
     ref
   ) => {
+    // Theme
     const snapPoints = useMemo(() => ['90%'], []);
-
+    const queryClient = useQueryClient();
     const theme = {
       background: dark ? '#000000' : '#ffffff',
       secondary: dark ? '#181818' : '#f5f5f5',
@@ -51,6 +58,33 @@ const FollowingBottomSheet = forwardRef<BottomSheet, FollowingBottomSheetProps>(
       textSecondary: dark ? '#999999' : '#666666',
       border: dark ? '#333333' : '#e0e0e0',
     };
+
+    // Local state for instant feedback
+    const [localUsers, setLocalUsers] = useState<User[]>(users);
+
+    useEffect(() => {
+      setLocalUsers(users);
+    }, [users]);
+
+    // Mutation - Accepts userId dynamically
+    const followMutation = useMutation({
+      mutationFn: async (targetUserId: string) => {
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) throw new Error('No auth token');
+        return await followUnfollowUser(Number(targetUserId), token);
+      },
+      onSuccess: (_data, targetUserId) => {
+        // Always refetch from backend for consistency
+        console.log("✅ Successfully followed/unfollowed user:", targetUserId);
+        queryClient.invalidateQueries({ queryKey: ['followers', targetUserId] });
+        queryClient.invalidateQueries({ queryKey: ['userProfile', targetUserId] });
+      },
+      onError: (error) => {
+        // Optionally revert local state or show toast here
+        console.log("❌ Error following/unfollowing user:", error);
+        console.error('Error following/unfollowing user:', error);
+      },
+    });
 
     const handleSheetChanges = useCallback((index: number) => {
       if (index === -1) {
@@ -68,17 +102,32 @@ const FollowingBottomSheet = forwardRef<BottomSheet, FollowingBottomSheetProps>(
             item.isFollowing ? styles.followingButton : styles.followRedButton,
             { borderColor: theme.border }
           ]}
-          onPress={() => onFollowToggle(item.id, item.isFollowing)}
+          onPress={() => {
+            // Optimistically update local UI
+            setLocalUsers(prev =>
+              prev.map(u =>
+                u.id === item.id
+                  ? { ...u, isFollowing: !item.isFollowing }
+                  : u
+              )
+            );
+            followMutation.mutate(item.id);
+          }}
+          disabled={followMutation.isPending && followMutation.variables === item.id}
         >
           <Text
             style={[
               styles.followButtonText,
-              item.isFollowing 
-                ? { color: theme.text } 
+              item.isFollowing
+                ? { color: theme.text }
                 : { color: '#ffffff' }
             ]}
           >
-            {item.isFollowing ? 'Following' : 'Follow'}
+            {followMutation.isPending && followMutation.variables === item.id
+              ? 'Updating...'
+              : item.isFollowing
+                ? 'Following'
+                : 'Follow'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -110,13 +159,13 @@ const FollowingBottomSheet = forwardRef<BottomSheet, FollowingBottomSheetProps>(
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
               <Text style={{ color: theme.textSecondary, fontSize: 16 }}>Loading...</Text>
             </View>
-          ) : users.length === 0 ? (
+          ) : localUsers.length === 0 ? (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
               <Text style={{ color: theme.textSecondary, fontSize: 16 }}>{emptyText}</Text>
             </View>
           ) : (
             <FlatList
-              data={users}
+              data={localUsers}
               renderItem={renderUserItem}
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}

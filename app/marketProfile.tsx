@@ -18,6 +18,26 @@ import { useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import MarketBottom from '@/components/Social/Boost/marketBottom';
 import BoostAdModal from '@/components/Social/Boost/BoostAdModal';
+import MarketBottom from '@/components/Social/Boost/MarketBottom';
+
+
+//Code Related to the integration
+import { useQuery } from '@tanstack/react-query';
+import { getMarketplaceListingsByUser } from '@/utils/queries/marketplace';
+import * as SecureStore from 'expo-secure-store';
+
+
+function timeAgo(dateString: string): string {
+    if (!dateString) return '--';
+    const now = new Date();
+    const date = new Date(dateString);
+    const diff = (now.getTime() - date.getTime()) / 1000;
+    if (diff < 60) return `${Math.floor(diff)} sec ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
+    if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
+    return date.toLocaleDateString();
+}
 
 type StatusType = 'Pending' | 'Running' | 'Closed';
 
@@ -38,56 +58,80 @@ interface Theme {
     border: string;
 }
 
+
 const ProfileScreen: React.FC = () => {
-    //   const [dark, setDark] = useState<boolean>(true);
     const { dark } = useTheme();
     const [modalVisible, setModalVisible] = useState(false);
-
     const handleOpenModal = () => setModalVisible(true);
     const handleCloseModal = () => setModalVisible(false);
     const router = useRouter();
+    const [username, setUsername] = useState<string | null>(null);
     const [BottomIndex, setBottomIndex] = useState(-1);
     const handleMenu = (userId: any, postId: any) => {
         setBottomIndex(1);
         console.log('click bottom sheet', userId, postId);
-    }
+    };
     const [activeFilter, setActiveFilter] = useState<string>('All');
     const filters: string[] = ['All', 'Pending', 'Running', 'Closed'];
-    const items: Item[] = [
-        {
-            id: 1,
-            title: '20KG Dumb Bells',
-            price: 'N25,000',
-            status: 'Pending',
-            time: '5 min ago',
-            image: 'https://images.pexels.com/photos/416717/pexels-photo-416717.jpeg?auto=compress&cs=tinysrgb&w=400',
-        },
-        {
-            id: 2,
-            title: '20KG Dumb Bells',
-            price: 'N25,000',
-            status: 'Running',
-            time: '5 min ago',
-            image: 'https://images.pexels.com/photos/416717/pexels-photo-416717.jpeg?auto=compress&cs=tinysrgb&w=400',
-        },
-        {
-            id: 3,
-            title: '20KG Dumb Bells',
-            price: 'N25,000',
-            status: 'Closed',
-            time: '5 min ago',
-            image: 'https://images.pexels.com/photos/416717/pexels-photo-416717.jpeg?auto=compress&cs=tinysrgb&w=400',
-        },
-        {
-            id: 4,
-            title: '20KG Dumb Bells',
-            price: 'N25,000',
-            status: 'Running',
-            time: '5 min ago',
-            image: 'https://images.pexels.com/photos/416717/pexels-photo-416717.jpeg?auto=compress&cs=tinysrgb&w=400',
-        },
-    ];
 
+    const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
+    const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
+
+    // --- Integration with API ---
+    const { data: listingsData, isLoading, error } = useQuery({
+        queryKey: ['marketplace-listings'],
+        queryFn: async () => {
+            const userId = await SecureStore.getItemAsync('user_id');
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!userId || !token) throw new Error('User not logged in');
+            return await getMarketplaceListingsByUser(Number(userId), token);
+        }
+    });
+    React.useEffect(() => {
+        (async () => {
+            try {
+                const userDataStr = await SecureStore.getItemAsync('user_data');
+                if (userDataStr) {
+                    const userData = JSON.parse(userDataStr);
+                    if (userData.profile_picture_url) {
+                        setProfileImage(userData.profile_picture_url);
+                    } else {
+                        setProfileImage(dummyImage);
+                    }
+                } else {
+                    setProfileImage(dummyImage);
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                setProfileImage(dummyImage);
+            }
+        })();
+    }, []);
+
+    React.useEffect(() => {
+        (async () => {
+            const storedUsername = await SecureStore.getItemAsync('username');
+            setUsername(storedUsername || "User");
+        })();
+    }, []);
+    // --- Map API data to UI Item[] ---
+    const items: Item[] = Array.isArray(listingsData?.listings)
+        ? listingsData.listings.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            price: `₦${Number(item.price).toLocaleString()}`,
+            status:
+                item.status === 'pending' ? 'Pending' :
+                    item.status === 'running' ? 'Running' :
+                        item.status === 'closed' ? 'Closed' : 'Pending',
+            time: timeAgo(item.created_at),
+            image: item.media_urls && item.media_urls.length > 0
+                ? `https://gympaddy.hmstech.xyz/storage/${item.media_urls[0]}`
+                : 'https://placehold.co/200x200?text=No+Image',
+        }))
+        : [];
+
+    // --- Filtering logic ---
     const filteredItems: Item[] =
         activeFilter === 'All' ? items : items.filter(item => item.status === activeFilter);
 
@@ -125,14 +169,28 @@ const ProfileScreen: React.FC = () => {
         border: dark ? '#333333' : '#E0E0E0',
     };
 
+    // --- Loading & Error states ---
+    if (isLoading) {
+        return (
+            <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+                <Text style={{ color: theme.text }}>Loading listings...</Text>
+            </SafeAreaView>
+        );
+    }
+    if (error) {
+        return (
+            <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+                <Text style={{ color: 'red' }}>Failed to load listings.</Text>
+            </SafeAreaView>
+        );
+    }
 
-    const renderItem = ({ item }: ListRenderItemInfo<Item>) => (
+    const renderItem = ({ item }: { item: Item }) => (
         <View style={[styles.itemCard, { backgroundColor: theme.cardBackground }]}>
             <Image source={{ uri: item.image }} style={styles.itemImage} />
             <View style={styles.itemContent}>
                 <Text style={[styles.itemTitle, { color: theme.text }]}>{item.title}</Text>
                 <Text style={styles.itemPrice}>{item.price}</Text>
-
                 <View style={styles.itemFooter}>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
                         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -141,26 +199,22 @@ const ProfileScreen: React.FC = () => {
                     </View>
                     <Text style={[styles.timeText, { color: theme.textSecondary }]}>{item.time}</Text>
                 </View>
-
                 <View style={styles.actionButtons}>
                     <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
                         <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                             <MaterialIcons name="edit" size={15} color={theme.textSecondary} />
                         </TouchableOpacity>
-
                         {item.status === 'Closed' && (
                             <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                                 <Ionicons name="play" size={15} color={theme.textSecondary} />
                             </TouchableOpacity>
                         )}
-
                         {item.status === 'Running' && (
                             <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                                 <Ionicons name="stop" size={15} color={theme.textSecondary} />
                             </TouchableOpacity>
                         )}
                     </View>
-
                     <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
                         <MaterialIcons name="delete-outline" size={15} color="#FF6B6B" />
                     </TouchableOpacity>
@@ -179,7 +233,8 @@ const ProfileScreen: React.FC = () => {
                     <TouchableOpacity onPress={() => router.back()}>
                         <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: theme.text }]}>Adewale's Profile</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>{username ? `${username}'s Profile` : "Profile"}</Text>
+
                     <TouchableOpacity onPress={() => handleMenu(1, 1)}>
                         <Ionicons name="ellipsis-vertical" size={24} color={theme.text} />
                     </TouchableOpacity>
@@ -195,11 +250,11 @@ const ProfileScreen: React.FC = () => {
                     <View style={styles.profileSection}>
                         <Image
                             source={{
-                                uri: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
+                                uri: profileImage,
                             }}
                             style={styles.profileImage}
                         />
-                        <Text style={[styles.profileName, { color: theme.text }]}>Adewale</Text>
+                        <Text style={[styles.profileName, { color: theme.text }]}>{username || "User"}</Text>
                     </View>
 
                     {/* Filter Tabs */}
@@ -236,16 +291,17 @@ const ProfileScreen: React.FC = () => {
                         />
                     </View>
                 </ScrollView>
-                
             </SafeAreaView>
             <MarketBottom
                 BottomIndex={BottomIndex}
                 setbottomIndex={setBottomIndex}
-                onBoost={handleOpenModal} // pass handler as prop
+                onBoost={handleOpenModal}
             />
         </GestureHandlerRootView>
     );
 };
+
+
 
 const styles = StyleSheet.create({
     container: {

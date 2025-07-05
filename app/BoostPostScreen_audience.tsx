@@ -42,6 +42,7 @@ const PostAudienceScreen: React.FC = () => {
     // Get post_id from route params
     let { post_id } = params || {};
     console.log("Post Audience Screen post_id:", post_id);
+    const postId = post_id;
 
     const handleNext = () => {
         // Use a valid route path and pass audience as an array if required
@@ -55,7 +56,7 @@ const PostAudienceScreen: React.FC = () => {
                     budget,
                     duration,
                     location,
-                    post_id[0] || '',
+                    postId,
                 ],
             },
         });
@@ -208,7 +209,7 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
     container: {
         flex: 1,
-        marginTop: 30,
+       
     },
     content: {
         flex: 1,

@@ -7,38 +7,69 @@ import {
   TouchableOpacity,
   Image,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Ad } from '@/components/more/ads/ads';
 import { useTheme } from '@/contexts/themeContext';
-import { adsData } from '@/components/more/ads/adsData';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 
+// Integration
+import { useQuery } from '@tanstack/react-query';
+import * as SecureStore from 'expo-secure-store';
+import { getAdCampaignById } from '@/utils/queries/adCampaigns';
 
-interface AdDetailsScreenProps {
-  navigation: {
-    goBack: () => void;
-  };
+// Helper: format date
+function formatDate(d: string | null | undefined) {
+  if (!d) return 'N/A';
+  return new Date(d).toLocaleString();
 }
- const AdDetailsScreen: React.FC<AdDetailsScreenProps> = ({
-  navigation,
-}) => {
-  const route = useRoute();
-  const GoBack = () => useRouter().back();
-  const { id } = route.params;
-  const ad = adsData.find((item) => item.id === id);
-  const { dark } = useTheme();
-   const colors = {
-        background: dark ? 'black' : '#fff',
-        surface: dark ? '#232323' : '#f8f9fa',
-        border: dark ? '#232323' : '#e0e0e0',
-        text: dark ? '#fff' : '#181818',
-        textSecondary: dark ? '#b0b0b0' : '#6c6c6c',
-        primary: '#FF3B30',
-        success: '#4CD964',
-    };
 
+const AdDetailsScreen: React.FC = () => {
+  const route = useRoute<any>();
+  const { id } = route.params || {};
+  const GoBack = () => useRouter().back();
+
+  const { dark } = useTheme();
+  const colors = {
+    background: dark ? 'black' : '#fff',
+    surface: dark ? '#232323' : '#f8f9fa',
+    border: dark ? '#232323' : '#e0e0e0',
+    text: dark ? '#fff' : '#181818',
+    textSecondary: dark ? '#b0b0b0' : '#6c6c6c',
+    primary: '#FF3B30',
+    success: '#4CD964',
+  };
+
+  // Fetch ad campaign
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['ad-campaign', id],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token found');
+      return await getAdCampaignById(Number(id), token);
+    },
+    enabled: !!id,
+  });
+
+  // Unwrap campaign object
+  const ad = data?.campaign;
+
+  // Use image from post.media[0].url if exists, fallback to placeholder
+  const imageUrl =
+    Array.isArray(ad?.post?.media) && ad.post.media.length > 0 && ad.post.media[0].url
+      ? ad.post.media[0].url
+      : 'https://placehold.co/600x400?text=No+Image';
+
+  // Metrics, fallback to dummy if not available
+  const metrics = [
+    { label: 'Reach', value: ad?.reach?.toLocaleString?.() || '0' },
+    { label: 'Impressions', value: ad?.impressions?.toLocaleString?.() || '0' },
+    { label: 'Cost Per click', value: ad?.costPerClick ?? 'N0' },
+    { label: 'Amount spent', value: ad?.amountSpent ?? 'N0' },
+    { label: 'Date created', value: formatDate(ad?.created_at) },
+    { label: 'End Date', value: formatDate(ad?.end_date) },
+  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -56,24 +87,34 @@ interface AdDetailsScreenProps {
   const getStatusBgColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return dark ? 'rgba(255, 149, 0, 0.1)' : 'rgba(255, 149, 0, 0.1)';
+        return 'rgba(255, 149, 0, 0.1)';
       case 'running':
-        return dark ? 'rgba(76, 217, 100, 0.1)' : 'rgba(76, 217, 100, 0.1)';
+        return 'rgba(76, 217, 100, 0.1)';
       case 'closed':
-        return dark ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 59, 48, 0.1)';
+        return 'rgba(255, 59, 48, 0.1)';
       default:
         return colors.surface;
     }
   };
 
-  const metrics = [
-    { label: 'Reach', value: ad?.reach?.toLocaleString() || '0' },
-    { label: 'Impressions', value: ad?.impressions?.toLocaleString() || '0' },
-    { label: 'Cost Per click', value: ad?.costPerClick || 'N0' },
-    { label: 'Amount spent', value: ad?.amountSpent || 'N0' },
-    { label: 'Date created', value: ad?.dateCreated || 'N/A' },
-    { label: 'End Date', value: ad?.endDate || 'N/A' },
-  ];
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.text, marginTop: 16 }}>Loading ad details...</Text>
+      </SafeAreaView>
+    );
+  }
+  if (error || !ad) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: 'red' }}>Failed to load ad details.</Text>
+        <TouchableOpacity onPress={GoBack} style={{ marginTop: 20 }}>
+          <Text style={{ color: colors.primary }}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -94,7 +135,7 @@ interface AdDetailsScreenProps {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Image */}
         <View style={styles.imageContainer}>
-          <Image source={{ uri: ad?.image }} style={styles.image} />
+          <Image source={{ uri: imageUrl }} style={styles.image} />
         </View>
 
         {/* Ad Info Card */}
@@ -107,21 +148,22 @@ interface AdDetailsScreenProps {
             }
           ]}
         >
-          <View style={styles.adInfoContent}>
-            <View>
-              <Text style={[styles.adTitle, { color: colors.text }]}>
-                {ad?.title}
-              </Text>
-              <Text style={[styles.adPrice, { color: colors.primary }]}>
-                {ad?.price}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.viewListingButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={styles.viewListingText}>View Listing</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.adInfoContent}>
+  <Text style={[styles.adTitle, { color: colors.text }]}>
+    {ad?.title}
+  </Text>
+  <View style={styles.priceAndButtonRow}>
+    <Text style={[styles.adPrice, { color: colors.primary }]}>
+      {ad?.budget ? `₦${ad.budget}` : ''}
+    </Text>
+    <TouchableOpacity
+      style={[styles.viewListingButton, { backgroundColor: colors.primary }]}
+    >
+      <Text style={styles.viewListingText}>View Listing</Text>
+    </TouchableOpacity>
+  </View>
+</View>
+
         </View>
 
         {/* Metrics */}
@@ -188,9 +230,6 @@ interface AdDetailsScreenProps {
             ]}
           >
             <Ionicons name="create-outline" size={18} color={colors.text} />
-            {/* <Text style={[styles.actionButtonText, { color: colors.text }]}>
-              Edit
-            </Text> */}
           </TouchableOpacity>
 
           {ad?.status !== 'closed' && (
@@ -204,9 +243,6 @@ interface AdDetailsScreenProps {
               ]}
             >
               <Ionicons name="pause-outline" size={18} color={colors.text} />
-              {/* <Text style={[styles.actionButtonText, { color: colors.text }]}>
-                {ad?.status === 'running' ? 'Pause' : 'Resume'}
-              </Text> */}
             </TouchableOpacity>
           )}
 
@@ -220,9 +256,6 @@ interface AdDetailsScreenProps {
             ]}
           >
             <Ionicons name="trash-outline" size={18} color={colors.primary} />
-            {/* <Text style={[styles.actionButtonText, { color: colors.primary }]}>
-              Delete
-            </Text> */}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -240,7 +273,7 @@ export default AdDetailsScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: 30,
+
   },
   header: {
     flexDirection: 'row',
@@ -268,6 +301,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     marginTop: 16,
     borderRadius: 16,
+    width: '100%',
     overflow: 'hidden',
     aspectRatio: 16 / 9,
   },
@@ -282,29 +316,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
   },
-  adInfoContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  adTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  adPrice: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  viewListingButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  viewListingText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+ adInfoContent: {
+  width: '100%',
+  padding: 8,
+},
+
+adTitle: {
+  fontSize: 14,
+  fontWeight: '600',
+  marginBottom: 10,
+  flexShrink: 1,
+  flexWrap: 'wrap',
+},
+
+priceAndButtonRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+},
+
+adPrice: {
+  fontSize: 20,
+  fontWeight: '700',
+},
+
+viewListingButton: {
+  paddingHorizontal: 24,
+  paddingVertical: 8,
+  borderRadius: 8,
+  marginLeft: 16, // Add some space between price and button
+},
+
+viewListingText: {
+  color: '#fff',
+  fontWeight: '600',
+},
+
   metricsCard: {
     marginTop: 24,
     borderRadius: 16,

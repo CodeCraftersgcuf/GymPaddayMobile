@@ -23,6 +23,7 @@ const API_ENDPOINTS = {
       EditProfile: API_DOMAIN + "/user/edit-profile",
     },
     POSTS: {
+      BoostPost: (id: number) => API_DOMAIN + `/user/boost-post/${id}`,
       List: API_DOMAIN + "/user/posts",
       Create: API_DOMAIN + "/user/posts",
       Show: (id: number) => API_DOMAIN + `/user/posts/${id}`,
@@ -30,6 +31,7 @@ const API_ENDPOINTS = {
       Delete: (id: number) => API_DOMAIN + `/user/posts/${id}`,
     },
     COMMENTS: {
+      PostList: (id: number) => API_DOMAIN + `/user/comments?post_id=${id}`,
       List: API_DOMAIN + "/user/comments",
       Create: API_DOMAIN + "/user/comments",
       Show: (id: number) => API_DOMAIN + `/user/comments/${id}`,
@@ -76,6 +78,8 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/ad-insights/${id}`,
     },
     MARKETPLACE_LISTINGS: {
+      UserList: (id: number) =>
+        API_DOMAIN + `/user/marketplace-listings/user/${id}`,
       List: API_DOMAIN + "/user/marketplace-listings",
       Create: API_DOMAIN + "/user/marketplace-listings",
       Show: (id: number) => API_DOMAIN + `/user/marketplace-listings/${id}`,
@@ -104,6 +108,7 @@ const API_ENDPOINTS = {
       Delete: (id: number) => API_DOMAIN + `/user/reels/${id}`,
     },
     LIKES: {
+      Like: (id: number) => API_DOMAIN + `/user/like/post/${id}`,
       List: API_DOMAIN + "/user/likes",
       Create: API_DOMAIN + "/user/likes",
       Show: (id: number) => API_DOMAIN + `/user/likes/${id}`,
@@ -121,6 +126,7 @@ const API_ENDPOINTS = {
       List: API_DOMAIN + "/user/follows",
       Create: API_DOMAIN + "/user/follows",
       Show: (id: number) => API_DOMAIN + `/user/followers/${id}`,
+      FollowingList: (id: number) => API_DOMAIN + `/user/following/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/follows/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/follows/${id}`,
     },

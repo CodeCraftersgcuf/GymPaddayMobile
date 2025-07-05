@@ -9,6 +9,7 @@ import {
   Dimensions,
   SafeAreaView,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
@@ -26,11 +27,8 @@ import { useTheme } from '@/contexts/themeContext';
 import { ChatMessagePayload, sendChatMessage } from '@/utils/mutations/chat';
 import Toast from 'react-native-toast-message';
 
-
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
-
-// const dark = true; // You can change this to toggle theme
 
 const profileData = {
   name: 'Adewale',
@@ -40,6 +38,7 @@ const profileData = {
   following: 100,
   avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
 };
+
 function getMediaByType(posts, type: 'image' | 'video') {
   if (!Array.isArray(posts)) return [];
   return posts.flatMap((post, postIndex) =>
@@ -58,17 +57,17 @@ function getMediaByType(posts, type: 'image' | 'video') {
 }
 
 export default function ProfileScreen() {
+  // --- All hooks at the top ---
   const { dark } = useTheme();
-  console.log('Dark Mode:', dark);
   const [activeTab, setActiveTab] = useState('posts');
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
   const followingSheetRef = useRef<BottomSheet>(null);
   const [authUser, setAuthUser] = useState<any>(null);
   const { user_id } = useLocalSearchParams<{ user_id?: any }>();
-  console.log('User ID:', user_id);
   const queryClient = useQueryClient();
 
+  // Mutations
   const followMutation = useMutation({
     mutationFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
@@ -76,7 +75,6 @@ export default function ProfileScreen() {
       return await followUnfollowUser(Number(user_id), token);
     },
     onSuccess: () => {
-      console.log('Follow/Unfollow successful');
       queryClient.invalidateQueries({ queryKey: ['followers', user_id] });
       queryClient.invalidateQueries({ queryKey: ['userProfile', user_id] });
     },
@@ -84,6 +82,7 @@ export default function ProfileScreen() {
       console.error('Error following/unfollowing user:', error);
     },
   });
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['userProfile', user_id],
     queryFn: async () => {
@@ -93,23 +92,6 @@ export default function ProfileScreen() {
     },
     enabled: !!user_id,
   });
-  console.log("prpfo;e data", data);
-  const getUserData = async () => {
-    return await SecureStore.getItemAsync('user_data');
-    // console.log("User data:", user_id);
-  };
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const userData = await getUserData();
-      if (userData) {
-        setAuthUser(JSON.parse(userData));
-      }
-      console.log("Fetched User Data:", userData);
-    };
-
-    fetchUserData();
-    console.log("Auth User Data:", authUser);
-  }, []);
 
   const {
     data: followersApiData,
@@ -119,7 +101,6 @@ export default function ProfileScreen() {
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
-      // Correct order: id first, then token
       return await getFollowerList(Number(user_id), token);
     },
     enabled: !!user_id,
@@ -133,19 +114,29 @@ export default function ProfileScreen() {
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
-      // Correct order: id first, then token
       return await getFollowingList(Number(user_id), token);
     },
     enabled: !!user_id,
   });
-  console.log("follower List is ", followersApiData);
+
+  // Fetch auth user data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const userData = await SecureStore.getItemAsync('user_data');
+      if (userData) {
+        setAuthUser(JSON.parse(userData));
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  // Map API users
   const mapApiUsers = (
     arr: any[],
     listType: 'followers' | 'following'
   ): User[] =>
     (arr || []).map((item: any) => {
       const user = listType === 'followers' ? item.follower : item.followed;
-
       return {
         id: user?.id?.toString() ?? '',
         name: user?.username || user?.name || 'Unknown',
@@ -153,91 +144,97 @@ export default function ProfileScreen() {
           user?.profile_picture_url ||
           user?.avatar ||
           'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
-        isFollowing: !!user?.is_following_back, // use backend value directly
+        isFollowing: !!user?.is_following_back,
       };
     });
-
-
 
   const followers = Array.isArray(followersApiData)
     ? mapApiUsers(followersApiData, 'followers')
     : [];
 
   const following = followingApiData && Array.isArray(followingApiData)
-    ? mapApiUsers(followingApiData)
+    ? mapApiUsers(followingApiData, 'following')
     : [];
 
-
   const snapPoints = useMemo(() => ['25%', '50%'], []);
-
   const handleSheetChanges = useCallback((index: number) => {
-    console.log('handleSheetChanges', index);
+    // No-op or logging
   }, []);
 
   const openBottomSheet = () => {
     bottomSheetRef.current?.expand();
   };
-
   const closeBottomSheet = () => {
     bottomSheetRef.current?.close();
   };
-
   const openFollowersSheet = () => {
     followersSheetRef.current?.expand();
   };
-
   const openFollowingSheet = () => {
     followingSheetRef.current?.expand();
   };
-
   const navigateToListings = () => {
     closeBottomSheet();
-    console.log("Passing user_id to UserListing:", user_id);
     router.push({
       pathname: '/UserListing',
       params: { user_id: user_id?.toString() }
     });
   };
-
   const handleListingPress = () => {
-    console.log("Passing user_id to UserListing:", user_id);
-
     router.push({
       pathname: '/UserListing',
       params: { user_id: user_id?.toString() }
     });
-  }
-
-  const handleFollowToggle = (userId: string, isCurrentlyFollowing: boolean) => {
-    // Update followers list
-    setFollowers(prev =>
-      prev.map(user =>
-        user.id === userId
-          ? { ...user, isFollowing: !isCurrentlyFollowing }
-          : user
-      )
-    );
-
-    // Update following list
-    setFollowing(prev =>
-      prev.map(user =>
-        user.id === userId
-          ? { ...user, isFollowing: !isCurrentlyFollowing }
-          : user
-      )
-    );
   };
 
-  const handleMediaPress = (index: number) => {
-    router.push({
-      pathname: '/MediaViewer',
-      params: {
-        index: index.toString(),
-        type: activeTab,
-      },
-    });
+  // Message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      const userData = await SecureStore.getItemAsync('user_data');
+      if (!token || !userData) throw new Error('Auth data missing');
+      const parsedUser = JSON.parse(userData);
+      const payload: ChatMessagePayload = {
+        sender_id: parsedUser.id,
+        receiver_id: Number(user_id),
+        message: 'Hi, I’d like to connect with you!',
+      };
+      return await sendChatMessage(payload, token);
+    },
+    onSuccess: (res) => {
+      Toast.show({
+        type: 'success',
+        text1: 'Message sent',
+        text2: 'Your message has been sent to the user',
+      });
+      router.push({
+        pathname: '/(tabs)/chat',
+        params: {
+          receiver_id: user_id?.toString(),
+        },
+      });
+    },
+    onError: (err) => {
+      console.error('Error sending message:', err);
+    },
+  });
+
+  // Add refreshing state for pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Handler for pull-to-refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Refetch all relevant queries
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['userProfile', user_id] }),
+      queryClient.invalidateQueries({ queryKey: ['followers', user_id] }),
+      queryClient.invalidateQueries({ queryKey: ['following', user_id] }),
+    ]);
+    setRefreshing(false);
   };
 
+  // Theme
   const theme = {
     background: dark ? '#000000' : '#FAFAFA',
     secondary: dark ? '#181818' : '#f5f5f5',
@@ -246,42 +243,10 @@ export default function ProfileScreen() {
     border: dark ? '#333333' : '#e0e0e0',
     Mbtn: dark ? '#FFFFFF80' : '#000000',
   };
-  // const renderPostGrid = () => (
-  //   <View style={styles.gridContainer}>
-  //     {data?.posts?.map((post, postIndex) =>
-  //       post.media.map((mediaItem, mediaIndex) => (
-  //         <TouchableOpacity
-  //           key={`${postIndex}-${mediaIndex}`}
-  //           style={styles.gridItem}
-  //           onPress={() => handleMediaPress(postIndex)}
-  //           activeOpacity={0.8}
-  //         >
-  //           <Image
-  //             source={{ uri: mediaItem.url }}
-  //             style={styles.gridImage}
-  //             resizeMode="cover"
-  //           />
-  //           {mediaItem.media_type === 'video' && (
-  //             <View style={styles.playButton}>
-  //               <Icon name="play" size={24} color="#ffffff" />
-  //             </View>
-  //           )}
-  //         </TouchableOpacity>
-  //       ))
-  //     )}
-  //   </View>
-  // );
-  if (isLoading) {
-    return (
-      <GestureHandlerRootView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-        <ActivityIndicator size="large" color="#ff0000" />
-        <Text style={{ color: '#fff', fontSize: 18, marginTop: 16 }}>Loading profile...</Text>
-      </GestureHandlerRootView>
-    );
-  }
+
+  // Media grid
   const imageMedia = getMediaByType(data?.posts, 'image');
   const videoMedia = getMediaByType(data?.posts, 'video');
-
   const renderMediaGrid = () => {
     const mediaArray = activeTab === 'posts' ? imageMedia : videoMedia;
     if (!mediaArray.length) {
@@ -329,47 +294,23 @@ export default function ProfileScreen() {
       </View>
     );
   };
-const sendMessageMutation = useMutation({
-  mutationFn: async () => {
-    const token = await SecureStore.getItemAsync('auth_token');
-    const userData = await SecureStore.getItemAsync('user_data');
-    if (!token || !userData) throw new Error('Auth data missing');
 
-    const parsedUser = JSON.parse(userData);
+  // --- End of hooks and logic ---
 
-    const payload: ChatMessagePayload = {
-      sender_id: parsedUser.id,
-      receiver_id: Number(user_id),
-      message: 'Hi, I’d like to connect with you!', // customize or make dynamic
-    };
-
-    return await sendChatMessage(payload, token);
-  },
-  onSuccess: (res) => {
-    console.log('Message sent:', res);
-    Toast.show({
-      type: 'success',
-      text1: 'Message sent',
-      text2: 'Your message has been sent to the user',
-      });
-    // Optionally navigate to chat screen here
-    router.push({
-      pathname: '/(tabs)/chat',
-      params: {
-        receiver_id: user_id?.toString(),
-      },
-    });
-  },
-  onError: (err) => {
-    console.error('Error sending message:', err);
-  },
-});
+  if (isLoading) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+        <ActivityIndicator size="large" color="#ff0000" />
+        <Text style={{ color: '#fff', fontSize: 18, marginTop: 16 }}>Loading profile...</Text>
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: '#FFFFFF' }]}>
+        <View style={[styles.header, { backgroundColor: theme.background }]}>
           <TouchableOpacity onPress={() => router.back()}>
             <Icon name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
@@ -379,7 +320,19 @@ const sendMessageMutation = useMutation({
           </TouchableOpacity>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#ff0000']}
+              tintColor={'#ff0000'}
+              title="Pull to refresh"
+              titleColor={theme.text}
+            />
+          }
+        >
           {/* Profile Info */}
           <View style={styles.profileSection}>
             <Image source={{ uri: data?.user?.profile_picture_url }} style={styles.avatar} />
@@ -400,7 +353,6 @@ const sendMessageMutation = useMutation({
                   {data?.followers_count}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
-
               </TouchableOpacity>
               <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <TouchableOpacity style={styles.statItem} onPress={openFollowingSheet}>
@@ -408,7 +360,6 @@ const sendMessageMutation = useMutation({
                   {data?.following_count}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
-
               </TouchableOpacity>
             </View>
 
@@ -428,7 +379,7 @@ const sendMessageMutation = useMutation({
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.messageButton, { backgroundColor: theme.Mbtn }]}  onPress={() => sendMessageMutation.mutate()}>
+              <TouchableOpacity style={[styles.messageButton, { backgroundColor: theme.Mbtn }]} onPress={() => sendMessageMutation.mutate()}>
                 <Text style={[styles.messageButtonText, { color: 'white' }]}>Message</Text>
               </TouchableOpacity>
               {
@@ -437,7 +388,6 @@ const sendMessageMutation = useMutation({
                   <Text style={[styles.messageButtonText, { color: "#FF0000" }]}>Listing</Text>
                 </TouchableOpacity>
               }
-
             </View>
             }
             {authUser && authUser?.id == user_id && <View style={styles.actionButtons}>
@@ -519,7 +469,7 @@ const sendMessageMutation = useMutation({
           title="Followers"
           count={Array.isArray(followers) ? followers.length : 0}
           dark={dark}
-          onFollowToggle={handleFollowToggle}
+          onFollowToggle={() => { }}
           onClose={() => followersSheetRef.current?.close()}
           loading={isLoadingFollowers}
           emptyText="No followers found."
@@ -528,11 +478,12 @@ const sendMessageMutation = useMutation({
         {/* Following Bottom Sheet */}
         <FollowingBottomSheet
           ref={followingSheetRef}
+          userId={user_id}
           users={following}
           title="Following"
           count={Array.isArray(following) ? following.length : 0}
           dark={dark}
-          onFollowToggle={handleFollowToggle}
+          onFollowToggle={() => { }}
           onClose={() => followingSheetRef.current?.close()}
           loading={isLoadingFollowing}
           emptyText="No following found."
@@ -545,7 +496,7 @@ const sendMessageMutation = useMutation({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: 30,
+
   },
   header: {
     flexDirection: 'row',
@@ -680,11 +631,11 @@ const styles = StyleSheet.create({
   },
   playButton: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
+    top: '40%',
+    left: '40%',
     transform: [{ translateX: -12 }, { translateY: -12 }],
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
+    borderRadius: 18,
     width: 40,
     height: 40,
     alignItems: 'center',

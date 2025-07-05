@@ -497,7 +497,6 @@ const { data: listingData, isLoading: isListingLoading } = useQuery({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        marginTop: 30,
     },
     header: {
         flexDirection: 'row',

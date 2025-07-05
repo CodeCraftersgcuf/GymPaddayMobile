@@ -52,7 +52,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        marginTop: 30, // Adjusted for header height
+       
     },
     containerLight: {
         backgroundColor: '#F9FAFB',
