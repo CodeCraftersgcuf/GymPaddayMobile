@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList } from 'react-native';
 import Story from './Story';
 // import { GroupedUserStories } from '@/types/story';
@@ -9,6 +9,8 @@ import { useTheme } from '@/contexts/themeContext';
 import { useRouter } from 'expo-router';
 import { GroupedUserStories } from '@/utils/types/story';
 
+import * as SecureStore from 'expo-secure-store';
+
 interface Props {
   stories: GroupedUserStories[];
 }
@@ -16,6 +18,30 @@ interface Props {
 const StoryContainer: React.FC<Props> = ({ stories }) => {
   const router = useRouter();
   const { dark } = useTheme();
+  const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
+
+  const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          if (userData.profile_picture_url) {
+            setProfileImage(userData.profile_picture_url);
+          } else {
+            setProfileImage(defatulImage); // fallback to prop
+          }
+        } else {
+          setProfileImage(defatulImage); // fallback to prop
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setProfileImage(defatulImage); // fallback to prop
+      }
+    })();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -26,7 +52,7 @@ const StoryContainer: React.FC<Props> = ({ stories }) => {
             colors={['#FF0000', '#0000FF']}
             style={styles.gradientBorder}
           >
-            <Image source={{ uri: dummyImage() }} style={styles.myStoryImage} />
+            <Image source={{ uri: profileImage }} style={styles.myStoryImage} />
           </LinearGradient>
           <View style={[styles.addButton, { backgroundColor: dark ? '#222' : 'red' }]}>
             <ThemeText style={styles.addButtonText}>+</ThemeText>

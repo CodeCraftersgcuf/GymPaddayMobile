@@ -41,7 +41,7 @@ const Login = () => {
         await SecureStore.setItemAsync("auth_token", data.access_token);
         await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
         await SecureStore.setItemAsync("user_id", data.user.id.toString());
-
+        await SecureStore.setItemAsync("username", data.user.username || "");
         console.log("User data saved:", data.user);
 
         Toast.show({

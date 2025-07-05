@@ -6,7 +6,8 @@ import {
   ScrollView,
   SafeAreaView,
   Image,
-  Alert
+  Alert,
+  TouchableOpacity
 } from 'react-native';
 import WalletCard from '@/components/more/main/WalletCard';
 import SettingItem from '@/components/more/main/SettingItem';
@@ -22,19 +23,19 @@ import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/
 
 export default function More() {
   const [fontsLoaded] = useFonts({
-      Caveat_400Regular,
-      Caveat_700Bold,
-    });
+    Caveat_400Regular,
+    Caveat_700Bold,
+  });
   const { dark, setScheme } = useTheme();
-const [balance, setBalance] = useState<number>(0);
+  const [balance, setBalance] = useState<number>(0);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [openTheme, setopenTheme] = useState(false)
   const route = useRouter();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
-  
+
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 
-const [loadingBalance, setLoadingBalance] = useState(true);
+  const [loadingBalance, setLoadingBalance] = useState(true);
 
   React.useEffect(() => {
     (async () => {
@@ -56,37 +57,37 @@ const [loadingBalance, setLoadingBalance] = useState(true);
       }
     })();
   }, []);
-React.useEffect(() => {
-  (async () => {
-    try {
-      setLoadingBalance(true); // start loading
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!token) throw new Error('No token found');
+  React.useEffect(() => {
+    (async () => {
+      try {
+        setLoadingBalance(true); // start loading
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) throw new Error('No token founds');
 
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/balance', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
+        const response = await fetch('https://gympaddy.hmstech.xyz/api/user/balance', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
 
-      const result = await response.json(); 
-      console.log('Balance fetch result:', result);
+        const result = await response.json();
+        console.log('Balance fetch result:', result);
 
-      if (response.ok && result.status === 'success') {
-        setBalance(Number(result.balance));
-      } else {
-        Alert.alert('Error', result.message || 'Failed to fetch balance');
+        if (response.ok && result.status === 'success') {
+          setBalance(Number(result.balance));
+        } else {
+          Alert.alert('Error', result.message || 'Failed to fetch balance');
+        }
+      } catch (error) {
+        console.error('Balance fetch error:', error);
+        Alert.alert('Error', 'Unable to fetch wallet balance.');
+      } finally {
+        setLoadingBalance(false); // stop loading
       }
-    } catch (error) {
-      console.error('Balance fetch error:', error);
-      Alert.alert('Error', 'Unable to fetch wallet balance.');
-    } finally {
-      setLoadingBalance(false); // stop loading
-    }
-  })();
-}, []);
+    })();
+  }, []);
 
 
   const userProfile = {
@@ -185,7 +186,9 @@ React.useEffect(() => {
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
           <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Wallet</Text>
-          <Image source={{ uri: profileImage }} style={styles.headerProfileImage} />
+          <TouchableOpacity onPress={() => route.push('/EditProfile')}>
+            <Image source={{ uri: profileImage }} style={styles.headerProfileImage} />
+          </TouchableOpacity>
         </ThemedView>
 
         {/* Wallet Card */}
@@ -198,7 +201,7 @@ React.useEffect(() => {
           onTransaction={handleTransaction}
           userName={userProfile.name}
           userImage={userProfile.image}
-            loading={loadingBalance} // 👈 pass loading state
+          loading={loadingBalance} // 👈 pass loading state
 
         />
 
@@ -232,7 +235,7 @@ React.useEffect(() => {
                 onPress={() => setopenTheme(!openTheme)}
               />
               {openTheme && (
-                <View style={{ padding: 10, backgroundColor: dark ? '#222' : '#f0f0f0', borderRadius: 8 ,borderTopLeftRadius:0,borderTopRightRadius:0}}>
+                <View style={{ padding: 10, backgroundColor: dark ? '#222' : '#f0f0f0', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                   <SettingItem
                     item={{
                       id: 'light-theme',
@@ -276,8 +279,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 15,
-    paddingBottom: 100,
-    marginTop: 30,
+ 
+
   },
   header: {
     flexDirection: 'row',

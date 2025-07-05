@@ -337,7 +337,6 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        marginTop: 30, // Adjusted for status bar
     },
     imageContainer: {
         position: 'relative',

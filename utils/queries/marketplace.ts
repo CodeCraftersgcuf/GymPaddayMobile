@@ -49,7 +49,7 @@ export const getMarketplaceListingsByUser = async (
 ): Promise<any> => {
   console.log("Fetching listings for user:", userId);
   return await apiCall(
-    API_ENDPOINTS.USER.MARKETPLACE_LISTINGS.Show(userId),
+    API_ENDPOINTS.USER.MARKETPLACE_LISTINGS.UserList(userId),
     "GET",
     undefined,
     token

@@ -165,23 +165,23 @@ export default function MediaViewer() {
 
       {/* Bottom Actions */}
       <View style={[styles.bottomActions, { backgroundColor: theme.background }]}>
-        <TouchableOpacity style={styles.actionButton}>
+        {/* <TouchableOpacity style={styles.actionButton}>
           <Icon name="heart-outline" size={28} color={theme.text} />
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.actionButton}>
+         */}
+        {/* <TouchableOpacity style={styles.actionButton}>
           <Icon name="chatbubble-outline" size={28} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         
-        <TouchableOpacity style={styles.actionButton}>
+        {/* <TouchableOpacity style={styles.actionButton}>
           <Icon name="paper-plane-outline" size={28} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         
         <View style={styles.actionSpacer} />
-        
+{/*         
         <TouchableOpacity style={styles.actionButton}>
           <Icon name="bookmark-outline" size={28} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Page Indicator */}
@@ -206,7 +206,7 @@ export default function MediaViewer() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop:30,
+ 
   },
   header: {
     flexDirection: 'row',

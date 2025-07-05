@@ -194,10 +194,12 @@ export default function MarketplaceScreen() {
   const allListings = filteredListings;
   console.log("topListings", filteredListings)
   const handleItemPress = (item: any) => {
-    router.push({
-      pathname: '/marketView',
-      params: { id: item.toString() }, // always pass params as strings
-    });
+    // router.push({
+    //   pathname: '/marketView',
+    //   params: { id: item.toString() }, // always pass params as strings
+    // });
+
+    router.push("/marketProfile");
   };
 
   // Add this helper component for image loading indicator
@@ -452,7 +454,7 @@ export default function MarketplaceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: 30,
+   
     paddingBottom: 60,
   },
   header: {

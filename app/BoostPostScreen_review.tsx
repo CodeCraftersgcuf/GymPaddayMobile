@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     ViewStyle,
     TextStyle,
+    Alert,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { colors } from '@/components/Social/Boost/colors';
@@ -47,8 +48,10 @@ const ReviewAdScreen: React.FC = () => {
     const theme = isDark ? colors.dark : colors.light;
     const route = useRouter();
     const params = useLocalSearchParams();
+    const [loadingBalance, setLoadingBalance] = useState(true);
+    const [balance, setBalance] = useState<number>(0);
 
-    // audience is expected as an array: [selectedGender, minAge, maxAge, budget, duration, location, post_id]
+    // audience is expected as an array: [selectedGender, minAge, maxAge, budget, duration, location, postId]
     // If passed as a string (comma-separated), split it
     let audienceArray: (string | number)[] = [];
     if (Array.isArray(params.audience)) {
@@ -59,6 +62,38 @@ const ReviewAdScreen: React.FC = () => {
 
     console.log("ReviewAdScreen audienceArray:", audienceArray);
 
+    React.useEffect(() => {
+        (async () => {
+            try {
+                setLoadingBalance(true); // start loading
+                const token = await SecureStore.getItemAsync('auth_token');
+                if (!token) throw new Error('No token founds');
+
+                const response = await fetch('https://gympaddy.hmstech.xyz/api/user/balance', {
+                    method: 'GET',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: 'application/json',
+                    },
+                });
+
+                const result = await response.json();
+                console.log('Balance fetch result:', result);
+
+                if (response.ok && result.status === 'success') {
+                    setBalance(Number(result.balance));
+                } else {
+                    Alert.alert('Error', result.message || 'Failed to fetch balance');
+                }
+            } catch (error) {
+                console.error('Balance fetch error:', error);
+                Alert.alert('Error', 'Unable to fetch wallet balance.');
+            } finally {
+                setLoadingBalance(false); // stop loading
+            }
+        })();
+    }, []);
+
     const [
         selectedGender = '',
         minAge = '',
@@ -66,7 +101,7 @@ const ReviewAdScreen: React.FC = () => {
         budget = 2000,
         duration = 1,
         location = '',
-        post_id = ''
+        postId = ''
     ] = Array.isArray(audienceArray) ? audienceArray : [];
 
     const audience = {
@@ -76,7 +111,7 @@ const ReviewAdScreen: React.FC = () => {
         budget: Number(budget),
         duration: Number(duration),
         location,
-        post_id,
+        postId,
     };
     const getToken = async () => {
         const storedToken = await SecureStore.getItemAsync('auth_token');
@@ -91,8 +126,8 @@ const ReviewAdScreen: React.FC = () => {
         mutationFn: async () => {
             if (!token) throw new Error('No auth token');
             // Prepare correct data for createBoostedPost
-            // post_id must be a number
-            const id = Number(audience.post_id);
+            // postId must be a number
+            const id = Number(audience.postId);
             const data = {
                 amount: Number(audience.budget),
                 duration: Number(audience.duration),
@@ -162,7 +197,7 @@ const ReviewAdScreen: React.FC = () => {
 
                 <ReviewItem icon="image" title="Ad Preview" value="" onEdit={() => { }} />
 
-                <ReviewItem icon="location-on" title="Lagos, Nigeria" value="" onEdit={() => route.back()} />
+                <ReviewItem icon="location-on" title={audience.location} value="" onEdit={() => route.back()} />
 
                 <ReviewItem
                     icon="attach-money"
@@ -171,17 +206,17 @@ const ReviewAdScreen: React.FC = () => {
                     onEdit={() => route.back()}
                 />
 
-                <View style={[styles.walletContainer, { backgroundColor: '#FFE4E1' }]}>
+                <View style={[styles.walletContainer, { backgroundColor: theme.walletCard }]}>
                     <View style={styles.walletHeader}>
                         <Text style={[styles.walletLabel, { color: theme.textSecondary }]}>Wallet Balance</Text>
                         <TouchableOpacity style={styles.topUpButton}>
                             <Text style={styles.topUpText}>TopUp</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text style={[styles.walletAmount, { color: theme.text }]}>N 20,000</Text>
+                    <Text style={[styles.walletAmount, { color: theme.text }]}>{balance}</Text>
                 </View>
 
-                <View style={[styles.reachContainer, { backgroundColor: theme.text }]}>
+                <View style={[styles.reachContainer, { backgroundColor: theme.reachCard }]}>
                     <Text style={[styles.reachLabel, { color: theme.background }]}>Estimated Reach</Text>
                     <Text style={[styles.reachValue, { color: theme.background }]}>1k - 2k Accounts</Text>
                 </View>
@@ -220,7 +255,7 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
     container: {
         flex: 1,
-        marginTop: 30,
+
     },
 
     content: {
@@ -286,16 +321,19 @@ const styles = StyleSheet.create<Styles>({
         fontWeight: '700',
     },
     reachContainer: {
-        padding: 16,
+        padding: 8,
         borderRadius: 8,
         marginBottom: 24,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+
     },
     reachLabel: {
-        fontSize: 14,
+        fontSize: 12,
         marginBottom: 4,
     },
     reachValue: {
-        fontSize: 16,
+        fontSize: 12,
         fontWeight: '600',
     },
 });
