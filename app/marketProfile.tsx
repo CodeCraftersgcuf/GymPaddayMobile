@@ -69,7 +69,7 @@ const ProfileScreen: React.FC = () => {
     const [username, setUsername] = useState<string | null>(null);
     const [BottomIndex, setBottomIndex] = useState(-1);
     const [selectedItem, setSelectedItem] = useState<{ id: number, image: string } | null>(null);
-
+    const route = useRouter();
     const handleMenu = (id: number, image: string) => {
         setSelectedItem({ id, image });
         console.log('click bottom sheet', id, image);
@@ -117,6 +117,36 @@ const ProfileScreen: React.FC = () => {
             setUsername(storedUsername || "User");
         })();
     }, []);
+
+    const handleEdit = (ad: Item) => {
+        const isEditable = true;
+        // Find the original backend API object for this ad using listingsData.listings
+        const originalItem =
+            Array.isArray(listingsData?.listings) &&
+            listingsData.listings.find((item: any) => String(item.id) === String(ad.id));
+
+        if (!originalItem) {
+            alert("Ad not found in the source data.");
+            return;
+        }
+
+        // If type is not present, set a fallback or map it (adjust as per your backend structure)
+        const boostType = originalItem.type === "marketplace" ? "listing" : "post";
+
+        route.push({
+            pathname: "/BoostPostScreen_audience",
+            params: {
+                isEditable,
+                boostType,
+                campaignId: originalItem.id,
+                campaign: JSON.stringify(originalItem),
+                listing: originalItem.listing ? JSON.stringify(originalItem.listing) : null,
+                post: originalItem.post ? JSON.stringify(originalItem.post) : null,
+            },
+        });
+    };
+
+
     // --- Map API data to UI Item[] ---
     const items: Item[] = Array.isArray(listingsData?.listings)
         ? listingsData.listings.map((item: any) => ({
@@ -208,7 +238,7 @@ const ProfileScreen: React.FC = () => {
                 </View>
                 <View style={styles.actionButtons}>
                     <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
-                        <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
+                        <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]} onPress={() => handleEdit(item)}>
                             <MaterialIcons name="edit" size={15} color={theme.textSecondary} />
                         </TouchableOpacity>
                         {item.status === 'Closed' && (
