@@ -18,19 +18,19 @@ import FollowingBottomSheet from '@/components/Social/post/FollowingBottomSheet'
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { images } from '@/constants';
 import { useLocalSearchParams } from 'expo-router';
-
-
-//Code Related to the integration
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import * as SecureStore from 'expo-secure-store';
 import { followUnfollowUser, getFollowerList, getFollowingList } from '@/utils/queries/socialMedia';
+import { useTheme } from '@/contexts/themeContext';
+import { ChatMessagePayload, sendChatMessage } from '@/utils/mutations/chat';
+import Toast from 'react-native-toast-message';
 
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
 
-const dark = true; // You can change this to toggle theme
+// const dark = true; // You can change this to toggle theme
 
 const profileData = {
   name: 'Adewale',
@@ -40,35 +40,6 @@ const profileData = {
   following: 100,
   avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
 };
-
-
-
-// Sample followers data
-// const followersData: User[] = [
-//   { id: '1', name: 'Adewale', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '2', name: 'Sasha', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-//   { id: '3', name: 'Walexy mo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-//   { id: '4', name: 'AAKCW C12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '5', name: 'Samba simo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '6', name: 'Racket 123', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '7', name: 'Biling 23_', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '8', name: 'LAQWX12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '9', name: 'Asder', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '10', name: 'Friday', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '11', name: 'Chris23345', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-// ];
-
-// // Sample following data
-// const followingData: User[] = [
-//   { id: '1', name: 'Adewale', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '2', name: 'Sasha', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-//   { id: '3', name: 'Walexy mo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: true },
-//   { id: '4', name: 'AAKCW C12', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-//   { id: '5', name: 'Samba simo', avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg', isFollowing: false },
-// ];
-
-
-// Helper to filter media by type
 function getMediaByType(posts, type: 'image' | 'video') {
   if (!Array.isArray(posts)) return [];
   return posts.flatMap((post, postIndex) =>
@@ -87,6 +58,8 @@ function getMediaByType(posts, type: 'image' | 'video') {
 }
 
 export default function ProfileScreen() {
+  const { dark } = useTheme();
+  console.log('Dark Mode:', dark);
   const [activeTab, setActiveTab] = useState('posts');
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
@@ -120,6 +93,7 @@ export default function ProfileScreen() {
     },
     enabled: !!user_id,
   });
+  console.log("prpfo;e data", data);
   const getUserData = async () => {
     return await SecureStore.getItemAsync('user_data');
     // console.log("User data:", user_id);
@@ -136,7 +110,7 @@ export default function ProfileScreen() {
     fetchUserData();
     console.log("Auth User Data:", authUser);
   }, []);
-  // Fetch followers and following from API
+
   const {
     data: followersApiData,
     isLoading: isLoadingFollowers,
@@ -165,29 +139,29 @@ export default function ProfileScreen() {
     enabled: !!user_id,
   });
   console.log("follower List is ", followersApiData);
-const mapApiUsers = (
-  arr: any[],
-  listType: 'followers' | 'following'
-): User[] =>
-  (arr || []).map((item: any) => {
-    const user = listType === 'followers' ? item.follower : item.followed;
+  const mapApiUsers = (
+    arr: any[],
+    listType: 'followers' | 'following'
+  ): User[] =>
+    (arr || []).map((item: any) => {
+      const user = listType === 'followers' ? item.follower : item.followed;
 
-    return {
-      id: user?.id?.toString() ?? '',
-      name: user?.username || user?.name || 'Unknown',
-      avatar:
-        user?.profile_picture_url ||
-        user?.avatar ||
-        'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
-      isFollowing: !!user?.is_following_back, // use backend value directly
-    };
-  });
+      return {
+        id: user?.id?.toString() ?? '',
+        name: user?.username || user?.name || 'Unknown',
+        avatar:
+          user?.profile_picture_url ||
+          user?.avatar ||
+          'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+        isFollowing: !!user?.is_following_back, // use backend value directly
+      };
+    });
 
 
 
-const followers = Array.isArray(followersApiData)
-  ? mapApiUsers(followersApiData, 'followers')
-  : [];
+  const followers = Array.isArray(followersApiData)
+    ? mapApiUsers(followersApiData, 'followers')
+    : [];
 
   const following = followingApiData && Array.isArray(followingApiData)
     ? mapApiUsers(followingApiData)
@@ -265,11 +239,12 @@ const followers = Array.isArray(followersApiData)
   };
 
   const theme = {
-    background: dark ? '#000000' : '#ffffff',
+    background: dark ? '#000000' : '#FAFAFA',
     secondary: dark ? '#181818' : '#f5f5f5',
     text: dark ? '#ffffff' : '#000000',
     textSecondary: dark ? '#999999' : '#666666',
     border: dark ? '#333333' : '#e0e0e0',
+    Mbtn: dark ? '#FFFFFF80' : '#000000',
   };
   // const renderPostGrid = () => (
   //   <View style={styles.gridContainer}>
@@ -354,12 +329,47 @@ const followers = Array.isArray(followersApiData)
       </View>
     );
   };
+const sendMessageMutation = useMutation({
+  mutationFn: async () => {
+    const token = await SecureStore.getItemAsync('auth_token');
+    const userData = await SecureStore.getItemAsync('user_data');
+    if (!token || !userData) throw new Error('Auth data missing');
+
+    const parsedUser = JSON.parse(userData);
+
+    const payload: ChatMessagePayload = {
+      sender_id: parsedUser.id,
+      receiver_id: Number(user_id),
+      message: 'Hi, I’d like to connect with you!', // customize or make dynamic
+    };
+
+    return await sendChatMessage(payload, token);
+  },
+  onSuccess: (res) => {
+    console.log('Message sent:', res);
+    Toast.show({
+      type: 'success',
+      text1: 'Message sent',
+      text2: 'Your message has been sent to the user',
+      });
+    // Optionally navigate to chat screen here
+    router.push({
+      pathname: '/(tabs)/chat',
+      params: {
+        receiver_id: user_id?.toString(),
+      },
+    });
+  },
+  onError: (err) => {
+    console.error('Error sending message:', err);
+  },
+});
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { backgroundColor: '#FFFFFF' }]}>
           <TouchableOpacity onPress={() => router.back()}>
             <Icon name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
@@ -418,12 +428,16 @@ const followers = Array.isArray(followersApiData)
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.messageButton, { backgroundColor: theme.secondary }]}>
-                <Text style={[styles.messageButtonText, { color: theme.text }]}>Message</Text>
+              <TouchableOpacity style={[styles.messageButton, { backgroundColor: theme.Mbtn }]}  onPress={() => sendMessageMutation.mutate()}>
+                <Text style={[styles.messageButtonText, { color: 'white' }]}>Message</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleListingPress()} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>
-                <Text style={[styles.messageButtonText, { color: "#FF0000" }]}>Listing</Text>
-              </TouchableOpacity>
+              {
+                data?.is_business &&
+                <TouchableOpacity onPress={() => handleListingPress()} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>
+                  <Text style={[styles.messageButtonText, { color: "#FF0000" }]}>Listing</Text>
+                </TouchableOpacity>
+              }
+
             </View>
             }
             {authUser && authUser?.id == user_id && <View style={styles.actionButtons}>
@@ -539,7 +553,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    // borderBottomWidth: 1,
     borderBottomColor: '#333333',
   },
   headerTitle: {
@@ -563,7 +577,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bio: {
-    fontSize: 16,
+    fontSize: 14,
+    color: '#000000B2',
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -605,7 +620,7 @@ const styles = StyleSheet.create({
   },
   followButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   messageButton: {
@@ -619,7 +634,7 @@ const styles = StyleSheet.create({
     borderColor: 'red'
   },
   messageButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   tabContainer: {

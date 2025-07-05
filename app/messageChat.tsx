@@ -122,7 +122,7 @@ export default function MessageChat() {
       const token = await getToken();
       if (!token) throw new Error('No token found');
       return sendChatMessage(
-        { sender_id: 'current', receiver_id: user_id, message: messageText },
+        { sender_id: 'current', receiver_id: user_id, message: messageText,conversation_id: conversation_id },
         token
       );
     },
@@ -143,53 +143,53 @@ export default function MessageChat() {
   useEffect(() => {
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
   }, [messages.length]);
-useEffect(() => {
-  const checkIncomingCall = async () => {
-    try {
-      const token = await SecureStore.getItemAsync('auth_token');
-      const res = await fetch('https://gympaddy.hmstech.xyz/api/user/incoming-call', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  useEffect(() => {
+    const checkIncomingCall = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/incoming-call', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      const { call } = await res.json();
-      console.log('Incoming call:', call);
+        const { call } = await res.json();
+        console.log('Incoming call:', call);
 
-      if (
-        call &&
-        call.channel_name &&
-        call.status?.toLowerCase() === 'initiated' &&
-        call.id !== lastCallId
-      ) {
-        setLastCallId(call.id);
-        console.log('Incoming call found:', call.id);
+        if (
+          call &&
+          call.channel_name &&
+          call.status?.toLowerCase() === 'initiated' &&
+          call.id !== lastCallId
+        ) {
+          setLastCallId(call.id);
+          console.log('Incoming call found:', call.id);
 
-        if (call.call_type === 'Voice') {
-          console.log('Incoming call set:', call);
-          console.log('Receiver UID:', call.receiver_uid);
-          setReceiverUid(call.receiver_uid);
+          if (call.call_type === 'Voice') {
+            console.log('Incoming call set:', call);
+            console.log('Receiver UID:', call.receiver_uid);
+            setReceiverUid(call.receiver_uid);
 
-          router.push({
-            pathname: '/VoiceCallScreen',
-            params: {
-              receiverId: call.caller_id,
-              uid: call.receiver_uid,
-              type: 'receiver',
-              channelName: call.channel_name,
-            },
-          });
-        } else if (call.call_type === 'video') {
-          setShowVideoCall(true);
+            router.push({
+              pathname: '/VoiceCallScreen',
+              params: {
+                receiverId: call.caller_id,
+                uid: call.receiver_uid,
+                type: 'receiver',
+                channelName: call.channel_name,
+              },
+            });
+          } else if (call.call_type === 'video') {
+            setShowVideoCall(true);
+          }
         }
+      } catch (error) {
+        console.log('Incoming call check failed', error);
       }
-    } catch (error) {
-      console.log('Incoming call check failed', error);
-    }
-  };
+    };
 
-  checkIncomingCall();
-}, []);
+    checkIncomingCall();
+  }, []);
 
 
   const handleVideoCall = () => {
@@ -260,7 +260,7 @@ useEffect(() => {
   const hanldeViewProfile = (id: any) => {
     router.push({
       pathname: '/UserProfile',
-      params: { user_id: id },
+      params: { user_id: user_id },
     })
   }
 
@@ -534,7 +534,7 @@ useEffect(() => {
               </View>
 
               <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.actionButton} onPress={handleVoiceCall}>
+                <TouchableOpacity style={[styles.actionButton,{backgroundColor:dark?'#0D0D0D':'#FAFAFA'}]} onPress={handleVoiceCall}>
                   <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
                   {/* <Icon name="call" size={20} color={theme.text} /> */}
                 </TouchableOpacity>
@@ -545,7 +545,7 @@ useEffect(() => {
             </View>
 
             {/* Profile Card */}
-            <View style={styles.profileCard}>
+            <View style={[styles.profileCard,{backgroundColor:dark?'#181818':'white'}]} >
               <Image
                 source={{ uri: otherUser?.profile_picture_url }}
                 style={styles.profileImage}
@@ -553,15 +553,15 @@ useEffect(() => {
               <Text style={styles.profileName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
               <View style={styles.profileStats}>
                 <View style={styles.stat}>
-                  <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={'white'} />
-                  <Text style={styles.statValue}>
+                  <Image source={images.chatsFollower} style={{ width: 16, height: 16 }}tintColor={dark?'white':'black'} />
+                  <Text style={[styles.statValue,{color:dark?'white':'black'}]}>
                     0 Followers
                   </Text>
                 </View>
                 <View style={styles.stat}>
                   {/* <Text style={styles.statIcon}>📝</Text> */}
-                  <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={'white'} />
-                  <Text style={styles.statValue}>
+                  <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={dark?'white':'black'} />
+                  <Text style={[styles.statValue,{color:dark?'white':'black'}]}>
                     0 Posts
                   </Text>
                 </View>
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderBottomWidth: 1,
+    // borderBottomWidth: 1,
   },
   backButton: {
     marginRight: 12,
@@ -673,17 +673,26 @@ const styles = StyleSheet.create({
   actionButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FAFAFA'
   },
-  profileCard: {
-    margin: 16,
-    padding: 20,
-    backgroundColor: '#ff5e62',
-    borderRadius: 16,
-    alignItems: 'center',
-  },
+profileCard: {
+  margin: 16,
+  padding: 20,
+  // backgroundColor: 'white', // ✅ try a dark solid color instead of 'transparent'
+  borderRadius: 16,
+  alignItems: 'center',
+  shadowColor: '#E50000',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.4,
+  shadowRadius: 20,
+  elevation: 20,
+  borderWidth: 1,
+  borderColor: '#E50000',
+},
+
   profileImage: {
     width: 80,
     height: 80,

@@ -101,7 +101,7 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
                 {
                     userId && idCan.userId && userId === idCan.userId.toString()
                         ? <UserPostDetail idCan={idCan} />
-                        : <ViewpostDetail onHide={onHidePost} onClose={onClose} />
+                        : <ViewpostDetail onHide={onHidePost} onClose={onClose} userId={idCan.userId} />
 
                 }
 

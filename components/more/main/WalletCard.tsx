@@ -8,6 +8,7 @@ import ThemeText from '@/components/ThemedText';
 
 import * as SecureStore from 'expo-secure-store';
 
+import { ImageBackground } from 'react-native';
 
 interface WalletCardProps {
   balance: number;
@@ -18,6 +19,7 @@ interface WalletCardProps {
   onTransaction: () => void;
   userName: string;
   userImage: string;
+  loading?: boolean; // optional loading state
 }
 
 export default function WalletCard({
@@ -29,6 +31,7 @@ export default function WalletCard({
   onTransaction,
   userName,
   userImage,
+  loading = false, // default to false if not provided
 }: WalletCardProps) {
   const { dark } = useTheme();
   const [profileImage, setProfileImage] = useState<string | null>(userImage);
@@ -62,11 +65,11 @@ export default function WalletCard({
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#1a1a2e', '#16213e', '#0f3460']}
+      <ImageBackground
+        source={require('../../../assets/images/walletbg.jpg')} // adjust path based on your file structure
+        resizeMode="cover"
         style={styles.cardContainer}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}>
+        imageStyle={{ borderRadius: 20 }}>
 
         <View style={styles.header}>
           <View style={styles.userInfo}>
@@ -79,7 +82,7 @@ export default function WalletCard({
           <Text style={styles.balanceLabel}>Balance</Text>
           <View style={styles.balanceRow}>
             <Text style={styles.balanceAmount}>
-              GP {isBalanceHidden ? '***,***' : formatBalance(balance)}
+             {loading ? 'Fetching...' : `GP ${isBalanceHidden ? '***,***' : formatBalance(balance)}`}
             </Text>
             <TouchableOpacity onPress={onToggleBalance} style={styles.eyeButton}>
               <AntDesign
@@ -90,24 +93,24 @@ export default function WalletCard({
             </TouchableOpacity>
           </View>
           <Text style={styles.balanceSubtext}>
-            Saldo saat ini tersimpan secara aman
+            {/* Saldo saat ini tersimpan secara aman */}
           </Text>
         </View>
-      </LinearGradient>
+      </ImageBackground>
 
       <View style={[styles.actionsContainer, { backgroundColor: dark ? '#181818' : 'white' }]}>
-        <TouchableOpacity style={styles.actionButton} onPress={onTopup}>
-          <Image source={images.topUp} style={{ width: 20, height: 20,objectFit:'contain' }} tintColor={dark ? 'white' : "#007AFF"} />
+        <TouchableOpacity style={[styles.actionButton,{ borderRightWidth: 1,}]} onPress={onTopup}>
+          <Image source={images.topUp} style={{ width: 20, height: 20, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
           <ThemeText style={styles.actionText}>Topup</ThemeText>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={onWithdraw}>
-          <Image source={images.withdraw} style={{ width: 18, height: 18,objectFit:'contain' }} tintColor={dark ? 'white' : "#007AFF"} />
+        <TouchableOpacity style={[styles.actionButton,{ borderRightWidth: 1,}]} onPress={onWithdraw}>
+          <Image source={images.withdraw} style={{ width: 18, height: 18, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
           <ThemeText style={styles.actionText}>Withdraw</ThemeText>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={onTransaction}>
-          <Image source={images.transactions} style={{ width: 20, height: 20,objectFit:'contain' }} tintColor={dark ? 'white' : "#007AFF"} />
+          <Image source={images.transactions} style={{ width: 20, height: 20, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
           <ThemeText style={styles.actionText}>Transaction</ThemeText>
         </TouchableOpacity>
       </View>
@@ -150,7 +153,7 @@ const styles = StyleSheet.create({
   },
   balanceLabel: {
     fontSize: 14,
-    color: '#a0a0a0',
+    color: 'white',
     marginBottom: 5,
   },
   balanceRow: {
@@ -172,7 +175,7 @@ const styles = StyleSheet.create({
     color: '#a0a0a0',
   },
   actionsContainer: {
-    paddingVertical:20,
+    paddingVertical: 20,
     position: 'absolute',
     bottom: -20,
     left: '50%',
@@ -196,7 +199,9 @@ const styles = StyleSheet.create({
     // backgroundColor: 'red',
     alignItems: 'center',
     flexDirection: 'row',
-    gap:5
+    gap: 5,
+   
+    marginRight: 10,
   },
   actionText: {
     fontSize: 12,

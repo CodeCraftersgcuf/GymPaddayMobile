@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
 import { TransactionFilter } from '@/components/more/transactions/types';
 import { useTheme } from '@/contexts/themeContext';
 import TransactionItem from '@/components/more/transactions/TransactionItem';
@@ -7,9 +7,10 @@ import FilterButton from '@/components/more/transactions/FilterButton';
 import SummaryCard from '@/components/more/transactions/SummaryCard';
 import Header from '@/components/more/withdraw/Header';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUserTransaction } from '@/utils/queries/transactions';
 import * as SecureStore from 'expo-secure-store';
+// import { ScrollView } from 'react-native-gesture-handler';
 
 export default function TransactionsScreen() {
   const { dark } = useTheme();
@@ -28,7 +29,15 @@ export default function TransactionsScreen() {
     },
     enabled: !!token,
   });
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
+    setRefreshing(false);
+  };
+  console.log("The data from API:", apiData);
   // Convert API response to local transaction format
   const allTransactions = useMemo(() => {
     if (!Array.isArray(apiData)) return [];
@@ -63,6 +72,17 @@ export default function TransactionsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, dark ? styles.containerDark : styles.containerLight]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={dark ? 'white' : 'black'}
+          />
+        }
+        contentContainerStyle={{ paddingBottom: 30 }}
+      >
       <Header title="Transactions" showBackButton={true} onBackPress={() => { }} />
 
       <SummaryCard
@@ -94,10 +114,13 @@ export default function TransactionsScreen() {
           renderItem={({ item }) => <TransactionItem transaction={item} />}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
+
           contentContainerStyle={styles.listContainer}
+
         />
       )}
-    </SafeAreaView>
+    </ScrollView>
+    </SafeAreaView >
   );
 }
 
@@ -108,7 +131,7 @@ const styles = StyleSheet.create({
     marginTop: 30,
   },
   containerLight: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFAFA',
   },
   containerDark: {
     backgroundColor: 'black',

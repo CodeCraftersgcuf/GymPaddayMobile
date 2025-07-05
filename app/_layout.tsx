@@ -10,6 +10,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { MessageProvider } from "@/components/messages/MessageContext";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // ✅ Create the client only once
 const queryClient = new QueryClient();
@@ -39,8 +40,12 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <MessageProvider>
-          <StatusBar style={dark ? 'dark' : 'light'} />
-          <Stack>
+          <SafeAreaProvider>
+
+          {/* <StatusBar style={dark ? 'dark' : 'light'} /> */}
+          <Stack screenOptions={{
+        headerShown: false, // default behavior
+      }}>
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="forgetpassword" options={{ headerShown: false }} />
@@ -76,6 +81,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           </Stack>
           <Toast /> {/* ✅ Add this here */}
+          </SafeAreaProvider>
 
         </MessageProvider>
       </ThemeProvider>

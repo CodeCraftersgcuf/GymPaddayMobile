@@ -4,6 +4,7 @@ import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const getTabIconBg = (isFocused: boolean, dark: boolean) => {
   if (isFocused) return dark ? '#FFAAAA' : '#FFAAAA'; // active: light pink with opacity
@@ -18,6 +19,8 @@ export default function TabLayout() {
   const tabViewBackgroundColor = 'transparent';
 
   return (
+    <SafeAreaProvider>
+
     <View style={[styles.tabContainerWrapper, { backgroundColor: tabViewBackgroundColor }]}>
       <Tabs
         screenOptions={{
@@ -27,11 +30,14 @@ export default function TabLayout() {
             ...styles.tabBar,
             backgroundColor: tabBackgroundColor,
             position: 'absolute',
-            bottom: 20,
+            bottom: 0,
             alignItems: 'center',
-            left: 20,
-            right: 20,
-            borderRadius: 15,
+            left: 0,
+            right: 0,
+            borderTopLeftRadius: 15,
+            borderTopRightRadius: 15,
+            borderBottomLeftRadius: 0,
+            borderBottomRightRadius: 0,
             height: 70,
             elevation: 5,
             shadowColor: '#000',
@@ -154,6 +160,8 @@ export default function TabLayout() {
         />
       </Tabs>
     </View>
+        </SafeAreaProvider>
+
   );
 }
 
@@ -168,7 +176,7 @@ const styles = StyleSheet.create({
     height: 60,
     // padding: 10,
     borderRadius: 10,
-    marginHorizontal: 15,
+    // marginHorizontal: 15,
   },
   tabBarLabel: {
     fontSize: 12,

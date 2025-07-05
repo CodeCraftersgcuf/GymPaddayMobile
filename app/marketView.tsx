@@ -22,7 +22,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getMarketplaceListingById } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { useMutation } from '@tanstack/react-query';
-import { sendChatMessage } from '@/utils/mutations/chat';
+import { sendChatMessage, sendMarketPlaceMessage } from '@/utils/mutations/chat';
 import Toast from 'react-native-toast-message';
 
 interface RelatedItem {
@@ -152,7 +152,7 @@ export default function ItemDetailsScreen() {
     const handleSendMessage = async () => {
         if (message.trim() && listing?.sender_id && listing?.receiver_id && token) {
             try {
-                await sendChatMessage({
+                await sendMarketPlaceMessage({
                     sender_id: listing.sender_id,
                     receiver_id: listing.receiver_id,
                     message,

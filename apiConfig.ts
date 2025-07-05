@@ -135,6 +135,7 @@ const API_ENDPOINTS = {
       ConnectedUsers: API_DOMAIN + "/user/chat-conversations",
       List: API_DOMAIN + "/user/chat-messages",
       Create: API_DOMAIN + "/user/chat-messages",
+      MarketPlace: API_DOMAIN + "/user/chat-messages-marketp[ace",
       Show: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,

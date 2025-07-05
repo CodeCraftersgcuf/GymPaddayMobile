@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     // marginHorizontal: 8,
   },
   activeButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#FF0000',
   },
   inactiveButtonLight: {
     backgroundColor: '#F3F4F6',

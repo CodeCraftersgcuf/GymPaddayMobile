@@ -11,10 +11,12 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Message {
     id: string;
@@ -22,6 +24,8 @@ interface Message {
     isUser: boolean;
     timestamp: string;
     avatar?: string;
+    imageUrl?: string; // ✅ add this
+
 }
 
 const supportCategories = [
@@ -45,33 +49,20 @@ export default function SupportScreen() {
             timestamp: 'Mar 31, 7:05 PM',
             avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
         },
-        {
-            id: '2',
-            text: 'Hello brother',
-            isUser: true,
-            timestamp: 'Mar 31, 7:06 PM',
-        },
-        {
-            id: '3',
-            text: 'How are you doing brother',
-            isUser: false,
-            timestamp: 'Mar 31, 7:06 PM',
-            avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-        },
-        {
-            id: '4',
-            text: 'It is nice hearing from you after a while now',
-            isUser: false,
-            timestamp: 'Mar 31, 7:07 PM',
-            avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-        },
-        {
-            id: '5',
-            text: 'Yeah that is great, i have been pretty occupied these past few weeks',
-            isUser: true,
-            timestamp: 'Mar 31, 7:08 PM',
-        },
     ]);
+
+useEffect(() => {
+  (async () => {
+    const stored = await AsyncStorage.getItem('supportMessages');
+    if (stored) {
+      setMessages(JSON.parse(stored));
+    }
+  })();
+}, []);
+    const updateMessages = (updatedMessages: Message[]) => {
+        setMessages(updatedMessages);
+        AsyncStorage.setItem('supportMessages', JSON.stringify(updatedMessages));
+    };
 
     const sendMessage = () => {
         if (message.trim()) {
@@ -81,7 +72,7 @@ export default function SupportScreen() {
                 isUser: true,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-            setMessages([...messages, newMessage]);
+            updateMessages([...messages, newMessage]);
             setMessage('');
         }
     };
@@ -94,6 +85,29 @@ export default function SupportScreen() {
         textSecondary: dark ? '#b0b0b0' : '#6c6c6c',
         primary: '#FF3B30',
         success: '#4CD964',
+    };
+    const handlePickImage = async () => {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+            alert('Permission to access media library is required!');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets?.length > 0) {
+            const newMessage: Message = {
+                id: Date.now().toString(),
+                imageUrl: result.assets[0].uri,
+                isUser: true,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            updateMessages([...messages, newMessage]);
+        }
     };
 
     const styles = StyleSheet.create({
@@ -217,7 +231,7 @@ export default function SupportScreen() {
             color: color.text,
             marginRight: 12,
             maxHeight: 100,
-            paddingRight:24
+            paddingRight: 24
         },
         sendButton: {
             padding: 8,
@@ -292,13 +306,21 @@ export default function SupportScreen() {
                         styles.messageBubble,
                         msg.isUser ? styles.messageBubbleUser : styles.messageBubbleAgent
                     ]}>
-                        <Text style={[
-                            styles.messageText,
-                            msg.isUser ? styles.messageTextUser : styles.messageTextAgent
-                        ]}>
-                            {msg.text}
-                        </Text>
+                        {msg.imageUrl ? (
+                            <Image
+                                source={{ uri: msg.imageUrl }}
+                                style={{ width: 200, height: 200, borderRadius: 12 }}
+                            />
+                        ) : (
+                            <Text style={[
+                                styles.messageText,
+                                msg.isUser ? styles.messageTextUser : styles.messageTextAgent
+                            ]}>
+                                {msg.text}
+                            </Text>
+                        )}
                     </View>
+
                 </View>
             </View>
         );
@@ -361,10 +383,17 @@ export default function SupportScreen() {
                         onChangeText={setMessage}
                         multiline
                     />
+                    <TouchableOpacity
+                        style={styles.sendButton}
+                        onPress={handlePickImage}
+                    >
+                        <Ionicons name="image" size={24} color={dark ? 'white' : 'black'} />
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
                         <Feather name="send" size={24} color={dark ? 'white' : 'black'} />
                     </TouchableOpacity>
                 </View>
+
 
                 {/* Category Selection Modal */}
                 <Modal

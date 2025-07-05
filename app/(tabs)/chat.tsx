@@ -19,25 +19,15 @@ import * as SecureStore from 'expo-secure-store';
 
 export default function Chat() {
 
-  
+
   const router = useRouter();
   const { dark } = useTheme();
   const { users } = useMessages();
-  // Example: Delay showing the search bar for 500ms after mount
-  // React.useEffect(() => {
-  //   const timeout = setTimeout(() => {
-  //     // You can perform any action here after 500ms
-  //     // For example, focus the search bar or trigger an animation
-  //     router.push('/messageChat');
-  //   }, 500);
-  //   return () => clearTimeout(timeout);
-  // }, []);
+const [selectedType, setSelectedType] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSocialModal, setShowSocialModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Securely get token for API call
   const getToken = async () => {
     return await SecureStore.getItemAsync('auth_token');
   };
@@ -56,7 +46,7 @@ export default function Chat() {
       return fetchConnectedUsers(token);
     },
   });
-  console.log("The data from API:", data);
+  console.log("The data from API:", data?.conversations);
 
   // Transform API data to ConversationList format
   const apiConversations = data?.conversations?.map((conv: any) => ({
@@ -75,32 +65,37 @@ export default function Chat() {
     },
     other_user: conv.other_user, // for navigation
     conversation_id: conv.conversation_id,
+    type: conv.type, // 'social' or 'marketplace'
   })) || [];
 
   // Build users for AvatarList from API conversations
   const apiUsers =
     apiConversations.length > 0
       ? Array.from(
-          new Map(
-            apiConversations.map((conv) => [
-              conv.user.id,
-              {
-                id: conv.user.id,
-                username: conv.user.username,
-                profile_img: conv.user.profile_img,
-                online: false,
-              },
-            ])
-          ).values()
-        )
+        new Map(
+          apiConversations.map((conv) => [
+            conv.user.id,
+            {
+              id: conv.user.id,
+              username: conv.user.username,
+              profile_img: conv.user.profile_img,
+              online: false,
+            },
+          ])
+        ).values()
+      )
       : users;
 
   // Filtering by username or last message
-  const filteredConversations = apiConversations.filter(
-    (conv) =>
-      conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      conv.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+const filteredConversations = apiConversations
+  .filter((conv) =>
+    conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    conv.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+  .filter((conv) => {
+    if (!selectedType) return true; // no filter applied
+    return conv.type === selectedType;
+  });
 
   // AvatarList: use users from context (not API)
   const handleAvatarPress = (userId: string) => {
@@ -142,7 +137,7 @@ export default function Chat() {
     setRefreshing(false);
   }, [refetch]);
 
-  const socialOptions = ['Instagram', 'Twitter', 'Facebook', 'LinkedIn'];
+const socialOptions = ['all', 'marketplace', 'social'];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -178,7 +173,11 @@ export default function Chat() {
         visible={showSocialModal}
         onClose={() => setShowSocialModal(false)}
         options={socialOptions}
-        onSelect={() => setShowSocialModal(false)}
+         onSelect={(type) => {
+    setSelectedType(type === 'all' ? null : type); // clear filter if all
+    setShowSocialModal(false);
+  }}
+
       />
     </SafeAreaView>
   );

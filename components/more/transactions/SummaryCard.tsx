@@ -40,11 +40,11 @@ export default function SummaryCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#FF0000',
     marginHorizontal: 20,
     marginTop: 20,
     marginBottom: 30,
-    borderRadius: 16,
+    borderRadius: 10,
     padding: 20,
   },
   row: {
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   section: {
-    flex: 1,
+    // flex: 1,
   },
   badge: {
     // backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -65,17 +65,18 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '400',
   },
   amount: {
     color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '500',
   },
   lastUpdated: {
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
+    textAlign: 'center',
     // textAlign: 'center',
   },
 });

@@ -26,7 +26,7 @@ export default function More() {
       Caveat_700Bold,
     });
   const { dark, setScheme } = useTheme();
-  const [balance] = useState(250000);
+const [balance, setBalance] = useState<number>(0);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [openTheme, setopenTheme] = useState(false)
   const route = useRouter();
@@ -34,6 +34,7 @@ export default function More() {
   
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 
+const [loadingBalance, setLoadingBalance] = useState(true);
 
   React.useEffect(() => {
     (async () => {
@@ -55,6 +56,38 @@ export default function More() {
       }
     })();
   }, []);
+React.useEffect(() => {
+  (async () => {
+    try {
+      setLoadingBalance(true); // start loading
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No token found');
+
+      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/balance', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const result = await response.json(); 
+      console.log('Balance fetch result:', result);
+
+      if (response.ok && result.status === 'success') {
+        setBalance(Number(result.balance));
+      } else {
+        Alert.alert('Error', result.message || 'Failed to fetch balance');
+      }
+    } catch (error) {
+      console.error('Balance fetch error:', error);
+      Alert.alert('Error', 'Unable to fetch wallet balance.');
+    } finally {
+      setLoadingBalance(false); // stop loading
+    }
+  })();
+}, []);
+
 
   const userProfile = {
     name: 'Sarah Johnson',
@@ -165,6 +198,8 @@ export default function More() {
           onTransaction={handleTransaction}
           userName={userProfile.name}
           userImage={userProfile.image}
+            loading={loadingBalance} // 👈 pass loading state
+
         />
 
         {/* Settings Section */}

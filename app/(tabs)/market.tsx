@@ -12,7 +12,10 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+ 
 } from 'react-native';
+import Modal from 'react-native-modal'; // ✅ Correct
+
 import { useRouter } from 'expo-router';
 import { categories } from '@/constants/marketData';
 import { AntDesign, Entypo, Feather, Ionicons } from '@expo/vector-icons';
@@ -45,6 +48,10 @@ export default function MarketplaceScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   // Default to 'all' so all listings show by default
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [showLocationSheet, setShowLocationSheet] = useState(false);
+  const [showCategorySheet, setShowCategorySheet] = useState(false);
+
   const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
   const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
   const [fontsLoaded] = useFonts({
@@ -72,6 +79,14 @@ export default function MarketplaceScreen() {
       }
     })();
   }, []);
+  const nigeriaLocations = [
+    { id: 'all', name: 'All' },
+    { id: 'lagos', name: 'Lagos' },
+    { id: 'abuja', name: 'Abuja' },
+    { id: 'kaduna', name: 'Kaduna' },
+    { id: 'portharcourt', name: 'Port Harcourt' },
+    { id: 'ibadan', name: 'Ibadan' },
+  ];
 
   const theme = {
     background: isDark ? '#000000' : '#FFFFFF',
@@ -96,6 +111,7 @@ export default function MarketplaceScreen() {
     },
     enabled: !!token,
   });
+  console.log("listing data", data)
 
   // Add refresh state (optional, but not strictly needed with isFetching)
   const [refreshing, setRefreshing] = useState(false);
@@ -155,25 +171,28 @@ export default function MarketplaceScreen() {
         sellerAvatar: sellerAvatar,
         seller: sellerName,
         timeAgo: timeAgo,
+        is_featured: item.is_featured
       };
     })
     : [];
-
+  // console.log("apiListings",apiListings)
 
   // --- Filtering ---
   const filteredListings = apiListings.filter((item) => {
     const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase());
-    let matchesCategory = true;
-    if (selectedCategory !== 'all') {
-      // Compare API category name with mapped value from local category id
-      matchesCategory = item.category === categoryIdToApiName[selectedCategory];
-    }
-    return matchesSearch && matchesCategory;
+
+    const matchesCategory =
+      selectedCategory === 'all' || item.category === categoryIdToApiName[selectedCategory];
+
+    const matchesLocation =
+      selectedLocation === 'all' || (item.user?.location?.toLowerCase() === selectedLocation);
+
+    return matchesSearch && matchesCategory && matchesLocation;
   });
 
-  const topListings = filteredListings.filter((item) => item.isTopAd);
+  const topListings = filteredListings.filter((item) => item.is_featured);
   const allListings = filteredListings;
-
+  console.log("topListings", filteredListings)
   const handleItemPress = (item: any) => {
     router.push({
       pathname: '/marketView',
@@ -219,13 +238,16 @@ export default function MarketplaceScreen() {
         <Text style={[styles.listingTitle, { color: theme.text }]} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={styles.listingPrice}>{item.price}</Text>
+        <Text style={styles.listingPrice}>
+          ₦{Intl.NumberFormat('en-NG').format(Math.floor(item.price))}
+        </Text>
+
         <TouchableOpacity onPress={() => router.push('/marketView')} style={styles.sellerInfo}>
           <ImageWithLoading
             source={{ uri: item.sellerAvatar || dummyImage }}
             style={styles.sellerAvatar}
           />
-          <View style={{ flexDirection: 'column' }}>
+          <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', gap: 12 }}>
             <Text style={[styles.sellerName, { color: theme.textSecondary }]}>
               {item.seller}
             </Text>
@@ -254,13 +276,13 @@ export default function MarketplaceScreen() {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.headerBackground }]}>
         <View style={styles.headerTop}>
-          <Text style={[styles.headerTitle,{fontFamily: 'Caveat_400Regular',}]}>Marketplace</Text>
+          <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Marketplace</Text>
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={()=>handleItemPress(12)} style={styles.notificationButton}>
-            <Image
-              source={{ uri: profileImage }}
-              style={styles.profileImage}
-            />
+            <TouchableOpacity onPress={() => handleItemPress(12)} style={styles.notificationButton}>
+              <Image
+                source={{ uri: profileImage }}
+                style={styles.profileImage}
+              />
             </TouchableOpacity>
             <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notification')}>
               <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
@@ -282,14 +304,28 @@ export default function MarketplaceScreen() {
 
         {/* Filters */}
         <View style={styles.filtersContainer}>
-          <TouchableOpacity style={[styles.filterButton, { backgroundColor: theme.searchBackground }]}>
-            <Text style={styles.filterText}>Location</Text>
+          <TouchableOpacity
+            style={[styles.filterButton, { backgroundColor: theme.searchBackground }]}
+            onPress={() => setShowLocationSheet(true)}
+          >
+            <Text style={styles.filterText}>
+              {nigeriaLocations.find((l) => l.id === selectedLocation)?.name || 'Location'}
+            </Text>
             <Entypo name="chevron-down" size={16} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterButton, { backgroundColor: theme.searchBackground }]}>
-            <Text style={styles.filterText}>Categories</Text>
+
+
+
+          <TouchableOpacity
+            style={[styles.filterButton, { backgroundColor: theme.searchBackground }]}
+            onPress={() => setShowCategorySheet(true)}
+          >
+            <Text style={styles.filterText}>
+              {categories.find((c) => c.id === selectedCategory)?.title || 'Category'}
+            </Text>
             <Entypo name="chevron-down" size={16} color="#FFFFFF" />
           </TouchableOpacity>
+
         </View>
       </View>
 
@@ -366,6 +402,44 @@ export default function MarketplaceScreen() {
           )}
         </View>
       </ScrollView>
+    <Modal
+  isVisible={showLocationSheet}
+  onBackdropPress={() => setShowLocationSheet(false)}
+  onSwipeComplete={() => setShowLocationSheet(false)}
+  swipeDirection="down"
+  style={styles.modal}
+>
+  <View style={styles.bottomSheetContent}>
+    {nigeriaLocations.map(loc => (
+      <TouchableOpacity key={loc.id} onPress={() => {
+        setSelectedLocation(loc.id);
+        setShowLocationSheet(false);
+      }}>
+        <Text style={styles.bottomSheetItem}>{loc.name}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</Modal>
+
+<Modal
+  isVisible={showCategorySheet}
+  onBackdropPress={() => setShowCategorySheet(false)}
+  onSwipeComplete={() => setShowCategorySheet(false)}
+  swipeDirection="down"
+  style={styles.modal}
+>
+  <View style={styles.bottomSheetContent}>
+    {categories.map(cat => (
+      <TouchableOpacity key={cat.id} onPress={() => {
+        setSelectedCategory(cat.id);
+        setShowCategorySheet(false);
+      }}>
+        <Text style={styles.bottomSheetItem}>{cat.title}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</Modal>
+
 
       {/* Floating Action Button */}
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/addListing')}>
@@ -460,15 +534,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   categoryCard: {
+    shadowColor: '#8B8585',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.25, // 40 hex = 25% opacity
+    shadowRadius: 15,
+    elevation: 5, // for Android (you can tweak this)
     flex: 1,
     alignItems: 'center',
-    padding: 16,
-    paddingVertical: 10,
+    // padding: 16,
+    paddingVertical: 16,
     borderRadius: 16,
     // minWidth: 100,
     // marginRight: 8,
   },
   categoryIcon: {
+
+
     width: 40,
     height: 40,
     borderRadius: 25,
@@ -477,13 +558,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '500',
     textAlign: 'center',
   },
   horizontalListings: {
     paddingHorizontal: 20,
-    gap: 16,
+    paddingBottom: 16,
+    gap: 8,
   },
   verticalListingItem: {
     paddingHorizontal: 20,
@@ -495,15 +577,21 @@ const styles = StyleSheet.create({
     // width: 200,
     marginHorizontal: 3,
     flex: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#8B8585',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.25, // equivalent of 40 in #8B858540
+    shadowRadius: 5,
+    elevation: 3, // for Android - tweak as needed
+    // shadowOpacity: 0.1,
+    // shadowRadius: 4,
+    // elevation: 3,
   },
   listingImage: {
     width: '100%',
-    height: 120,
+    height: 100,
   },
   topAdBadge: {
     position: 'absolute',
@@ -523,13 +611,13 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   listingTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '400',
     marginBottom: 4,
   },
   listingPrice: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '500',
     color: '#FF0000',
     marginBottom: 8,
   },
@@ -538,17 +626,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sellerAvatar: {
-    width: 20,
-    height: 20,
+    width: 16,
+    height: 16,
     borderRadius: 10,
     marginRight: 6,
   },
   sellerName: {
-    fontSize: 12,
+    fontSize: 8,
     flex: 1,
   },
   timeAgo: {
-    fontSize: 12,
+    fontSize: 8,
   },
   fab: {
     position: 'absolute',
@@ -566,6 +654,24 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+ modal: {
+  justifyContent: 'flex-end',
+  margin: 0, // removes default margin
+},
+bottomSheetContent: {
+  backgroundColor: 'white',
+  padding: 20,
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  maxHeight: '50%', // optional: prevents full screen takeover
+},
+bottomSheetItem: {
+  paddingVertical: 14,
+  fontSize: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: '#eee',
+},
+
 });
 
 // Helper to get "time ago" string

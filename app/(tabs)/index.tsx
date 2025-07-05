@@ -31,6 +31,8 @@ import * as SecureStore from 'expo-secure-store';
 import { getPostComments } from '@/utils/queries/comments';
 import { useMutation } from '@tanstack/react-query';
 import { createComment } from '@/utils/mutations/comments';
+import { groupStoriesByUser } from '@/utils/groupStories';
+import { GroupedUserStories, StoryItem } from '@/utils/types/story';
 
 // LoadingIndicator component
 function LoadingIndicator({ text = "Loading..." }) {
@@ -63,7 +65,33 @@ export default function SocialFeedScreen() {
       return response; // ← this will be in `data`
     },
   });
+ const [groupedStories, setGroupedStories] = useState<GroupedUserStories[]>([]);
+  const [loading, setLoading] = useState(true);
+const getToken = async () => {
+    return await SecureStore.getItemAsync('auth_token');
+  }
+  useEffect(() => {
+    const fetchStories = async () => {
+      try {
+        const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/get/stories`, {
+          headers: {
+            Authorization: `Bearer ${await getToken()}`,
+          },
+        });
 
+        const json = await response.json();
+        const stories: StoryItem[] = json.stories;
+        const grouped = groupStoriesByUser(stories);
+        setGroupedStories(grouped);
+      } catch (err) {
+        console.error('Error fetching stories:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStories();
+  }, []);
   // Query for comments (enabled only when modal visible and postId set)
   const {
     data: commentData,
@@ -153,20 +181,7 @@ export default function SocialFeedScreen() {
   const handleAddComment = (text: string, postId: number) => {
     // Call the mutation
     addComment({ text, postId });
-    // Optionally optimistic update: (uncomment if you want the comment to appear instantly)
-    // setCurrentComments(prev => [
-    //   ...prev,
-    //   {
-    //     id: Math.random().toString(),
-    //     userId: 'current-user-id',
-    //     username: 'You',
-    //     profileImage: 'https://randomuser.me/api/portraits/men/45.jpg',
-    //     text,
-    //     timestamp: new Date().toISOString(),
-    //     likes: 0,
-    //     replies: []
-    //   }
-    // ]);
+
     console.log('Adding comment to post:', postId, text);
   };
 
@@ -248,17 +263,13 @@ export default function SocialFeedScreen() {
             />
           }
         >
-          {/* Stories */}
-          <StoryContainer stories={mockStories} />
-
-          {/* Real Posts from API */}
+          <StoryContainer stories={groupedStories ?? []} />
           <PostContainer
             posts={posts}
             onCommentPress={handleCommentPress}
             handleMenu={handleMenu}
           />
         </ScrollView>
-
         <CommentsBottomSheet
           visible={commentModalVisible}
           comments={mapApiCommentsToInternal(commentData)}

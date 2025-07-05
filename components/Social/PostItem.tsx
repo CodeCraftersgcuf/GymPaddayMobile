@@ -69,6 +69,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showSeeMore, setShowSeeMore] = useState(false);
 
 
   useEffect(() => {
@@ -290,9 +292,27 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
           </TouchableOpacity>
         </ThemedView>
       </View>
-      <ThemedView darkColor="transparent" style={{ marginTop: 10 }}>
-        <ThemeText style={styles.content}>{post.content}</ThemeText>
-      </ThemedView>
+      <Text
+        numberOfLines={isExpanded ? undefined : 2}
+        onTextLayout={(e) => {
+          // Detect if content exceeds 2 lines
+          if (e.nativeEvent.lines.length > 2 && !showSeeMore) {
+            setShowSeeMore(true);
+          }
+        }}
+        style={styles.content}
+      >
+        {post.content}
+      </Text>
+
+      {showSeeMore && (
+        <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
+          <Text style={{ color: '#007BFF', marginTop: -4 }}>
+            {isExpanded ? 'See less' : 'See more'}
+          </Text>
+        </TouchableOpacity>
+
+      )}
 
       {/* Full-Screen Image Slider Modal */}
       <Modal visible={modalVisible} transparent={true} animationType="fade">
@@ -372,11 +392,18 @@ const styles = StyleSheet.create({
   imageGrid: {
     marginTop: 10,
   },
+  // fullWidthImage: {
+  //   width: "100%",
+  //   height: 300,
+  //   borderRadius: 8,
+  // },
   fullWidthImage: {
-    width: "100%",
-    height: 300,
+    width: width - 20, // to give padding
+    height: width - 20,
     borderRadius: 8,
-  },
+    alignSelf: 'center',
+  }
+  ,
   threeImagesGrid: {
     flexDirection: "row",
     gap: 5,
@@ -385,10 +412,11 @@ const styles = StyleSheet.create({
     flex: 2,
   },
   largeImage: {
-    width: "100%",
-    height: 180,
+    width: '100%',
+    aspectRatio: 1, // this forces 1:1 square
     borderRadius: 8,
-  },
+  }
+  ,
   smallImagesWrapper: {
     flex: 1,
     justifyContent: "space-between",
@@ -397,8 +425,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   smallImage: {
-    width: "100%",
-    height: 87,
+    width: '100%',
+    aspectRatio: 1,
     borderRadius: 8,
     marginBottom: 5,
   },
@@ -408,10 +436,11 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   gridImage: {
-    width: "100%",
-    height: 120,
+    width: '100%',
+    aspectRatio: 1,
     borderRadius: 8,
   },
+
   imageWrapper: {
     flexBasis: "48%",
     position: "relative",
