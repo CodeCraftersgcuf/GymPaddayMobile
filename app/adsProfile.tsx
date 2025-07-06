@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusTabs } from '@/components/more/ads/StatusTabs';
@@ -22,6 +23,7 @@ import { getAdCampaigns } from '@/utils/queries/adCampaigns';
 import { useMutation } from '@tanstack/react-query';
 import { toggleCampaignStatus } from '@/utils/mutations/toggle';
 import { useQueryClient } from '@tanstack/react-query';
+import { deleteAdCompaign } from '@/utils/mutations/boost';
 
 
 interface AdsListScreenProps {
@@ -80,8 +82,8 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
 
   console.log("The data from API:", adsApiData);
   // Map API data to Ad[]
- const ads: Ad[] = Array.isArray(adsApiData)
-  ? adsApiData.map((item) => {
+  const ads: Ad[] = Array.isArray(adsApiData)
+    ? adsApiData.map((item) => {
       let status = item.status ?? '';
       // Map backend "active" to frontend "running"
       if (status === 'active') status = 'running';
@@ -113,7 +115,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
         endDate: item.endDate ? new Date(item.endDate).toLocaleString() : '--',
       };
     })
-  : [];
+    : [];
 
 
   // Filter Ads
@@ -126,34 +128,34 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
     return statusMatch && typeMatch;
   });
 
- const handleEdit = (ad: Ad) => {
-  const isEditable = true;
-  const boostType = ad.type === "marketplace" ? "listing" : "post";
+  const handleEdit = (ad: Ad) => {
+    const isEditable = true;
+    const boostType = ad.type === "marketplace" ? "listing" : "post";
 
-  // Find the original API response object for more backend fields
-  const originalItem =
-    Array.isArray(adsApiData) &&
-    adsApiData.find((item) => String(item.id) === ad.id);
+    // Find the original API response object for more backend fields
+    const originalItem =
+      Array.isArray(adsApiData) &&
+      adsApiData.find((item) => String(item.id) === ad.id);
 
-  if (!originalItem) {
-    alert("Ad not found in the source data.");
-    return;
-  }
-  console.log("Editing ad:", ad.id, "Original item:", originalItem);
+    if (!originalItem) {
+      alert("Ad not found in the source data.");
+      return;
+    }
+    console.log("Editing ad:", ad.id, "Original item:", originalItem);
 
-  // Use a single editor screen for both types
- route.push({
-  pathname: "/BoostPostScreen_audience",
-  params: {
-    isEditable,
-    boostType,
-    campaignId: ad.id,
-    campaign: JSON.stringify(originalItem), // <-- Always send as string!
-    listing: originalItem.listing ? JSON.stringify(originalItem.listing) : null,
-    post: originalItem.post ? JSON.stringify(originalItem.post) : null,
-  },
-});
-};
+    // Use a single editor screen for both types
+    route.push({
+      pathname: "/BoostPostScreen_audience",
+      params: {
+        isEditable,
+        boostType,
+        campaignId: ad.id,
+        campaign: JSON.stringify(originalItem), // <-- Always send as string!
+        listing: originalItem.listing ? JSON.stringify(originalItem.listing) : null,
+        post: originalItem.post ? JSON.stringify(originalItem.post) : null,
+      },
+    });
+  };
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({
@@ -204,9 +206,35 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
     }
   };
 
+  // Add mutation for deleting ad campaign
+  const { mutate: deleteAd, isLoading: isDeleting } = useMutation({
+    mutationFn: async (id: number) => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token');
+      return await deleteAdCompaign({ id, token });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ad-campaigns']);
+    },
+    onError: (error) => {
+      Alert.alert('Error', 'Failed to delete ad campaign.');
+      console.error('Delete ad campaign error:', error);
+    }
+  });
 
   const handleDelete = (ad: Ad) => {
-    // For real app: Call delete mutation, then refetch
+    Alert.alert(
+      'Delete Ad Campaign',
+      'Are you sure you want to delete this ad campaign?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteAd(Number(ad.id))
+        }
+      ]
+    );
   };
 
   const handleViewDetails = (ad: Ad) => {
