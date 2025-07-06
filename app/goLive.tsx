@@ -14,7 +14,11 @@ import BuySuccessModal from '@/components/Social/live/BuySuccessModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
+import { createLiveStream } from '@/utils/mutations/live';
+// import { v4 as uuidv4 } from 'uuid'; // npm i uuid
+import uuid from 'react-native-uuid';
 
+import * as SecureStore from 'expo-secure-store';
 export default function HomeScreen() {
     const { dark } = useTheme();
     const [selectedDuration, setSelectedDuration] = useState('15 Min');
@@ -24,17 +28,45 @@ export default function HomeScreen() {
     const [showBuySuccess, setShowBuySuccess] = useState(false);
     const [boughtMinutes, setBoughtMinutes] = useState('');
     const [showBuyModal, setShowBuyModal] = useState(false);
+    const [channelInfo, setChannelInfo] = useState<{ title: string; agora_channel: string,id?:string } | null>(null);
 
+    const handleProceed = async () => {
+        try {
+            setShowSummary(false);
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) throw new Error('No token');
+
+            const randomChannel = uuid.v4().toString().slice(0, 8); // e.g. '9f1b1c8a'
+
+            const payload = {
+                title: 'Morning Workout Live',
+                agora_channel: randomChannel,
+            };
+
+            const res = await createLiveStream(payload, token);
+
+            setChannelInfo({
+                title: res.title,
+                agora_channel: res.agora_channel,
+                id:res.id
+            });
+
+            setIsLive(true); // will trigger LiveStreamingView
+        } catch (err) {
+            console.error('Error creating live stream:', err);
+            alert('Failed to go live. Try again.');
+        }
+    };
     const handleDurationSelect = () => setShowDurationSelector(true);
     const handleSaveDuration = (duration: string) => {
         setSelectedDuration(duration);
         setShowDurationSelector(false);
     };
     const handleGoLive = () => setShowSummary(true);
-    const handleProceed = () => {
-        setShowSummary(false);
-        setIsLive(true);
-    };
+    // const handleProceed = () => {
+    //     setShowSummary(false);
+    //     setIsLive(true);
+    // };
     const handleEndLive = () => setIsLive(false);
     const handleBuyPress = () => {
         // buySheetRef.current?.expand();
@@ -51,8 +83,10 @@ export default function HomeScreen() {
         return (
             <LiveStreamingView
                 dark={dark}
+                livestreamId={channelInfo?.id}
+                channelName={channelInfo?.agora_channel}
                 onEndLive={handleEndLive}
-                onThreeDotsPress={()=>{}}
+                onThreeDotsPress={() => { }}
             />
         );
     }
@@ -62,7 +96,7 @@ export default function HomeScreen() {
             <SafeAreaView style={{ flex: 1 }} >
                 <Header
                     dark={dark}
-                    onThreeDotsPress={()=>{}}
+                    onThreeDotsPress={() => { }}
                 />
                 <StreamingCard
                     dark={dark}

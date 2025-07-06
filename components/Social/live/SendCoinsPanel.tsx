@@ -29,7 +29,7 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
   selectedGift, 
   onSendSuccess 
 }) => {
-  const [coinAmount, setCoinAmount] = useState<string>(selectedGift.price.toString());
+  const [coinAmount, setCoinAmount] = useState<string>('1');
 
   const themeStyles = {
     backgroundColor: dark ? '#000000' : '#ffffff',
@@ -82,7 +82,7 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
         </Text>
         
         <Text style={[styles.sendDescription, { color: themeStyles.textColorSecondary }]}>
-          Enter coin amount
+        Enter Coing Quanity
         </Text>
 
         <TextInput

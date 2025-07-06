@@ -139,25 +139,7 @@ const Login = () => {
             </ThemeText>
 
                     {/* Login Button */}
-                    <Pressable
-                      onPress={() => route.push("/(tabs)")}
-                      style={{
-                        backgroundColor: "#FF0000",
-                        paddingVertical: 15,
-                        borderRadius: 10,
-                      }}
-                    >
-                      <ThemeText
-                        style={{
-                          textAlign: "center",
-                          color: "white",
-                          fontWeight: "500",
-                          fontSize: 16,
-                        }}
-                      >
-                        {mutation.isPending ? "Logging in..." : "Login"}
-                      </ThemeText>
-                    </Pressable>
+                
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : "height"}
             >

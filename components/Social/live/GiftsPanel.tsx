@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ interface GiftItem {
   name: string;
   price: number;
   currency: string;
+  quantity?: number;
 }
 
 interface GiftsPanelProps {
@@ -22,7 +23,15 @@ interface GiftsPanelProps {
   onTopupPress: () => void;
 }
 
-const GiftsPanel: React.FC<GiftsPanelProps> = ({ dark, balance, onGiftSelect, onTopupPress }) => {
+const GiftsPanel: React.FC<GiftsPanelProps> = ({
+  dark,
+  balance,
+  onGiftSelect,
+  onTopupPress,
+}) => {
+  const [selectedGiftId, setSelectedGiftId] = useState<string | null>(null);
+  const [giftQuantities, setGiftQuantities] = useState<{ [key: string]: number }>({});
+
   const themeStyles = {
     backgroundColor: dark ? '#000000' : '#ffffff',
     secondaryBackground: dark ? '#181818' : '#f5f5f5',
@@ -44,30 +53,60 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({ dark, balance, onGiftSelect, on
     { id: '10', emoji: '🐱', name: 'Cat', price: 100, currency: 'GP' },
     { id: '11', emoji: '🐋', name: 'Whale', price: 100, currency: 'GP' },
     { id: '12', emoji: '🌻', name: 'Sunflower', price: 100, currency: 'GP' },
-    { id: '8', emoji: '🍩', name: 'Donut Pro', price: 100, currency: 'GP' },
-    { id: '9', emoji: '🦁', name: 'Lion', price: 0, currency: 'GP Coins' },
-    { id: '10', emoji: '🐱', name: 'Cat', price: 100, currency: 'GP' },
-    { id: '11', emoji: '🐋', name: 'Whale', price: 100, currency: 'GP' },
-    { id: '12', emoji: '🌻', name: 'Sunflower', price: 100, currency: 'GP' },
-    { id: '8', emoji: '🍩', name: 'Donut Pro', price: 100, currency: 'GP' },
-    { id: '9', emoji: '🦁', name: 'Lion', price: 0, currency: 'GP Coins' },
-    { id: '10', emoji: '🐱', name: 'Cat', price: 100, currency: 'GP' },
   ];
 
-  const renderGiftItem = ({ item }: { item: GiftItem }) => (
-    <TouchableOpacity 
-      style={[styles.giftCard, { backgroundColor: themeStyles.cardBackground }]}
-      onPress={() => onGiftSelect(item)}
-    >
-      <Text style={styles.giftEmoji}>{item.emoji}</Text>
-      <View style={styles.priceContainer}>
-        <Text style={styles.coinIcon}>🪙</Text>
-        <Text style={[styles.priceText, { color: themeStyles.textColor }]}>
-          {item.price > 0 ? `${item.price} ${item.currency}` : item.currency}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderGiftItem = ({ item }: { item: GiftItem }) => {
+    const isSelected = selectedGiftId === item.id;
+    const quantity = giftQuantities[item.id] || 1;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.giftCard,
+          { backgroundColor: themeStyles.cardBackground },
+          isSelected && { borderWidth: 2, borderColor: '#FF0000' },
+        ]}
+        onPress={() => {
+          setSelectedGiftId(item.id);
+          onGiftSelect({ ...item, quantity });
+        }}
+      >
+        <Text style={styles.giftEmoji}>{item.emoji}</Text>
+        <View style={styles.priceContainer}>
+          <Text style={styles.coinIcon}>🪙</Text>
+          <Text style={[styles.priceText, { color: themeStyles.textColor }]}>
+            {item.price > 0 ? `${item.price} ${item.currency}` : item.currency}
+          </Text>
+        </View>
+
+        {isSelected && (
+          <View style={styles.quantityControl}>
+            <TouchableOpacity
+              onPress={() => {
+                setGiftQuantities((prev) => ({
+                  ...prev,
+                  [item.id]: Math.max(1, quantity - 1),
+                }));
+              }}
+            >
+              <Text style={styles.quantityBtn}>−</Text>
+            </TouchableOpacity>
+            <Text style={styles.quantityValue}>{quantity}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setGiftQuantities((prev) => ({
+                  ...prev,
+                  [item.id]: quantity + 1,
+                }));
+              }}
+            >
+              <Text style={styles.quantityBtn}>+</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.giftsPanel, { backgroundColor: themeStyles.secondaryBackground }]}>
@@ -94,9 +133,10 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({ dark, balance, onGiftSelect, on
           showsVerticalScrollIndicator={false}
         />
       </View>
+
       <TouchableOpacity style={styles.topupBtn} onPress={onTopupPress}>
-            <Text style={styles.topupText}>Topup</Text>
-          </TouchableOpacity>
+        <Text style={styles.topupText}>Topup</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -136,9 +176,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: 8,
   },
-  topupBtn:{
+  topupBtn: {
     padding: 10,
-    paddingVertical:16,
+    paddingVertical: 16,
     borderRadius: 8,
     backgroundColor: '#FF0000',
     alignItems: 'center',
@@ -151,7 +191,7 @@ const styles = StyleSheet.create({
   },
   giftsGrid: {
     paddingHorizontal: 16,
-    flex:1,
+    flex: 1,
   },
   giftCard: {
     flex: 1,
@@ -169,7 +209,6 @@ const styles = StyleSheet.create({
   },
   giftEmoji: {
     fontSize: 32,
-    // marginBottom: 8,
   },
   priceContainer: {
     flexDirection: 'row',
@@ -182,6 +221,29 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  quantityBtn: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderRadius: 4,
+    borderColor: '#888',
+    color: '#FF0000',
+  },
+  quantityValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginHorizontal: 6,
+    color: '#444',
   },
 });
 

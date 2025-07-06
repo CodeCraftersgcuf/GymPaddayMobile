@@ -17,6 +17,11 @@ import { Ionicons as Icon } from '@expo/vector-icons';
 import GiftsPanel from '@/components/Social/live/GiftsPanel';
 import TopupPanel from '@/components/Social/live/TopupPanel';
 import SendCoinsPanel from '@/components/Social/live/SendCoinsPanel';
+import { useLocalSearchParams } from 'expo-router';
+import LiveStreamingPlayer from '@/components/Social/live/LiveStreamingPlayer';
+import WebView from 'react-native-webview';
+import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
+import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,11 +40,14 @@ interface GiftItem {
   name: string;
   price: number;
   currency: string;
+  quantity?: number;
 }
 
 type PanelType = 'gifts' | 'topup' | 'sendCoins' | 'none';
 
 const User_liveViewMain: React.FC = () => {
+  const { channelName, id } = useLocalSearchParams<{ channelName: string, id: string }>();
+
   const router = useRouter();
   const [dark, setDark] = useState<boolean>(true);
   const [message, setMessage] = useState<string>('');
@@ -47,32 +55,7 @@ const User_liveViewMain: React.FC = () => {
   const [activePanel, setActivePanel] = useState<PanelType>('none');
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      user: 'Amara',
-      message: 'This is a beautiful scenery',
-      avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
-    },
-    {
-      id: '2',
-      user: 'Sandra',
-      message: 'This is a beautiful scenery',
-      avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
-    },
-    {
-      id: '3',
-      user: 'Adewale',
-      message: 'This is a beautiful scenery',
-      avatar: 'https://images.pexels.com/photos/1040880/pexels-photo-1040880.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
-    },
-    {
-      id: '4',
-      user: 'Samantha',
-      message: 'Sent you a gift',
-      avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
-      hasGift: true,
-      giftCount: 3,
-    },
+
   ]);
 
   const themeStyles = {
@@ -81,22 +64,29 @@ const User_liveViewMain: React.FC = () => {
     textColor: dark ? '#ffffff' : '#000000',
     textColorSecondary: dark ? '#cccccc' : '#666666',
   };
+  const { data: chats = [], isLoading } = useLiveStreamChats(id);
+  const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(id);
+  console.log("chats", chats)
+  useEffect(() => {
+    if (chats.length > 0) {
+      const formatted = chats.map((msg: any) => ({
+        id: msg.id.toString(),
+        user: msg.user?.name || 'User',
+        message: msg.message,
+        avatar: msg.user?.avatar || 'https://ui-avatars.com/api/?name=User',
+      }));
+      setChatMessages(formatted);
+    }
+  }, [chats]);
 
   const sendMessage = () => {
-    if (message.trim()) {
-      const newMessage: ChatMessage = {
-        id: Date.now().toString(),
-        user: 'You',
-        message: message.trim(),
-        avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
-      };
-      setChatMessages([...chatMessages, newMessage]);
-      setMessage('');
-    }
+    if (!message.trim()) return;
+    sendChatMessage(message.trim());
+    setMessage('');
   };
 
-  const handleGiftSelect = (gift: GiftItem) => {
-    setSelectedGift(gift);
+  const handleGiftSelect = (gift: GiftItem, quantity: number = 1) => {
+    setSelectedGift({ ...gift, quantity }); // Optional: add quantity into gift object
     setActivePanel('sendCoins');
   };
 
@@ -108,13 +98,14 @@ const User_liveViewMain: React.FC = () => {
   const handleSendSuccess = (amount: number) => {
     setBalance(prevBalance => prevBalance - amount);
     setActivePanel('none');
-
+    const giftText = `Sent ${selectedGift?.name} x${amount}`;
     // Add gift message to chat
+    sendChatMessage(giftText)
     if (selectedGift) {
       const giftMessage: ChatMessage = {
         id: Date.now().toString(),
         user: 'You',
-        message: `Sent ${selectedGift.name}`,
+        message: `Sent ${selectedGift.name} x ${amount}`,
         avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
         hasGift: true,
         giftCount: 1,
@@ -128,6 +119,14 @@ const User_liveViewMain: React.FC = () => {
     setSelectedGift(null);
   };
 
+  const [giftQuantities, setGiftQuantities] = React.useState<{ [id: string]: number }>({});
+
+  const updateQuantity = (id: string, change: number) => {
+    setGiftQuantities(prev => {
+      const newQty = Math.max(1, (prev[id] || 1) + change);
+      return { ...prev, [id]: newQty };
+    });
+  };
   const renderPanel = () => {
     switch (activePanel) {
       case 'gifts':
@@ -175,37 +174,47 @@ const User_liveViewMain: React.FC = () => {
 
       {/* Video Background */}
       <View style={[styles.videoContainer]}>
-        <Image
-          source={{
-            uri: 'https://images.pexels.com/photos/268533/pexels-photo-268533.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop',
-          }}
-          style={styles.backgroundVideo}
-        />
+        {channelName ? (
+          <WebView
+            source={{
+              uri: `https://hmstech.xyz/live.html?channel=${channelName}`,
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            allowsFullscreenVideo
+            style={{ flex: 1 }}
+          />
 
-        {/* Chat Messages Overlay - Only show when no panel is active */}
-          <View style={styles.chatOverlay}>
-            <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
-              {chatMessages.map((chat) => (
-                <View key={chat.id} style={styles.chatMessage}>
-                  <Image source={{ uri: chat.avatar }} style={styles.avatar} />
-                  <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-                    <Text style={styles.username}>{chat.user}</Text>
-                    <View style={styles.messageRow}>
-                      <Text style={styles.messageText}>{chat.message}</Text>
-                      {chat.hasGift && (
-                        <View style={styles.giftContainer}>
-                          <Text style={styles.giftEmoji}>🎁</Text>
-                          <View style={styles.giftBadge}>
-                            <Text style={styles.giftCount}>x{chat.giftCount}</Text>
-                          </View>
+        ) : (
+          <Text style={{ color: 'white', textAlign: 'center', marginTop: 20 }}>
+            No channel specified
+          </Text>
+        )}
+        <View style={styles.chatOverlay}>
+          <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
+            {chatMessages.map((chat) => (
+              <View key={chat.id} style={styles.chatMessage}>
+                <Image source={{ uri: chat.avatar }} style={styles.avatar} />
+                <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                  <Text style={styles.username}>{chat.user}</Text>
+                  <View style={styles.messageRow}>
+                    <Text style={styles.messageText}>{chat.message}</Text>
+                    {chat.hasGift && (
+                      <View style={styles.giftContainer}>
+                        <Text style={styles.giftEmoji}>🎁</Text>
+                        <View style={styles.giftBadge}>
+                          <Text style={styles.giftCount}>x{chat.giftCount}</Text>
                         </View>
-                      )}
-                    </View>
+                      </View>
+                    )}
                   </View>
                 </View>
-              ))}
-            </ScrollView>
-          </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
       </View>
 
       {activePanel !== 'none' && (
@@ -216,10 +225,10 @@ const User_liveViewMain: React.FC = () => {
           onRequestClose={closePanel}
         >
           {/* <View style={{flex:1}}> */}
-            <Pressable style={styles.modalBackdrop} onPress={closePanel} />
-            <View style={styles.bottomPanelContainer}>
-              {renderPanel()}
-            </View>
+          <Pressable style={styles.modalBackdrop} onPress={closePanel} />
+          <View style={styles.bottomPanelContainer}>
+            {renderPanel()}
+          </View>
           {/* </View> */}
         </Modal>
       )}
@@ -268,7 +277,7 @@ const styles = StyleSheet.create({
   },
   // Add to your StyleSheet.create
   modalBackdrop: {
-    height:300,
+    height: 300,
     // backgroundColor:"red",
     backgroundColor: 'rgba(0,0,0,0.2)',
     // position: 'absolute',
@@ -363,7 +372,7 @@ const styles = StyleSheet.create({
   },
   panelContainer: {
     flex: 1,
-    maxHeight:"70%",
+    maxHeight: "70%",
     position: 'relative',
   },
   closeButton: {

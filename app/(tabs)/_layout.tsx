@@ -102,7 +102,7 @@ export default function TabLayout() {
               <TouchableOpacity
                 {...props}
                 onPress={() => {
-                  router.push('/goLive'); // 👈 Navigates to goLive screen
+                  router.push('/LiveStreamDiscoverScreen'); // 👈 Navigates to goLive screen
                 }}
               >
                 <LinearGradient

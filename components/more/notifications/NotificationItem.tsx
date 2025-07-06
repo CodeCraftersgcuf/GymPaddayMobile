@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Notification } from '../../types';
 import { useTheme } from '@/contexts/themeContext';
+import { format } from 'date-fns';
 
 interface NotificationItemProps {
   notification: Notification;
@@ -29,18 +30,24 @@ export default function NotificationItem({ notification, onPress }: Notification
           styles.message,
           dark ? styles.messageDark : styles.messageLight
         ]}>
-          {notification.message}
+          {notification.title}
+        </Text>
+        <Text style={[
+          styles.message,
+          dark ? styles.messageDark : styles.messageLight,{fontSize:12}
+        ]}>
+          {notification.description}
         </Text>
         <View style={styles.header}>
           {!notification.isRead && (
             <View style={styles.unreadIndicator} />
           )}
           <Text style={[
-            styles.timestamp,
-            dark ? styles.timestampDark : styles.timestampLight
-          ]}>
-            {notification.date} - {notification.timestamp}
-          </Text>
+  styles.timestamp,
+  dark ? styles.timestampDark : styles.timestampLight
+]}>
+  {format(new Date(notification.created_at), 'MMM d, yyyy · h:mm a')}
+</Text>
         </View>
       </View>
     </TouchableOpacity>

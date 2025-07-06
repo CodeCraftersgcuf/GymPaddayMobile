@@ -7,26 +7,34 @@ import {
   ActivityIndicator,
   Platform,
   PermissionsAndroid,
+Image
 } from 'react-native';
+import Modal from 'react-native-modal';
+
 import { MaterialIcons } from '@expo/vector-icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { getLiveVideoCallToken } from '@/utils/mutations/video';
 import * as SecureStore from 'expo-secure-store';
 import LiveStreamingPlayer from './LiveStreamingPlayer';
+import WebView from 'react-native-webview';
 
 interface LiveStreamingViewProps {
   dark: boolean;
   onEndLive: () => void;
   onThreeDotsPress: () => void;
+  channelName: string
+  livestreamId?: string
 }
 
 export default function LiveStreamingView({
   dark,
   onEndLive,
   onThreeDotsPress,
+  channelName,
+  livestreamId
 }: LiveStreamingViewProps) {
   const UID = 12345;
-  const CHANNEL_NAME = 'live_stream';
+  const CHANNEL_NAME = channelName ?? 'live_stream';
 
   const fetchLiveVideoCallToken = useMutation({
     mutationFn: async () => {
@@ -44,7 +52,21 @@ export default function LiveStreamingView({
       console.error('❌ Live token error:', error);
     },
   });
+  const [audienceModalVisible, setAudienceModalVisible] = useState(false);
 
+  const audienceQuery = useQuery({
+    queryKey: ['audience', livestreamId],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/live-streams/${livestreamId}/audience`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch audience');
+      return await res.json();
+    },
+    enabled: audienceModalVisible, // only fetch when modal is open
+  });
   // Permissions for Android
   useEffect(() => {
     const requestPermissions = async () => {
@@ -66,11 +88,15 @@ export default function LiveStreamingView({
 
     requestPermissions();
   }, []);
-
-  // Fetch token on mount
   useEffect(() => {
     fetchLiveVideoCallToken.mutate();
   }, []);
+  useEffect(() => {
+    if (audienceQuery.data) {
+      console.log('Audience API response:', audienceQuery.data);
+    }
+  }, [audienceQuery.data]);
+
 
   return (
     <View style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}>
@@ -82,21 +108,25 @@ export default function LiveStreamingView({
         <Text style={[styles.title, { color: dark ? '#FFF' : '#000' }]}>Live Streaming</Text>
         <View style={{ width: 24 }} /> {/* Spacer to balance layout */}
       </View>
-
-      {/* Stream View */}
       <View style={styles.streamContainer}>
         {fetchLiveVideoCallToken.isPending && (
           <ActivityIndicator size="large" color="#FF0000" />
         )}
 
         {fetchLiveVideoCallToken.data && (
-          <LiveStreamingPlayer
-            token={fetchLiveVideoCallToken.data.token}
-            channelName={CHANNEL_NAME}
-            uid={UID}
-            role="host"
+          <WebView
+            source={{
+              uri: `https://hmstech.xyz/live.html?channel=${CHANNEL_NAME}&role=host`,
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            allowsFullscreenVideo
+            style={{ flex: 1 }}
           />
         )}
+
       </View>
 
       {/* Controls */}
@@ -104,7 +134,10 @@ export default function LiveStreamingView({
         <TouchableOpacity style={styles.endLiveButton} onPress={onEndLive}>
           <Text style={styles.endLiveButtonText}>End Live</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.viewAudienceButton}>
+        <TouchableOpacity
+          style={styles.viewAudienceButton}
+          onPress={() => setAudienceModalVisible(true)} // ✅ show modal
+        >
           <Text
             style={[
               styles.viewAudienceButtonText,
@@ -114,7 +147,56 @@ export default function LiveStreamingView({
             View Audience
           </Text>
         </TouchableOpacity>
+
       </View>
+      <Modal
+        isVisible={audienceModalVisible}
+        onBackdropPress={() => setAudienceModalVisible(false)}
+        style={{ margin: 0, justifyContent: 'flex-end' }}
+      >
+        <View style={{ backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Current Audience</Text>
+
+          {audienceQuery.isLoading ? (
+            <ActivityIndicator size="large" color="#000" />
+          ) : Array.isArray(audienceQuery.data?.data) && audienceQuery.data.data.length > 0 ? (
+            audienceQuery.data.data.map((audience: any) => (
+              <View
+                key={audience.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#eee',
+                  gap: 12,
+                }}
+              >
+                <Image
+                  source={{
+                    uri: audience.user?.profile_picture
+                      ? audience.user.profile_picture.includes('http')
+                        ? audience.user.profile_picture
+                        : `https://yourdomain.com/${audience.user.profile_picture}`
+                      : 'https://yourdomain.com/default-avatar.png',
+                  }}
+                  style={{ width: 40, height: 40, borderRadius: 20 }}
+                />
+                <View>
+                  <Text style={{ fontWeight: '600' }}>{audience.user?.name || 'Unnamed User'}</Text>
+                  <Text style={{ color: '#555' }}>{audience.user?.email || 'No email'}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={{ color: '#888', textAlign: 'center', paddingVertical: 20 }}>
+              No audience found.
+            </Text>
+          )}
+
+        </View>
+      </Modal>
+
     </View>
   );
 }

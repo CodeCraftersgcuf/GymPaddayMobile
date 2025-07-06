@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 
 interface StreamingCardProps {
   dark: boolean;
@@ -12,29 +13,55 @@ interface StreamingCardProps {
   onBuyMinutes: () => void;
 }
 
-export default function StreamingCard({ 
-  dark, 
-  selectedDuration, 
-  onDurationSelect, 
-  onGoLive ,
-  onBuyMinutes
+export default function StreamingCard({
+  dark,
+  selectedDuration,
+  onDurationSelect,
+  onGoLive,
+  onBuyMinutes,
 }: StreamingCardProps) {
   const router = useRouter();
-  const hasMinFollowers = true; // Set to true if user has 500+ followers
+  const [facing, setFacing] = useState<CameraType>('front');
+  const [permission, requestPermission] = useCameraPermissions();
+  const hasMinFollowers = true;
+
+  useEffect(() => {
+    if (!permission?.granted) {
+      requestPermission();
+    }
+  }, []);
+
+  if (!permission) return <Text>Requesting permission...</Text>;
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={{ textAlign: 'center' }}>No access to camera</Text>
+        <TouchableOpacity onPress={requestPermission} style={styles.buyButton}>
+          <Text style={{ color: '#FF0000', fontWeight: 'bold' }}>Grant Camera Access</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       {/* Camera Preview */}
       <View style={styles.cameraContainer}>
-        <ImageBackground
-          source={{ uri: 'https://images.pexels.com/photos/268533/pexels-photo-268533.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }}
+        <CameraView
           style={styles.cameraPreview}
-          imageStyle={styles.cameraImage}
+          facing={facing}
         >
-          <TouchableOpacity style={styles.flipCamera}>
+          <TouchableOpacity
+            style={styles.flipCamera}
+            onPress={() =>
+              setFacing((prev) =>
+                prev === 'back' ? 'front' : 'back'
+              )
+            }
+          >
             <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-        </ImageBackground>
+        </CameraView>
       </View>
 
       {/* Streaming Info Card */}
@@ -46,15 +73,15 @@ export default function StreamingCard({
       >
         <Text style={styles.durationText}>Live streaming duration left this month</Text>
         <Text style={styles.hoursText}>5 Hrs</Text>
-        
+
         <View style={styles.progressBar}>
           <View style={styles.progressFill} />
         </View>
-        
+
         <Text style={styles.purchaseText}>
           Get more streaming minutes by purchasing with your GP coins.
         </Text>
-        
+
         <View style={styles.priceContainer}>
           <Text style={styles.priceText}>30GP/30 Minute</Text>
           <TouchableOpacity style={styles.buyButton} onPress={onBuyMinutes}>
@@ -73,43 +100,52 @@ export default function StreamingCard({
       )}
 
       {/* Duration Selector */}
-      <TouchableOpacity 
-        style={[styles.durationSelector, { backgroundColor: dark ? '#181818' : '#F5F5F5' }]}
+      <TouchableOpacity
+        style={[
+          styles.durationSelector,
+          { backgroundColor: dark ? '#181818' : '#F5F5F5' },
+        ]}
         onPress={onDurationSelect}
       >
-        <Text style={[styles.durationSelectorText, { color: dark ? '#FFFFFF' : '#666666' }]}>
-          { selectedDuration ?? "Select Duration"}
+        <Text
+          style={[
+            styles.durationSelectorText,
+            { color: dark ? '#FFFFFF' : '#666666' },
+          ]}
+        >
+          {selectedDuration ?? 'Select Duration'}
         </Text>
-        <MaterialIcons 
-          name="keyboard-arrow-down" 
-          size={24} 
-          color={dark ? '#FFFFFF' : '#666666'} 
+        <MaterialIcons
+          name="keyboard-arrow-down"
+          size={24}
+          color={dark ? '#FFFFFF' : '#666666'}
         />
       </TouchableOpacity>
 
-      {/* Go Live Button */}
-      <TouchableOpacity 
+      {/* Go Live Buttons */}
+      <TouchableOpacity
         style={[
-          styles.goLiveButton, 
-          { 
+          styles.goLiveButton,
+          {
             backgroundColor: hasMinFollowers ? '#FF0000' : '#CCCCCC',
-            opacity: hasMinFollowers ? 1 : 0.6 
-          }
+            opacity: hasMinFollowers ? 1 : 0.6,
+          },
         ]}
         onPress={onGoLive}
         disabled={!hasMinFollowers}
       >
         <Text style={styles.goLiveButtonText}>Go Live</Text>
       </TouchableOpacity>
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={[
-          styles.goLiveButton, 
-          { 
+          styles.goLiveButton,
+          {
             backgroundColor: hasMinFollowers ? '#FF0000' : '#CCCCCC',
-            opacity: hasMinFollowers ? 1 : 0.6 
-          }
+            opacity: hasMinFollowers ? 1 : 0.6,
+          },
         ]}
-        onPress={()=> router.push('/userLiveViewMain')}
+        onPress={() => router.push('/userLiveViewMain')}
         disabled={!hasMinFollowers}
       >
         <Text style={styles.goLiveButtonText}>Go Live User View</Text>
@@ -130,9 +166,6 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 20,
     overflow: 'hidden',
-  },
-  cameraImage: {
-    borderRadius: 20,
   },
   flipCamera: {
     position: 'absolute',

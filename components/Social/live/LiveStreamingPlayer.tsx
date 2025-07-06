@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ActivityIndicator, Platform, PermissionsAndroid } from 'react-native';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  Platform,
+  PermissionsAndroid,
+} from 'react-native';
 import {
   createAgoraRtcEngine,
   ChannelProfileType,
@@ -7,16 +13,16 @@ import {
   RtcSurfaceView,
 } from 'react-native-agora';
 
-const APP_ID = '2fae578d9eef4fe19df335eb67227571';
+const APP_ID = '594b734537da44b7994c6a0194c25ffb'; // your actual app ID
 
 interface Props {
-  token: string;
+  token?: string; // use empty string if you are not using tokens
   channelName: string;
   uid: number;
   role: 'host' | 'audience';
 }
 
-export default function LiveStreamingPlayer({ token, channelName, uid, role }: Props) {
+export default function LiveStreamingPlayer({ channelName, uid, role }: Props) {
   const engineRef = useRef<any>(null);
 
   const [joined, setJoined] = useState(false);
@@ -26,75 +32,73 @@ export default function LiveStreamingPlayer({ token, channelName, uid, role }: P
   const [previewActive, setPreviewActive] = useState(false);
   const [status, setStatus] = useState<string[]>([]);
 
-  const log = React.useCallback((...args: any[]) => {
+  const log = (...args: any[]) => {
     console.log('[AGORA]', ...args);
-    setStatus(prev => [...prev.slice(-10), args.map(String).join(' ')]);
-  }, []);
+    setStatus((prev) => [...prev.slice(-15), args.map(String).join(' ')]);
+  };
 
   useEffect(() => {
-    async function requestPermissionsAndInit() {
+    const init = async () => {
       if (Platform.OS === 'android') {
-        log('Requesting camera/mic permissions...');
         const granted = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
           PermissionsAndroid.PERMISSIONS.CAMERA,
         ]);
-        log('Permissions result:', JSON.stringify(granted));
         const allGranted = Object.values(granted).every(
-          v => v === PermissionsAndroid.RESULTS.GRANTED
+          (v) => v === PermissionsAndroid.RESULTS.GRANTED
         );
         if (!allGranted) {
-          log('[ERROR] Permissions not granted!');
           setCameraWorking('fail');
           return;
-        } else {
-          log('All permissions granted.');
         }
       }
 
-      log('Creating Agora engine...');
       const engine = createAgoraRtcEngine();
       engineRef.current = engine;
 
+      log('Initializing Agora...');
       engine.initialize({ appId: APP_ID });
-      log('Agora engine initialized.');
-
-      engine.enableVideo();
-      log('Video enabled.');
-
       engine.setChannelProfile(ChannelProfileType.ChannelProfileLiveBroadcasting);
       engine.setClientRole(
         role === 'host'
           ? ClientRoleType.ClientRoleBroadcaster
           : ClientRoleType.ClientRoleAudience
       );
-      log('Set channelProfile and clientRole:', role);
+
+      engine.enableVideo();
+      engine.enableAudio();
+      engine.setChannelProfile(ChannelProfileType.ChannelProfileLiveBroadcasting);
+      engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
+      engine.enableVideo();
+      engine.enableAudio();
+      engine.enableLocalVideo(true);
+      engine.enableLocalAudio(true);
 
       if (role === 'host') {
-        log('Starting local preview...');
         try {
-          engine.startPreview();
+          await engine.startPreview();
           setCameraWorking('ok');
-          log('startPreview() success.');
-        } catch (e) {
+          log('startPreview() success');
+
+        } catch (err) {
           setCameraWorking('fail');
-          log('[ERROR] startPreview() failed:', e);
+          log('startPreview() failed:', err);
         }
       }
 
-      engine.addListener('onJoinChannelSuccess', (channel, actualLocalUid, elapsed) => {
-        log('JoinChannelSuccess', JSON.stringify({ channel, actualLocalUid, elapsed }));
-        setLocalUid(actualLocalUid);
+      engine.addListener('onJoinChannelSuccess', (channel, actualUid, elapsed) => {
+        log('JoinChannelSuccess', JSON.stringify({ channel, actualUid, elapsed }));
+        setLocalUid(actualUid);
         setJoined(true);
       });
 
-      engine.addListener('onUserJoined', (remoteUid) => {
-        log('UserJoined', remoteUid);
-        setRemoteUid(remoteUid);
+      engine.addListener('onUserJoined', (uid) => {
+        log('Remote user joined:', uid);
+        setRemoteUid(uid);
       });
 
       engine.addListener('onUserOffline', (uid) => {
-        log('UserOffline', uid);
+        log('Remote user left:', uid);
         setRemoteUid(null);
       });
 
@@ -108,37 +112,35 @@ export default function LiveStreamingPlayer({ token, channelName, uid, role }: P
       });
 
       try {
-        log('Joining channel...', JSON.stringify({ token, channelName, uid }));
-        engine.joinChannel(token, channelName, uid, {
+        log('Joining channel...', JSON.stringify({ channelName, uid }));
+        await engine.joinChannel(null, channelName, uid, {
           clientRoleType:
             role === 'host'
               ? ClientRoleType.ClientRoleBroadcaster
               : ClientRoleType.ClientRoleAudience,
         });
-        log('joinChannel called.');
-      } catch (e) {
-        log('[ERROR] joinChannel failed:', e);
-        setCameraWorking('fail');
-      }
-    }
+       
 
-    requestPermissionsAndInit();
+        log('joinChannel() called.');
+      } catch (err) {
+        log('[ERROR] joinChannel failed:', err);
+      }
+    };
+    
+
+    init();
 
     return () => {
-      log('Cleaning up Agora engine...');
       if (engineRef.current) {
+        log('Cleaning up Agora...');
         engineRef.current.leaveChannel();
         engineRef.current.release();
         engineRef.current = null;
       }
     };
-  }, [token, channelName, uid, role, log]);
+  }, [channelName, uid, role]);
 
-  useEffect(() => {
-    log(joined ? 'Joined channel.' : 'Not joined yet.');
-  }, [joined, log]);
-
-  if (!joined || !localUid) {
+  if (!joined) {
     return (
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="tomato" />
@@ -149,68 +151,36 @@ export default function LiveStreamingPlayer({ token, channelName, uid, role }: P
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#222' }}>
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
       <Text style={{ color: '#fff', textAlign: 'center', margin: 8 }}>
-        You are a {role === 'host' ? 'Host (Broadcaster)' : 'Audience'}
+        You are a {role === 'host' ? 'Host' : 'Audience'}
       </Text>
-      <Text style={{ color: '#aaa', textAlign: 'center', fontSize: 11, marginBottom: 4 }}>
-        Channel: {channelName} | Your UID: {localUid}
-      </Text>
-      <StatusConsole status={status} />
 
       <View style={{ flex: 1 }}>
-        {/* Show your own video even if you are host! */}
-        {role === 'host' && localUid && (
-          <>
-            <Text
-              style={{
-                color: cameraWorking === 'ok' ? 'lime' : cameraWorking === 'fail' ? 'red' : '#ff0',
-                textAlign: 'center',
-                fontSize: 12,
-              }}
-            >
-              {cameraWorking === 'ok'
-                ? previewActive
-                  ? '✅ Camera preview showing'
-                  : '🕒 Camera preview area created, waiting for video...'
-                : cameraWorking === 'fail'
-                ? 'Camera failed (see logs)'
-                : 'Camera status: pending...'}
-            </Text>
-            <RtcSurfaceView
-              canvas={{ uid: 0, renderMode: 1 }}
-              style={{ flex: 1, backgroundColor: cameraWorking === 'ok' ? '#000' : '#600' }}
-              onLayout={() => {
-                if (!previewActive) {
-                  setPreviewActive(true);
-                  log('✅ Camera preview rendered (RtcSurfaceView onLayout, localUid=' + localUid + ').');
-                }
-              }}
-            />
-          </>
+        {/* Host: Show their own camera */}
+        {role === 'host' && localUid !== null && (
+          <RtcSurfaceView
+            canvas={{ uid: 0, renderMode: 1 }}
+            style={{ flex: 1, backgroundColor: cameraWorking === 'ok' ? '#000' : '#600' }}
+            onLayout={() => {
+              if (!previewActive) {
+                setPreviewActive(true);
+                log('✅ Camera preview rendered (RtcSurfaceView onLayout, localUid=' + localUid + ').');
+              }
+            }}
+          />
         )}
 
-        {/* Remote user */}
-        {remoteUid && (
-          <>
-            <Text style={{ color: 'orange', fontSize: 10, textAlign: 'center' }}>
-              Remote UID: {remoteUid}
-            </Text>
-            <RtcSurfaceView
-              canvas={{ uid: remoteUid, renderMode: 1 }}
-              style={{
-                width: 120,
-                height: 120,
-                margin: 4,
-                borderRadius: 8,
-                overflow: 'hidden',
-                borderWidth: 1,
-                borderColor: '#444',
-              }}
-            />
-          </>
+        {/* Audience: Show host video */}
+        {role === 'audience' && remoteUid !== null && (
+          <RtcSurfaceView
+            canvas={{ uid: remoteUid, renderMode: 1 }}
+            style={{ flex: 1, backgroundColor: '#222' }}
+          />
         )}
       </View>
+
+      <StatusConsole status={status} />
     </View>
   );
 }
@@ -218,12 +188,10 @@ export default function LiveStreamingPlayer({ token, channelName, uid, role }: P
 function StatusConsole({ status }: { status: string[] }) {
   if (!status.length) return null;
   return (
-    <View style={{ backgroundColor: '#222', padding: 6, marginVertical: 2 }}>
-      <Text style={{ color: '#fff', fontSize: 11 }}>Logs:</Text>
+    <View style={{ backgroundColor: '#111', padding: 8, marginTop: 10 }}>
+      <Text style={{ color: '#fff', fontSize: 12, marginBottom: 4 }}>Logs:</Text>
       {status.map((line, i) => (
-        <Text key={i} style={{ color: '#bbb', fontSize: 10 }}>
-          {line}
-        </Text>
+        <Text key={i} style={{ color: '#ccc', fontSize: 10 }}>{line}</Text>
       ))}
     </View>
   );
