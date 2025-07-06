@@ -39,6 +39,7 @@ const images = {
   moreUser:require('../assets/icons/more/User.png'),
   moreBag:require('../assets/icons/more/Bag.png'),
   moreClipboard:require('../assets/icons/more/ClipboardText.png'),
+  gallery:require('../assets/images/gallery.jpg'),
 };
 
 export default images;

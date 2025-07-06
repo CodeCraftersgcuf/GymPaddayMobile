@@ -32,11 +32,11 @@ import { useAgoraCall } from './AgoraCallScreen';
 import AgoraVideoView from 'react-native-agora';
 
 import { RenderModeType } from 'react-native-agora';
+import VoiceCallScreenT from '@/app/VoiceCallScreen';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get('window');
 import { RtcSurfaceView } from 'react-native-agora';
-import VoiceCallScreenT from '@/app/VoiceCallScreen';
-
 
 export default function MessageChat() {
   const { dark } = useTheme();
@@ -71,11 +71,14 @@ export default function MessageChat() {
     queryKey: ['chatMessages', conversation_id],
     queryFn: async () => {
       const token = await getToken();
+      console.log("Token for chat messages:", token);
+      console.log("Conversation ID for chat messages:", conversation_id);
       if (!token) throw new Error('No token found');
       return fetchChatMessages(token, conversation_id);
     },
     enabled: !!conversation_id,
   });
+  console.log("Fetched chat messages:", data);
   const [lastCallId, setLastCallId] = useState<number | null>(null);
 
   const [incomingCall, setIncomingCall] = useState<null | {
@@ -100,6 +103,12 @@ export default function MessageChat() {
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
   // Transform fetched data
   const messages = data?.messages?.map((msg: any) => {
+    // Try all possible keys for image
+    let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
+    // If backend returns only the path, prepend storage URL
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      imageUrl = `https://gympaddy.hmstech.xyz/storage/${imageUrl}`;
+    }
     return {
       id: String(msg.id),
       isCurrentUser: msg.direction === 'sent',
@@ -108,29 +117,82 @@ export default function MessageChat() {
       senderPicture: msg.direction === 'sent'
         ? msg.sender?.profile_picture_url
         : msg.receiver?.profile_picture_url,
+      image: imageUrl,
     }
   }) || [];
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async (messageText: string) => {
+    mutationFn: async (payload: { text: string; imageUri?: string | null }) => {
       const token = await getToken();
       if (!token) throw new Error('No token found');
-      return sendChatMessage(
-        { sender_id: 'current', receiver_id: user_id, message: messageText, conversation_id: conversation_id },
-        token
-      );
+      if (payload.imageUri) {
+        const formData = new FormData();
+        formData.append('sender_id', 'current');
+        formData.append('receiver_id', user_id);
+        formData.append('conversation_id', conversation_id);
+        if (payload.text) formData.append('message', payload.text);
+        // Use field name 'image' (not 'image[]') and ensure correct file object
+        const fileObj = {
+          uri: payload.imageUri,
+          name: `chat_${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        } as any;
+        formData.append('image', fileObj);
+
+        // Debug: log FormData keys and values
+        if (__DEV__) {
+          // Only works in dev, not in production
+          // FormData can't be directly logged, so we use a workaround
+          // @ts-ignore
+          formData._parts?.forEach?.(([key, value]) => {
+            if (typeof value === 'object' && value.uri) {
+              console.log('FormData:', key, value.uri, value.name, value.type);
+            } else {
+              console.log('FormData:', key, value);
+            }
+          });
+        }
+        console.log('Sending message with image:', payload.text, payload.imageUri);
+
+        // Do NOT set Content-Type header, let fetch set it for multipart
+        const response = await fetch('https://gympaddy.hmstech.xyz/api/user/chat-messages', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+          body: formData,
+        });
+        const resJson = await response.json();
+        console.log('Image message response:', resJson);
+        if (!response.ok) {
+          throw new Error(resJson?.message || 'Failed to send image message');
+        }
+        return resJson;
+      } else {
+        // Text only
+        console.log('Sending text message:', payload.text);
+        return sendChatMessage(
+          { sender_id: 'current', receiver_id: user_id, message: payload.text, conversation_id: conversation_id },
+          token
+        );
+      }
     },
     onSuccess: () => {
       setNewMessage('');
+      setAttachedImage(null);
       refetch();
     },
+    onError: (err) => {
+      console.log('Send message error:', err);
+    }
   });
 
   // Handle send button
   const handleSendMessage = () => {
-    if (newMessage.trim() && !sendMessageMutation.isLoading) {
-      sendMessageMutation.mutate(newMessage.trim());
+    if ((newMessage.trim() || attachedImage) && !sendMessageMutation.isLoading) {
+      sendMessageMutation.mutate({ text: newMessage.trim(), imageUri: attachedImage });
     }
   };
 
@@ -285,7 +347,6 @@ export default function MessageChat() {
 
   const renderMessage = ({ item, index }) => {
     const isCurrentUser = item.isCurrentUser;
-
     const showAvatar =
       !isCurrentUser &&
       (index === 0 || messages[index - 1].senderId !== item.senderId);
@@ -315,14 +376,31 @@ export default function MessageChat() {
             },
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isCurrentUser ? styles.sentText : styles.receivedText,
-            ]}
-          >
-            {item.text}
-          </Text>
+          {/* Render image if present */}
+          {item.image && (
+            <Image
+              source={{ uri: item.image }}
+              style={{
+                width: 160,
+                height: 160,
+                borderRadius: 10,
+                marginBottom: item.text ? 8 : 0,
+                alignSelf: isCurrentUser ? 'flex-end' : 'flex-start',
+                backgroundColor: '#eee',
+              }}
+              resizeMode="cover"
+            />
+          )}
+          {item.text ? (
+            <Text
+              style={[
+                styles.messageText,
+                isCurrentUser ? styles.sentText : styles.receivedText,
+              ]}
+            >
+              {item.text}
+            </Text>
+          ) : null}
         </View>
       </View>
     );
@@ -386,7 +464,7 @@ export default function MessageChat() {
   //         {joined && remoteUid !== null ? (
   //           <RtcSurfaceView
   //             style={styles.callBackground}
-  //             channelId={channelName}
+  //             channelId={remoteUid}
   //             uid={remoteUid}
   //             renderMode={RenderModeType.RenderModeHidden}
   //           />
@@ -400,7 +478,7 @@ export default function MessageChat() {
   //           {joined && localUid !== null ? (
   //             <RtcSurfaceView
   //               style={styles.smallVideo}
-  //               channelId={channelName}
+  //               channelId={localUid}
   //               uid={localUid}
   //               renderMode={RenderModeType.RenderModeHidden}
   //             />
@@ -506,6 +584,25 @@ export default function MessageChat() {
     return null;
   };
 
+  // Add this state for attached image at the top of the component
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+
+  // Add this function to pick image from gallery
+  const handlePickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setAttachedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image.');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.background }]}
@@ -603,8 +700,55 @@ export default function MessageChat() {
               onRefresh={handleRefresh}
             />
 
+            {/* Image preview above input bar */}
+            {attachedImage && (
+              <View style={{ alignItems: 'flex-end', marginRight: 16, marginBottom: 4 }}>
+                <View style={{ position: 'relative', width: 80, height: 80 }}>
+                  <Image
+                    source={{ uri: attachedImage }}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#ccc',
+                    }}
+                  />
+                  <TouchableOpacity
+                    style={{
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      backgroundColor: '#fff',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#ccc',
+                      width: 24,
+                      height: 24,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                    }}
+                    onPress={() => setAttachedImage(null)}
+                  >
+                    <Text style={{ color: '#333', fontWeight: 'bold', fontSize: 16 }}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* Input Container */}
             <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+              {/* Attach photo icon */}
+              <TouchableOpacity
+                style={{ marginRight: 8 }}
+                onPress={handlePickImage}
+              >
+                <Image
+                  source={images.gallery || images.notifcationIcon}
+                  style={{ width: 25, height: 25,  }}
+                />
+              </TouchableOpacity>
               <TextInput
                 style={[styles.input, {
                   backgroundColor: theme.secondary,
@@ -619,10 +763,10 @@ export default function MessageChat() {
               <TouchableOpacity
                 style={[
                   styles.sendButton,
-                  !newMessage.trim() && styles.sendButtonDisabled
+                  (!newMessage.trim() && !attachedImage) && styles.sendButtonDisabled
                 ]}
                 onPress={handleSendMessage}
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() && !attachedImage}
               >
                 {sendMessageMutation.isLoading ? (
                   <Text>Sending...</Text>
@@ -984,15 +1128,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  muteButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
   },
