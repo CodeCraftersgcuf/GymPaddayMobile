@@ -12,6 +12,8 @@ import {
     ImageSourcePropType,
     FlatList,
     ActivityIndicator,
+    RefreshControl,
+    Alert,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
@@ -23,10 +25,10 @@ import MarketBottom from '@/components/Social/Boost/MarketBottom';
 
 
 //Code Related to the integration
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { getMarketplaceListingsByUser } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
-
+import { deleteMarketplaceListing } from '@/utils/mutations/boost';
 
 function timeAgo(dateString: string): string {
     if (!dateString) return '--';
@@ -81,7 +83,7 @@ const ProfileScreen: React.FC = () => {
     const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
 
     // --- Integration with API ---
-    const { data: listingsData, isLoading, error } = useQuery({
+    const { data: listingsData, isLoading, error, refetch } = useQuery({
         queryKey: ['marketplace-listings'],
         queryFn: async () => {
             const userId = await SecureStore.getItemAsync('user_id');
@@ -119,33 +121,57 @@ const ProfileScreen: React.FC = () => {
     }, []);
 
     const handleEdit = (ad: Item) => {
-        const isEditable = true;
-        // Find the original backend API object for this ad using listingsData.listings
-        const originalItem =
+        // Find the original listing (full backend object, not UI-mapped)
+        const originalListing =
             Array.isArray(listingsData?.listings) &&
             listingsData.listings.find((item: any) => String(item.id) === String(ad.id));
 
-        if (!originalItem) {
-            alert("Ad not found in the source data.");
+        if (!originalListing) {
+            alert("Original listing not found!");
             return;
         }
 
-        // If type is not present, set a fallback or map it (adjust as per your backend structure)
-        const boostType = originalItem.type === "marketplace" ? "listing" : "post";
-
-        route.push({
-            pathname: "/BoostPostScreen_audience",
+        // Pass it to the addListing route as a JSON string (so it can be prefilled)
+        router.push({
+            pathname: '/addListing',
             params: {
-                isEditable,
-                boostType,
-                campaignId: originalItem.id,
-                campaign: JSON.stringify(originalItem),
-                listing: originalItem.listing ? JSON.stringify(originalItem.listing) : null,
-                post: originalItem.post ? JSON.stringify(originalItem.post) : null,
+                listing: JSON.stringify(originalListing),
+                isEdit: true, // (optional: let your AddListing screen know this is an edit)
             },
         });
     };
 
+    // Add mutation for deleting a listing
+    const { mutate: deleteListing, isLoading: isDeleting } = useMutation({
+        mutationFn: async (id: number) => {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) throw new Error('No auth token');
+            return await deleteMarketplaceListing({ id, token });
+        },
+        onSuccess: () => {
+            refetch(); // Refresh the listings after delete
+        },
+        onError: (error) => {
+            Alert.alert('Error', 'Failed to delete listing.');
+            console.error('Delete listing error:', error);
+        }
+    });
+
+    // Handler for delete button
+    const handleDelete = (item: Item) => {
+        Alert.alert(
+            'Delete Listing',
+            'Are you sure you want to delete this listing?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => deleteListing(item.id)
+                }
+            ]
+        );
+    };
 
     // --- Map API data to UI Item[] ---
     const items: Item[] = Array.isArray(listingsData?.listings)
@@ -242,17 +268,23 @@ const ProfileScreen: React.FC = () => {
                             <MaterialIcons name="edit" size={15} color={theme.textSecondary} />
                         </TouchableOpacity>
                         {item.status === 'Closed' && (
-                            <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
+                            <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}
+                            >
                                 <Ionicons name="play" size={15} color={theme.textSecondary} />
                             </TouchableOpacity>
                         )}
                         {item.status === 'Running' && (
-                            <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
+                            <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}
+                            >
                                 <Ionicons name="stop" size={15} color={theme.textSecondary} />
                             </TouchableOpacity>
                         )}
                     </View>
-                    <TouchableOpacity style={[styles.actionButton, { borderColor: theme.border }]}>
+                    <TouchableOpacity
+                        style={[styles.actionButton, { borderColor: theme.border }]}
+                        onPress={() => handleDelete(item)}
+                        disabled={isDeleting}
+                    >
                         <MaterialIcons name="delete-outline" size={15} color="#FF6B6B" />
                     </TouchableOpacity>
                 </View>
@@ -260,6 +292,17 @@ const ProfileScreen: React.FC = () => {
         </TouchableOpacity>
     );
 
+
+    // Add refreshing state for pull-to-refresh
+    const [refreshing, setRefreshing] = useState(false);
+
+    // Handler for pull-to-refresh
+    const onRefresh = async () => {
+        setRefreshing(true);
+        // Refetch the query
+        await refetch();
+        setRefreshing(false);
+    };
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -283,7 +326,19 @@ const ProfileScreen: React.FC = () => {
                     dark={dark}
                 />
 
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={['#FF0000']}
+                            tintColor="#FF0000"
+                            title="Pull to refresh"
+                            titleColor={theme.text}
+                        />
+                    }
+                >
                     {/* Profile Section */}
                     <View style={styles.profileSection}>
                         <Image

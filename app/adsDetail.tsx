@@ -18,6 +18,7 @@ import { router, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { getAdCampaignById } from '@/utils/queries/adCampaigns';
+import { useAdCampaignActions } from '@/hooks/useAdCampaignActions';
 
 // Helper: format date
 function formatDate(d: string | null | undefined) {
@@ -29,6 +30,7 @@ const AdDetailsScreen: React.FC = () => {
   const route = useRoute<any>();
   const { id } = route.params || {};
   const GoBack = () => useRouter().back();
+  const { handleEdit, handleToggleStatus, handleDelete } = useAdCampaignActions([ad]);
 
   const { dark } = useTheme();
   const colors = {
@@ -274,7 +276,8 @@ const AdDetailsScreen: React.FC = () => {
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity
+          {/* Edit Button */}
+          {/* <TouchableOpacity
             style={[
               styles.actionButton,
               {
@@ -282,10 +285,16 @@ const AdDetailsScreen: React.FC = () => {
                 borderColor: colors.border,
               }
             ]}
+            onPress={() => handleEdit({
+              ...ad,
+              id: String(ad.id),
+              type: ad.type === "boost_post" ? "social" : "marketplace", // match Ad type in hook
+            })}
           >
             <Ionicons name="create-outline" size={18} color={colors.text} />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
+          {/* Pause/Resume Button */}
           {ad?.status !== 'closed' && (
             <TouchableOpacity
               style={[
@@ -295,11 +304,21 @@ const AdDetailsScreen: React.FC = () => {
                   borderColor: colors.border,
                 }
               ]}
+              onPress={() => handleToggleStatus({
+                ...ad,
+                id: String(ad.id),
+                status: ad.status,
+              })}
             >
-              <Ionicons name="pause-outline" size={18} color={colors.text} />
+              <Ionicons
+                name={ad?.status === 'running' || ad?.status === 'active' ? "pause-outline" : "play-outline"}
+                size={18}
+                color={colors.text}
+              />
             </TouchableOpacity>
           )}
 
+          {/* Delete Button */}
           <TouchableOpacity
             style={[
               styles.actionButton,
@@ -308,16 +327,63 @@ const AdDetailsScreen: React.FC = () => {
                 borderColor: colors.border,
               }
             ]}
+            onPress={() => handleDelete({
+              ...ad,
+              id: String(ad.id),
+            })}
           >
             <Ionicons name="trash-outline" size={18} color={colors.primary} />
           </TouchableOpacity>
 
+          {/* Summary Button (unchanged, wire up if you want action) */}
           <TouchableOpacity
             style={[styles.summaryButton, { backgroundColor: colors.primary }]}
+            onPress={() => {
+              let mediaArray: Array<{ uri: string; type: 'image' | 'video'; media_type: string }> = [];
+
+              if (Array.isArray(ad?.post?.media) && ad.post.media.length > 0) {
+                mediaArray = ad.post.media.map(m => ({
+                  uri: m.url && typeof m.url === "string" ? m.url : imageUrl,
+                  type: m.media_type === "video" ? "video" : "image",
+                  media_type: m.media_type || 'image',
+                }));
+              } else {
+                // Fallback to the same image you show in the details card (imageUrl)
+                mediaArray = [{
+                  uri: imageUrl,
+                  type: "image",
+                  media_type: "image",
+                }];
+              }
+
+              if (ad?.type === "boost_post") {
+                router.push({
+                  pathname: "/MediaViewer",
+                  params: {
+                    id: ad?.post?.id,
+                    mediaArray: JSON.stringify(mediaArray),
+                    type: mediaArray[0]?.media_type === "video" ? "videos" : "posts",
+                    index: 0,
+                  }
+                });
+              } else if (ad?.type === "boost_listing") {
+                router.push({
+                  pathname: "/marketView",
+                  params: { id: ad?.listing?.id }
+                });
+              } else {
+                // Fallback to campaign id, but normally this should not run
+                router.push({
+                  pathname: "/marketView",
+                  params: { id: ad?.id }
+                });
+              }
+            }}
           >
             <Text style={styles.summaryButtonText}>Summary</Text>
           </TouchableOpacity>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
