@@ -9,15 +9,16 @@ import {
   RESULTS,
 } from 'react-native-permissions';
 export default function DailyCallScreen() {
-  const { roomUrl, type, callType } = useLocalSearchParams();
+  const { roomUrl, type, callType, channelName } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-
+  const webViewRef = React.useRef(null);
+console.log("calltype",callType,"channnel name",channelName,"type",type)
   // Use custom hosted voice-only HTML page
   // Define the URL based on call type
   const callUrl =
     callType === 'voice'
-      ? `https://hmstech.xyz/agora.html?role=caller`
+      ? `https://hmstech.xyz/agora.html?role=${type}&room=${channelName}`
       : roomUrl
 
   if (!roomUrl) return null;
@@ -46,6 +47,7 @@ export default function DailyCallScreen() {
         />
       )}
       <WebView
+        ref={webViewRef}
         source={{ uri: callUrl }}
         style={{ flex: 1 }}
         javaScriptEnabled={true}
@@ -54,16 +56,23 @@ export default function DailyCallScreen() {
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         allowsFullscreenVideo={true}
-        // VERY IMPORTANT:
-        // This enables mic/cam permissions in Android WebView
         onPermissionRequest={(event) => {
           event.grant(event.resources);
         }}
+
       />
 
-      <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-        <Text style={styles.closeText}>End Call</Text>
-      </TouchableOpacity>
+
+      <TouchableOpacity
+  onPress={() => {
+    webViewRef.current?.postMessage(JSON.stringify({ action: 'leave-call' }));
+    setTimeout(() => router.back(), 1000); // give the WebView 1s to leave
+  }}
+  style={styles.closeBtn}
+>
+  <Text style={styles.closeText}>End Call</Text>
+</TouchableOpacity>
+
     </View>
   );
 }

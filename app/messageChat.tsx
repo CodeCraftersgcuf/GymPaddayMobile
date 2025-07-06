@@ -168,6 +168,7 @@ export default function MessageChat() {
               roomUrl: call.room_url,
               type: 'receiver',
               callType: call.type,
+              channelName: call.channel_name
             },
           });
         }
@@ -211,6 +212,7 @@ export default function MessageChat() {
           roomUrl: call.room_url,
           type: 'caller',
           callType: call.type,
+          channelName: call.channel_name
         },
       });
 
@@ -250,6 +252,7 @@ export default function MessageChat() {
           roomUrl: call.room_url,
           type: 'caller',
           callType: call.type,
+          channelName:call.channel_name
         },
       });
 

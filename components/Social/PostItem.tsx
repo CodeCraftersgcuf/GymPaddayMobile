@@ -225,42 +225,38 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
       {/* <ThemeText style={styles.content}>{post.content}</ThemeText> */}
 
       {/* Image Grid */}
-      {ImagesData && ImagesData.length > 0 && (
-        <View style={styles.imageGrid}>
-          {imagesUrl.length === 1 ? (
-            <TouchableOpacity onPress={() => openImageSlider(0)}>
-              <Image source={{ uri: ImagesData[0] }} style={styles.fullWidthImage} />
-            </TouchableOpacity>
-          ) : imagesUrl.length === 3 ? (
-            <View style={styles.threeImagesGrid}>
-              <TouchableOpacity onPress={() => openImageSlider(0)} style={styles.largeImageWrapper}>
-                <Image source={{ uri: ImagesData[0] }} style={styles.largeImage} />
-              </TouchableOpacity>
-              <View style={styles.smallImagesWrapper}>
-                <TouchableOpacity onPress={() => openImageSlider(1)} style={styles.smallImageWrapper}>
-                  <Image source={{ uri: ImagesData[1] }} style={styles.smallImage} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => openImageSlider(2)} style={styles.smallImageWrapper}>
-                  <Image source={{ uri: ImagesData[2] }} style={styles.smallImage} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.twoColumnGrid}>
-              {ImagesData.slice(0, 4).map((image, index) => (
-                <TouchableOpacity key={index} onPress={() => openImageSlider(index)} style={styles.imageWrapper}>
-                  <Image source={{ uri: image }} style={styles.gridImage} />
-                  {imagesUrl.length > 4 && index === 3 && (
-                    <View style={styles.overlay}>
-                      <Text style={styles.overlayText}>+{imagesUrl.length - 4}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+   {ImagesData && ImagesData.length > 0 && (
+  <View style={styles.carouselContainer}>
+    <FlatList
+      data={ImagesData}
+      horizontal
+      pagingEnabled
+      showsHorizontalScrollIndicator={false}
+      keyExtractor={(item, index) => index.toString()}
+      renderItem={({ item, index }) => (
+        <TouchableOpacity onPress={() => openImageSlider(index)}>
+          <Image source={{ uri: item }} style={styles.carouselImage} />
+        </TouchableOpacity>
       )}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
+    />
+    {ImagesData.length > 1 && (
+      <View style={styles.carouselPagination}>
+        {ImagesData.map((_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.carouselDot,
+              currentIndex === index && styles.carouselActiveDot,
+            ]}
+          />
+        ))}
+      </View>
+    )}
+  </View>
+)}
+
 
       {/* Post Actions */}
       <View style={styles.actions}>
@@ -523,7 +519,41 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     transform: [{ rotate: '45deg' }]
-  }
+  },
+  carouselContainer: {
+  marginTop: 10,
+  position: 'relative',
+},
+carouselImage: {
+  width: width - 20,  // to account for padding
+  height: width - 20, // keep it square
+  borderRadius: 18,
+  overflow: 'hidden',
+  resizeMode: 'cover',
+},
+
+
+carouselPagination: {
+  position: 'absolute',
+  bottom: 10,
+  alignSelf: 'center',
+  flexDirection: 'row',
+  backgroundColor: 'rgba(0,0,0,0.2)',
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 20,
+},
+carouselDot: {
+  width: 8,
+  height: 8,
+  borderRadius: 4,
+  backgroundColor: 'gray',
+  marginHorizontal: 4,
+},
+carouselActiveDot: {
+  backgroundColor: '#fff',
+},
+
 });
 
 export default PostItem;

@@ -27,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
-import { useAgoraCall } from './AgoraCallScreen';
+// import { useAgoraCall } from './AgoraCallScreen';
 
 import AgoraVideoView from 'react-native-agora';
 
@@ -155,7 +155,6 @@ export default function MessageChat() {
           call &&
           call.channel_name &&
           call.status?.toLowerCase() === 'initiated' &&
-          call.id !== lastCallId
         ) {
           setLastCallId(call.id);
           console.log('Incoming call found:', call.id);
@@ -172,6 +171,7 @@ export default function MessageChat() {
                 uid: call.receiver_uid,
                 type: 'receiver',
                 channelName: call.channel_name,
+                callType:call.call_type
               },
             });
           } else if (call.call_type === 'video') {
@@ -229,6 +229,7 @@ export default function MessageChat() {
           uid: callData?.call?.caller_uid,
           type: 'caller',
           channelName: channelName,
+          callType:callData?.call?.call_type
         }
       });
 
