@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   View,
@@ -27,9 +27,26 @@ import { loginUser } from "@/utils/mutations/auth";
 
 import * as SecureStore from 'expo-secure-store';
 
-const Login = () => {
+const Login = () => {const [checkingAuth, setCheckingAuth] = React.useState(true);
+
+
   const route = useRouter();
   const { dark } = useTheme();
+useEffect(() => {
+  const checkAuth = async () => {
+    const token = await SecureStore.getItemAsync("auth_token");
+    const userData = await SecureStore.getItemAsync("user_data");
+
+    if (token && userData) {
+      console.log("✅ User already logged in. Redirecting...");
+      route.replace("/(tabs)");
+    } else {
+      setCheckingAuth(false); // allow login UI to show
+    }
+  };
+
+  checkAuth();
+}, []);
 
   const mutation = useMutation({
     mutationFn: loginUser,
@@ -73,6 +90,15 @@ const Login = () => {
     console.log("Login Data:", values);
     mutation.mutate({ data: values });
   };
+if (checkingAuth) {
+  return (
+    <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <Text style={{ fontSize: 16, color: dark ? "white" : "black" }}>
+        Checking authentication...
+      </Text>
+    </SafeAreaView>
+  );
+}
 
   return (
     <SafeAreaView style={styles.container}>

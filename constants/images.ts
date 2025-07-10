@@ -40,6 +40,8 @@ const images = {
   moreBag:require('../assets/icons/more/Bag.png'),
   moreClipboard:require('../assets/icons/more/ClipboardText.png'),
   gallery:require('../assets/images/gallery.jpg'),
+  mute:require('../assets/images/muted.png'),
+  unmute:require('../assets/images/unmute.png')
 };
 
 export default images;

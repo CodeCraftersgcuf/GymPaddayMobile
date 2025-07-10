@@ -186,7 +186,7 @@ const PostAudienceScreen: React.FC = () => {
         setDuration(newDuration);
     };
 
-    const formatCurrency = (value: number) => `N ${value.toLocaleString()}`;
+    const formatCurrency = (value: number) => `GP  ${value.toLocaleString()}`;
     const formatDuration = (value: number) => `${Math.round(value)} Days`;
 
     return (

@@ -252,7 +252,7 @@ export default function MessageChat() {
           roomUrl: call.room_url,
           type: 'caller',
           callType: call.type,
-          channelName:call.channel_name
+          channelName: call.channel_name
         },
       });
 
@@ -507,141 +507,146 @@ export default function MessageChat() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+  
       <SafeAreaView style={{ flex: 1 }}>
         {isLoading && (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         )}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0} // adjust if header overlaps input
+        >
+          {incomingCall && (
+            <VoiceCallScreenT
+              receiverId={incomingCall?.caller_id}
+              channelName={incomingCall.channel_name}
+              onCallEnded={() => {
+                setShowVoiceCall(false);
+                setIncomingCall(null);
+              }}
+            />
+          )}
 
-        {incomingCall && (
-          <VoiceCallScreenT
-            receiverId={incomingCall?.caller_id}
-            channelName={incomingCall.channel_name}
-            onCallEnded={() => {
-              setShowVoiceCall(false);
-              setIncomingCall(null);
-            }}
-          />
-        )}
+          {!isLoading && (
+            // {true && (
+            <>
+              {/* Header */}
+              <View style={[styles.header, { borderBottomColor: theme.border }]}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => router.back()}
+                >
+                  <Icon name="chevron-back" size={24} color={theme.text} />
+                </TouchableOpacity>
 
-        {!isLoading && (
-          // {true && (
-          <>
-            {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.border }]}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-              >
-                <Icon name="chevron-back" size={24} color={theme.text} />
-              </TouchableOpacity>
+                <View style={styles.userInfo}>
+                  <Image
+                    source={{ uri: otherUser?.profile_picture_url }}
+                    style={styles.userImage}
+                  />
+                  <View style={styles.userDetails}>
+                    <Text style={styles.userName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
+                    <Text style={styles.onlineStatus}>Online</Text>
+                  </View>
+                </View>
 
-              <View style={styles.userInfo}>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity style={[styles.actionButton, { backgroundColor: dark ? '#0D0D0D' : '#FAFAFA' }]} onPress={handleVoiceCall}>
+                    <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
+                    {/* <Icon name="call" size={20} color={theme.text} /> */}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
+                    <MaterialIcons name="videocam" size={20} color={theme.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Profile Card */}
+              <View style={[styles.profileCard, { backgroundColor: dark ? '#181818' : 'white' }]} >
                 <Image
                   source={{ uri: otherUser?.profile_picture_url }}
-                  style={styles.userImage}
+                  style={styles.profileImage}
                 />
-                <View style={styles.userDetails}>
-                  <Text style={styles.userName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
-                  <Text style={styles.onlineStatus}>Online</Text>
+                <Text style={styles.profileName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
+                <View style={styles.profileStats}>
+                  <View style={styles.stat}>
+                    <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
+                    <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
+                      0 Followers
+                    </Text>
+                  </View>
+                  <View style={styles.stat}>
+                    {/* <Text style={styles.statIcon}>📝</Text> */}
+                    <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
+                    <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
+                      0 Posts
+                    </Text>
+                  </View>
                 </View>
-              </View>
-
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: dark ? '#0D0D0D' : '#FAFAFA' }]} onPress={handleVoiceCall}>
-                  <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
-                  {/* <Icon name="call" size={20} color={theme.text} /> */}
+                <TouchableOpacity onPress={() => hanldeViewProfile(12)} style={styles.viewProfileButton}>
+                  <Text style={styles.viewProfileText}>View Profile</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
-                  <MaterialIcons name="videocam" size={20} color={theme.text} />
+              </View>
+
+              {/* Messages */}
+              <FlatList
+                ref={flatListRef}
+                data={messages}
+                style={styles.messagesContainer}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={true}
+                          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+
+                renderItem={renderMessage}
+                onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+              />
+
+              {/* Input Container */}
+              <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+                <TextInput
+                  style={[styles.input, {
+                    backgroundColor: theme.secondary,
+                    color: theme.text
+                  }]}
+                  placeholder="Type a message"
+                  placeholderTextColor={theme.textSecondary}
+                  value={newMessage}
+                  onChangeText={setNewMessage}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    !newMessage.trim() && styles.sendButtonDisabled
+                  ]}
+                  onPress={handleSendMessage}
+                  disabled={!newMessage.trim()}
+                >
+                  {sendMessageMutation.isLoading ? (
+                    <Text>Sending...</Text>
+                  ) : (
+                    <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"} />
+                  )}
                 </TouchableOpacity>
               </View>
-            </View>
+            </>
+          )}
 
-            {/* Profile Card */}
-            <View style={[styles.profileCard, { backgroundColor: dark ? '#181818' : 'white' }]} >
-              <Image
-                source={{ uri: otherUser?.profile_picture_url }}
-                style={styles.profileImage}
-              />
-              <Text style={styles.profileName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
-              <View style={styles.profileStats}>
-                <View style={styles.stat}>
-                  <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
-                  <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
-                    0 Followers
-                  </Text>
-                </View>
-                <View style={styles.stat}>
-                  {/* <Text style={styles.statIcon}>📝</Text> */}
-                  <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
-                  <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
-                    0 Posts
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity onPress={() => hanldeViewProfile(12)} style={styles.viewProfileButton}>
-                <Text style={styles.viewProfileText}>View Profile</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Messages */}
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              style={styles.messagesContainer}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={true}
-              renderItem={renderMessage}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-            />
-
-            {/* Input Container */}
-            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: theme.secondary,
-                  color: theme.text
-                }]}
-                placeholder="Type a message"
-                placeholderTextColor={theme.textSecondary}
-                value={newMessage}
-                onChangeText={setNewMessage}
-                multiline
-              />
-              <TouchableOpacity
-                style={[
-                  styles.sendButton,
-                  !newMessage.trim() && styles.sendButtonDisabled
-                ]}
-                onPress={handleSendMessage}
-                disabled={!newMessage.trim()}
-              >
-                {sendMessageMutation.isLoading ? (
-                  <Text>Sending...</Text>
-                ) : (
-                  <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"} />
-                )}
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
-        {/* <VideoCallPopup /> */}
-        {/* Modals */}
-        {/* {showVideoCall && <VideoCallScreen />} */}
-        {/* {showVoiceCall && <VoiceCallScreen />} */}
-        {/* <VoiceCallScreen /> */}
-        {/* {renderCallScreen()} */}
+          {/* <VideoCallPopup /> */}
+          {/* Modals */}
+          {/* {showVideoCall && <VideoCallScreen />} */}
+          {/* {showVoiceCall && <VoiceCallScreen />} */}
+          {/* <VoiceCallScreen /> */}
+          {/* {renderCallScreen()} */}
+        </KeyboardAvoidingView>
       </SafeAreaView>
-    </KeyboardAvoidingView>
+    // </KeyboardAvoidingView>
   );
 }
 

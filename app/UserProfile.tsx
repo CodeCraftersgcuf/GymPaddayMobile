@@ -39,22 +39,51 @@ const profileData = {
   avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
 };
 
+// function getMediaByType(posts, type: 'image' | 'video') {
+//   if (!Array.isArray(posts)) return [];
+//   return posts.flatMap((post, postIndex) =>
+//     (Array.isArray(post.media) ? post.media : [])
+//       .filter(mediaItem =>
+//         type === 'image'
+//           ? mediaItem.media_type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(mediaItem.url)
+//           : mediaItem.media_type === 'video' || /\.(mp4|mov|avi|webm)$/i.test(mediaItem.url)
+//       )
+//       .map((mediaItem, mediaIndex) => ({
+//         ...mediaItem,
+//         postIndex,
+//         mediaIndex,
+//       }))
+//   );
+// }
 function getMediaByType(posts, type: 'image' | 'video') {
   if (!Array.isArray(posts)) return [];
-  return posts.flatMap((post, postIndex) =>
-    (Array.isArray(post.media) ? post.media : [])
-      .filter(mediaItem =>
+
+  const seenPostIds = new Set();
+
+  return posts
+    .map((post, postIndex) => {
+      if (!Array.isArray(post.media)) return null;
+
+      const firstMedia = post.media.find((mediaItem) =>
         type === 'image'
-          ? mediaItem.media_type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(mediaItem.url)
+          ? mediaItem.media_type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(mediaItem.url)
           : mediaItem.media_type === 'video' || /\.(mp4|mov|avi|webm)$/i.test(mediaItem.url)
-      )
-      .map((mediaItem, mediaIndex) => ({
-        ...mediaItem,
-        postIndex,
-        mediaIndex,
-      }))
-  );
+      );
+
+      if (firstMedia && !seenPostIds.has(post.id)) {
+        seenPostIds.add(post.id);
+        return {
+          ...firstMedia,
+          postIndex,
+          mediaIndex: 0, // always first
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean); // remove nulls
 }
+
 
 export default function ProfileScreen() {
   // --- All hooks at the top ---

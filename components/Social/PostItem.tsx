@@ -1,5 +1,5 @@
 import { images } from "@/constants";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { getLikenDislikePost } from "@/utils/queries/socialMedia";
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import { Video } from "expo-av";
 
 
 
@@ -44,6 +45,7 @@ interface PostItemProps {
     recent_comments: any[];
     timestamp: string;
     imagesUrl: string[];
+    videoUrl?: string;
     view_count: number;
     share_count: number;
     user: {
@@ -59,6 +61,9 @@ interface PostItemProps {
 const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu }) => {
   const { dark } = useTheme();
   const router = useRouter();
+  const [isMuted, setIsMuted] = useState(true);
+  const toggleMute = () => setIsMuted(prev => !prev);
+
   const [token, setToken] = useState<string | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -71,6 +76,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
+  const videoRefs = useRef<Record<number, Video>>({});
 
 
   useEffect(() => {
@@ -106,9 +112,23 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   // Extract images from post
   const imagesUrl = post.imagesUrl;
 
+  // useEffect(() => {
+  //   setImagesData(imagesUrl);
+  // }, [post]);
   useEffect(() => {
-    setImagesData(imagesUrl);
+    const mediaArray: string[] = [];
+
+    if (post.videoUrl) {
+      mediaArray.push(post.videoUrl); // add video first
+    }
+
+    if (post.imagesUrl && post.imagesUrl.length > 0) {
+      mediaArray.push(...post.imagesUrl);
+    }
+
+    setImagesData(mediaArray);
   }, [post]);
+
 
   const handleLike = async () => {
     if (likeLoading || !token) return;
@@ -138,15 +158,32 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   };
 
   const openImageSlider = (index: number) => {
+    const isVideo = ImagesData[index] === post.videoUrl;
+    if (isVideo) return; // ⛔ don't open modal for video
     setSelectedImage(index);
     setCurrentIndex(index);
     setModalVisible(true);
   };
 
+  // const handleScroll = (event: any) => {
+  //   const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+  //   setCurrentIndex(newIndex);
+  // };
   const handleScroll = (event: any) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
     setCurrentIndex(newIndex);
+
+    Object.keys(videoRefs.current).forEach((key) => {
+      const ref = videoRefs.current[parseInt(key)];
+      if (parseInt(key) === newIndex) {
+        ref?.playAsync();
+      } else {
+        ref?.pauseAsync();
+      }
+    });
   };
+
+
   const formatTimestamp = (timestamp) => {
     const postDate = new Date(timestamp);
     return `${formatDistanceToNow(postDate)} ago`; // "20 minutes ago"
@@ -225,37 +262,65 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
       {/* <ThemeText style={styles.content}>{post.content}</ThemeText> */}
 
       {/* Image Grid */}
-   {ImagesData && ImagesData.length > 0 && (
-  <View style={styles.carouselContainer}>
-    <FlatList
-      data={ImagesData}
-      horizontal
-      pagingEnabled
-      showsHorizontalScrollIndicator={false}
-      keyExtractor={(item, index) => index.toString()}
-      renderItem={({ item, index }) => (
-        <TouchableOpacity onPress={() => openImageSlider(index)}>
-          <Image source={{ uri: item }} style={styles.carouselImage} />
-        </TouchableOpacity>
-      )}
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
-    />
-    {ImagesData.length > 1 && (
-      <View style={styles.carouselPagination}>
-        {ImagesData.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.carouselDot,
-              currentIndex === index && styles.carouselActiveDot,
-            ]}
+      {ImagesData && ImagesData.length > 0 && (
+        <View style={styles.carouselContainer}>
+          <FlatList
+            data={ImagesData}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item, index }) => {
+              const isVideo = item === post.videoUrl;
+
+              return isVideo ? (
+                <View style={styles.carouselImage}>
+                  <Video
+                    ref={(ref) => {
+                      if (ref) videoRefs.current[index] = ref;
+                    }}
+                    source={{ uri: item }}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode="cover"
+                    isLooping
+                    isMuted={isMuted}
+                  />
+
+                  {/* Mute/Unmute button */}
+                  <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
+                    <Image
+                      source={isMuted ? images.mute : images.unmute}
+                      style={styles.muteIcon}
+                    />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity onPress={() => openImageSlider(index)}>
+                  <Image source={{ uri: item }} style={styles.carouselImage} />
+                </TouchableOpacity>
+              );
+
+            }}
+
+
+            onMomentumScrollEnd={handleScroll}
+            scrollEventThrottle={16}
           />
-        ))}
-      </View>
-    )}
-  </View>
-)}
+          {ImagesData.length > 1 && (
+            <View style={styles.carouselPagination}>
+              {ImagesData.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.carouselDot,
+                    currentIndex === index && styles.carouselActiveDot,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      )}
 
 
       {/* Post Actions */}
@@ -521,37 +586,51 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }]
   },
   carouselContainer: {
-  marginTop: 10,
-  position: 'relative',
-},
-carouselImage: {
-  width: width - 20,  // to account for padding
-  height: width - 20, // keep it square
-  borderRadius: 18,
-  overflow: 'hidden',
-  resizeMode: 'cover',
-},
+    marginTop: 10,
+    position: 'relative',
+  },
+  carouselImage: {
+    width: width - 20,  // to account for padding
+    height: width - 20, // keep it square
+    borderRadius: 18,
+    overflow: 'hidden',
+    resizeMode: 'cover',
+  },
 
 
-carouselPagination: {
+  carouselPagination: {
+    position: 'absolute',
+    bottom: 10,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  carouselDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'gray',
+    marginHorizontal: 4,
+  },
+  carouselActiveDot: {
+    backgroundColor: '#fff',
+  },
+muteButton: {
   position: 'absolute',
   bottom: 10,
-  alignSelf: 'center',
-  flexDirection: 'row',
-  backgroundColor: 'rgba(0,0,0,0.2)',
-  paddingHorizontal: 10,
-  paddingVertical: 5,
+  right: 10,
+  backgroundColor: 'rgba(0,0,0,0.5)',
+  padding: 8,
   borderRadius: 20,
 },
-carouselDot: {
-  width: 8,
-  height: 8,
-  borderRadius: 4,
-  backgroundColor: 'gray',
-  marginHorizontal: 4,
-},
-carouselActiveDot: {
-  backgroundColor: '#fff',
+
+muteIcon: {
+  width: 20,
+  height: 20,
+  tintColor: '#fff',
 },
 
 });
