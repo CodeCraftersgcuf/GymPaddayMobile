@@ -181,7 +181,7 @@ export default function More() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : '#FAFAFA' }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
@@ -208,7 +208,7 @@ export default function More() {
         {/* Settings Section */}
         <View style={styles.settingsSection}>
           <ThemeText lightColor='#8E8E93' style={styles.sectionTitle}>Settings</ThemeText>
-          <ThemedView lightColor='#ffffff' darkColor='#181818' style={styles.settingsContainer}>
+          <ThemedView lightColor='#FAFAFA' darkColor='#181818' style={styles.settingsContainer}>
             {settingsData.map((item) => (
               <SettingItem
                 key={item.id}
@@ -235,7 +235,7 @@ export default function More() {
                 onPress={() => setopenTheme(!openTheme)}
               />
               {openTheme && (
-                <View style={{ padding: 10, backgroundColor: dark ? '#222' : '#f0f0f0', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                <View style={{ padding: 10, backgroundColor: dark ? '#222' : '#FAFAFA', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                   <SettingItem
                     item={{
                       id: 'light-theme',

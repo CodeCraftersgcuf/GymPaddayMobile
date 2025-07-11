@@ -71,6 +71,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalVisibleBottomSheet, setModalVisibleBottomSheet] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
@@ -284,9 +287,49 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
                     resizeMode="cover"
                     isLooping
                     isMuted={isMuted}
+                    shouldPlay={isPlaying}
+                    onLoadStart={() => setIsBuffering(true)}
+                    onLoad={() => setIsBuffering(false)}
+                    onPlaybackStatusUpdate={(status) => {
+                      if ('isPlaying' in status) {
+                        setIsPlaying(status.isPlaying);
+                      }
+                    }}
                   />
 
-                  {/* Mute/Unmute button */}
+                  {/* Loader */}
+                  {isBuffering && (
+                    <ActivityIndicator
+                      size="large"
+                      color="#fff"
+                      style={styles.videoLoader}
+                    />
+                  )}
+
+                  {/* Play Button */}
+                  {!isBuffering && (
+                    <TouchableOpacity
+                      style={styles.playButton}
+                      onPress={async () => {
+                        const ref = videoRefs.current[index];
+                        if (ref) {
+                          if (isPlaying) {
+                            await ref.pauseAsync();
+                          } else {
+                            await ref.playAsync();
+                          }
+                        }
+                      }}
+                    >
+                      <Image
+                        source={isPlaying ? images.pauseIcon : images.playIcon}
+                        style={styles.playIcon}
+                      />
+                    </TouchableOpacity>
+                  )}
+
+
+                  {/* Mute Button */}
                   <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
                     <Image
                       source={isMuted ? images.mute : images.unmute}
@@ -294,6 +337,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
                     />
                   </TouchableOpacity>
                 </View>
+
               ) : (
                 <TouchableOpacity onPress={() => openImageSlider(index)}>
                   <Image source={{ uri: item }} style={styles.carouselImage} />
@@ -432,6 +476,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  videoLoader: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+  },
+
+  playButton: {
+    position: 'absolute',
+    top: '45%',
+    left: '40%',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 30,
+    padding: 15,
+  },
+
+  playIcon: {
+    width: 30,
+    height: 30,
+  tintColor: '#FF0000',
   },
   profileImage: {
     width: 40,
@@ -618,20 +683,20 @@ const styles = StyleSheet.create({
   carouselActiveDot: {
     backgroundColor: '#fff',
   },
-muteButton: {
-  position: 'absolute',
-  bottom: 10,
-  right: 10,
-  backgroundColor: 'rgba(0,0,0,0.5)',
-  padding: 8,
-  borderRadius: 20,
-},
+  muteButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 8,
+    borderRadius: 20,
+  },
 
-muteIcon: {
-  width: 20,
-  height: 20,
-  tintColor: '#fff',
-},
+  muteIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#fff',
+  },
 
 });
 

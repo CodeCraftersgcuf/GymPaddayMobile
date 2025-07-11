@@ -23,7 +23,7 @@ export default function Chat() {
   const router = useRouter();
   const { dark } = useTheme();
   const { users } = useMessages();
-const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSocialModal, setShowSocialModal] = useState(false);
@@ -87,15 +87,15 @@ const [selectedType, setSelectedType] = useState<string | null>(null);
       : users;
 
   // Filtering by username or last message
-const filteredConversations = apiConversations
-  .filter((conv) =>
-    conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-  .filter((conv) => {
-    if (!selectedType) return true; // no filter applied
-    return conv.type === selectedType;
-  });
+  const filteredConversations = apiConversations
+    .filter((conv) =>
+      conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .filter((conv) => {
+      if (!selectedType) return true; // no filter applied
+      return conv.type === selectedType;
+    });
 
   // AvatarList: use users from context (not API)
   const handleAvatarPress = (userId: string) => {
@@ -137,11 +137,11 @@ const filteredConversations = apiConversations
     setRefreshing(false);
   }, [refetch]);
 
-const socialOptions = ['all', 'marketplace', 'social'];
+  const socialOptions = ['all', 'marketplace', 'social'];
 
   return (
     <SafeAreaView style={styles.container}>
-      <ThemedView style={styles.content} darkColor={dark ? '#000' : 'white'}>
+      <ThemedView style={styles.content} darkColor={dark ? '#000' : '#FAFAFA'}>
         <Header onBack={() => router.back()} onOpenSocials={() => setShowSocialModal(true)} />
         <SearchBar query={searchQuery} onChange={setSearchQuery} />
         {/* Show loading indicator while users are loading */}
@@ -173,10 +173,10 @@ const socialOptions = ['all', 'marketplace', 'social'];
         visible={showSocialModal}
         onClose={() => setShowSocialModal(false)}
         options={socialOptions}
-         onSelect={(type) => {
-    setSelectedType(type === 'all' ? null : type); // clear filter if all
-    setShowSocialModal(false);
-  }}
+        onSelect={(type) => {
+          setSelectedType(type === 'all' ? null : type); // clear filter if all
+          setShowSocialModal(false);
+        }}
 
       />
     </SafeAreaView>
@@ -186,7 +186,7 @@ const socialOptions = ['all', 'marketplace', 'social'];
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'tranxsparent',
+    // backgroundColor: 'tranxsparent',
   },
   content: {
     flex: 1,

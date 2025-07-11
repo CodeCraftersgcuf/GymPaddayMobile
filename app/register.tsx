@@ -26,6 +26,7 @@ import { useMutation } from "@tanstack/react-query";
 import { registerUser } from "@/utils/mutations/auth";
 import Toast from "react-native-toast-message";
 import { showApiErrorToast } from "@/utils/showApiErrorToast";
+import * as ImagePicker from 'expo-image-picker';
 
 
 
@@ -54,22 +55,51 @@ export default function Register() {
   themedark = dark;
   const router = useRouter();
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const pickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      alert("Permission to access camera roll is required!");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setProfileImage(result.assets[0].uri);
+    }
+  };
 
   const handleRegister = (values: any) => {
-    console.log("Register Data:", values);
-    mutation.mutate({
-      data: {
-        username: values.username,
-        fullname: values.fullName,
-        email: values.email,
-        phone: values.phone,
-        age: parseInt(values.age),
-        gender: values.gender.toLowerCase(), // fix here 👈
-        password: values.password,
-        password_confirmation: values.password,
-      },
-    });
-  };
+  const formData = new FormData();
+
+  formData.append('username', values.username);
+  formData.append('fullname', values.fullName);
+  formData.append('email', values.email);
+  formData.append('phone', values.phone);
+  formData.append('age', values.age.toString());
+  formData.append('gender', values.gender.toLowerCase());
+  formData.append('password', values.password);
+  formData.append('password_confirmation', values.password);
+
+  if (profileImage) {
+    const uriParts = profileImage.split('.');
+    const fileType = uriParts[uriParts.length - 1];
+
+    formData.append('profile_picture', {
+      uri: profileImage,
+      name: `profile.${fileType}`,
+      type: `image/${fileType}`,
+    } as any);
+  }
+
+  mutation.mutate({ data: formData });
+};
 
 
   const handleSheetChanges = useCallback((index: number) => {
@@ -210,6 +240,18 @@ export default function Register() {
               <ThemedView style={styles.logoContainer}>
                 <Image source={images.logo} style={styles.logo} />
               </ThemedView>
+              <TouchableOpacity onPress={pickImage} style={{ alignSelf: 'center', marginBottom: 20 }}>
+                <Image
+                  source={profileImage || require('../assets/images/placeholder.png')} // 👈 Add placeholder fallback
+                  style={{
+                    width: 100,
+                    height: 100,
+                    borderRadius: 50,
+                    borderWidth: 2,
+                    borderColor: '#FF0000',
+                  }}
+                />
+              </TouchableOpacity>
 
               <ThemedView style={styles.formContainer}>
                 <ThemeText style={styles.title}>Register</ThemeText>
