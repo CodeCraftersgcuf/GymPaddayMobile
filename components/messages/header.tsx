@@ -47,10 +47,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
+     borderWidth:0.1,
     borderRadius: 20,
+    //  paddingVertical:2,
+    // paddingHorizontal:10,borderRadius:10
   },
   socialsButtonText: {
     fontSize: 14,
     marginRight: 4,
+   
+   
   },
 });

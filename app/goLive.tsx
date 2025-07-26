@@ -28,7 +28,7 @@ export default function HomeScreen() {
     const [showBuySuccess, setShowBuySuccess] = useState(false);
     const [boughtMinutes, setBoughtMinutes] = useState('');
     const [showBuyModal, setShowBuyModal] = useState(false);
-    const [channelInfo, setChannelInfo] = useState<{ title: string; agora_channel: string,id?:string } | null>(null);
+    const [channelInfo, setChannelInfo] = useState<{ title: string; agora_channel: string, id?: string } | null>(null);
 
     const handleProceed = async () => {
         try {
@@ -48,7 +48,7 @@ export default function HomeScreen() {
             setChannelInfo({
                 title: res.title,
                 agora_channel: res.agora_channel,
-                id:res.id
+                id: res.id
             });
 
             setIsLive(true); // will trigger LiveStreamingView
@@ -72,10 +72,38 @@ export default function HomeScreen() {
         // buySheetRef.current?.expand();
         setShowBuyModal(true);
     };
-    const handleBuy = (amount: string) => {
-        setShowBuyModal(false);
-        setBoughtMinutes(amount);
-        setShowBuySuccess(true);
+    const handleBuy = async (amount: string) => {
+        try {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) throw new Error('Token not found');
+
+            const response = await fetch('https://gympaddy.hmstech.xyz/api/user/minutes/purchase', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ minutes: Number(amount) }), // send as number
+            });
+
+            if (!response.ok) {
+                const errRes = await response.json();
+                console.error('❌ Purchase failed:', errRes);
+                alert('Purchase failed: ' + (errRes.message || 'Unknown error'));
+                return;
+            }
+
+            const data = await response.json();
+            console.log('✅ Purchase successful:', data);
+
+            setShowBuyModal(false);
+            setBoughtMinutes(amount);
+            setShowBuySuccess(true);
+        } catch (error) {
+            console.error('❌ Error purchasing minutes:', error);
+            alert('Error purchasing minutes. Please try again.');
+        }
     };
     const handleCloseBuySuccess = () => setShowBuySuccess(false);
 

@@ -50,9 +50,6 @@ const ReviewAdScreen: React.FC = () => {
     const params = useLocalSearchParams();
     const [loadingBalance, setLoadingBalance] = useState(true);
     const [balance, setBalance] = useState<number>(0);
-
-    // audience is expected as an array: [selectedGender, minAge, maxAge, budget, duration, location, postId]
-    // If passed as a string (comma-separated), split it
     let audienceArray: (string | number)[] = [];
     if (Array.isArray(params.audience)) {
         audienceArray = params.audience as (string | number)[];
@@ -129,50 +126,6 @@ const ReviewAdScreen: React.FC = () => {
     useEffect(() => {
         getToken();
     }, []);
-
-
-    //   const boostMutation = useMutation({
-    //   mutationFn: async () => {
-    //     if (!token) throw new Error('No auth token');
-    //     const id = Number(audience.postId);
-    //     const data = {
-    //       amount: Number(audience.budget),
-    //       duration: Number(audience.duration),
-    //       location: audience.location || null,
-    //       age_min: Number(audience.minAge) || null,
-    //       age_max: Number(audience.maxAge) || null,
-    //       gender: (audience.selectedGender || '').toLowerCase() as "all" | "male" | "female" | null,
-    //     };
-
-    //     // This is the ONLY change:
-    //     if (isMarketBool) {
-    //       return await createBoostedListing({ id, data, token });
-    //     } else {
-    //       return await createBoostedPost({ id, data, token });
-    //     }
-    //   },
-    //   onSuccess: (res) => {
-    //     Toast.show({
-    //       type: 'success',
-    //       text1: 'Boosted!',
-    //       text2: 'Your post has been boosted successfully',
-    //       visibilityTime: 500,
-    //     });
-    //     setTimeout(() => {
-    //       route.push('/BoostPostScreen_Final');
-    //     }, 500);
-    //   },
-    //   onError: (error: any) => {
-    //     Toast.show({
-    //       type: 'error',
-    //       text1: 'Boost Failed',
-    //       text2: error?.message || 'Failed to boost post',
-    //       visibilityTime: 2000,
-    //     });
-    //   }
-    // });
-
-    // Convert isEditable param to boolean
     const isEditableBool =
         typeof isEditable === 'string'
             ? isEditable === 'true'
@@ -240,7 +193,7 @@ const ReviewAdScreen: React.FC = () => {
                 visibilityTime: 500,
             });
             setTimeout(() => {
-                route.push('/BoostPostScreen_Final');
+                route.push('/(tabs)');
             }, 500);
         },
         onError: (error: any) => {
@@ -295,7 +248,20 @@ const ReviewAdScreen: React.FC = () => {
             <ScrollView style={styles.content}>
                 <Text style={[styles.subtitle, { color: theme.text }]}>Your ad is almost ready</Text>
 
-                <ReviewItem icon="image" title="Ad Preview" value="" onEdit={() => { }} />
+                <ReviewItem
+                    icon="image"
+                    title="Ad Preview"
+                    value=""
+                    onEdit={() => {
+                        route.push({
+                            pathname: '/AdPreview',
+                            params: {
+                                postId: audience.postId,
+                                campaignId: campaignId
+                            }
+                        });
+                    }}
+                />
 
                 <ReviewItem icon="location-on" title={audience.location} value="" onEdit={() => route.back()} />
 

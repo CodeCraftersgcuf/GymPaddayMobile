@@ -5,11 +5,12 @@ import { PostData } from './mockData';
 
 interface PostContainerProps {
   posts: PostData[];
+  showComment?:boolean
   onCommentPress: (comments: any[], postId: number) => void;
   handleMenu:(userId: number | string, postId: number) => void;
 }
 
-const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,handleMenu }) => {
+const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,handleMenu,showComment=true }) => {
   // console.log("PostContainer posts:", posts);
   return (
     <FlatList
@@ -18,6 +19,7 @@ const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,han
       renderItem={({ item }) => (
         <PostItem
           post={item}
+          showComment={showComment}
           onCommentPress={onCommentPress}
           handleMenu={handleMenu}
         />

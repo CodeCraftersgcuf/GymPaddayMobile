@@ -59,9 +59,9 @@ export default function SettingItem({ item, onPress }: SettingItemProps) {
       ]}>
         {item.title}
       </Text>
-      {item.icon !== 'sun' && item.icon !== 'moon' && (
+      {/* {item.icon !== 'sun' && item.icon !== 'moon' && (
         <AntDesign name="right" size={16} color="#C7C7CC" />
-      )}
+      )} */}
     </TouchableOpacity>
   );
 }
@@ -70,9 +70,14 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
+    // paddingVertical: 16,
+    // paddingHorizontal: 20,
+    padding:6,
+    // borderBottomWidth: 1,
+    marginBottom:8,
+    borderWidth:0.3,
+    borderColor:'#B8B8B8',
+    borderRadius:10
   },
   iconContainer: {
     width: 36,

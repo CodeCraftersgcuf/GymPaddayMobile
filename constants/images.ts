@@ -41,7 +41,9 @@ const images = {
   moreClipboard:require('../assets/icons/more/ClipboardText.png'),
   gallery:require('../assets/images/gallery.jpg'),
   mute:require('../assets/images/muted.png'),
-  unmute:require('../assets/images/unmute.png')
+  unmute:require('../assets/images/unmute.png'),
+  playIcon:require('../assets/images/player.png'),
+  pauseIcon:require('../assets/images/pause.png')
 };
 
 export default images;

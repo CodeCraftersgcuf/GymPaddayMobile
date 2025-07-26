@@ -61,7 +61,6 @@ export default function MessageChat() {
   };
   const getUserData = async () => {
     return await SecureStore.getItemAsync('user_data');
-    console.log("User data:", user_id);
   };
   const {
     data,
@@ -150,7 +149,8 @@ export default function MessageChat() {
         });
 
         const { call } = await res.json();
-        console.log('Incoming call:', call);
+        // console.log('Incoming call:', call);
+
 
         if (
           call &&
@@ -159,7 +159,7 @@ export default function MessageChat() {
           call.id !== lastCallId
         ) {
           setLastCallId(call.id);
-          console.log('New incoming call detected');
+          // console.log('New incoming call detected');
 
           // Navigate to DailyCallScreen as receiver
           router.push({
@@ -173,7 +173,7 @@ export default function MessageChat() {
           });
         }
       } catch (error) {
-        console.log('Incoming call check failed:', error);
+        // console.log('Incoming call check failed:', error);
       }
     }, 3000); // check every 3 seconds
 
@@ -183,43 +183,62 @@ export default function MessageChat() {
 
 
   const handleVideoCall = async () => {
+     try {
+    const receiverId = user_id; // Make sure this is defined
+    const token = await SecureStore.getItemAsync('auth_token');
+
+    if (!token) throw new Error('Authentication token not found');
+      console.log("hanndled video clicked")
+    router.push({
+      pathname: '/StreamCallInitiateScreen',
+      params: {
+        receiver_id: receiverId,
+        call_type: 'video',
+      },
+    });
+
+  } catch (err: any) {
+    console.error('Video call error:', err);
+    Alert.alert('Call Error', err.message || 'Unknown error');
+  }
     // setShowVideoCallPopup(true);
-    try {
-      const receiverId = user_id;
-      const token = await getToken();
 
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-daily-call', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          receiver_id: receiverId,
-          type: 'video', // or 'video'
-        }),
-      });
+    // try {
+    //   const receiverId = user_id;
+    //   const token = await getToken();
 
-      const { call } = await response.json();
+    //   const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-daily-call', {
+    //     method: 'POST',
+    //     headers: {
+    //       'Authorization': `Bearer ${token}`,
+    //       'Content-Type': 'application/json',
+    //     },
+    //     body: JSON.stringify({
+    //       receiver_id: receiverId,
+    //       type: 'video', // or 'video'
+    //     }),
+    //   });
 
-      if (!response.ok || !call?.room_url) {
-        throw new Error('Call initiation failed');
-      }
+    //   const { call } = await response.json();
 
-      router.push({
-        pathname: '/daily-call-screen',
-        params: {
-          roomUrl: call.room_url,
-          type: 'caller',
-          callType: call.type,
-          channelName: call.channel_name
-        },
-      });
+    //   if (!response.ok || !call?.room_url) {
+    //     throw new Error('Call initiation failed');
+    //   }
 
-    } catch (err) {
-      console.error('Voice call error:', err);
-      Alert.alert('Call Error', err.message || 'Unknown error');
-    }
+    //   router.push({
+    //     pathname: '/daily-call-screen',
+    //     params: {
+    //       roomUrl: call.room_url,
+    //       type: 'caller',
+    //       callType: call.type,
+    //       channelName: call.channel_name
+    //     },
+    //   });
+
+    // } catch (err) {
+    //   console.error('Voice call error:', err);
+    //   Alert.alert('Call Error', err.message || 'Unknown error');
+    // }
   };
   const [channelName, setChannelName] = useState('');
 

@@ -97,13 +97,14 @@ const styles = StyleSheet.create({
     margin: 20,
     marginVertical: 20,
   },
-  overlay: {
-    width: '100%',
-    flex:1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
+overlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)', // ✅ this dims the background
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+
   container: {
     width:"100%",
     borderRadius: 20,

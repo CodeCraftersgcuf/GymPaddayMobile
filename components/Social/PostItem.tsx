@@ -54,11 +54,12 @@ interface PostItemProps {
       profile_picture: string
     };
   };
+  showComment?: boolean
   onCommentPress: (value: any[], postId: number) => void;
   handleMenu: (userId: number | string, postId: number) => void;
 }
 
-const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu }) => {
+const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, showComment }) => {
   const { dark } = useTheme();
   const router = useRouter();
   const [isMuted, setIsMuted] = useState(true);
@@ -71,6 +72,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalVisibleBottomSheet, setModalVisibleBottomSheet] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
@@ -208,32 +212,72 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
   };
 
   // Download image to device gallery
+  // const handleDownload = async () => {
+  //   try {
+  //     if (!post.imagesUrl || post.imagesUrl.length === 0) {
+  //       Alert.alert('No image', 'No image to download.');
+  //       return;
+  //     }
+  //     const imageUrl = post.imagesUrl[0];
+  //     // Ask for permission if needed
+  //     if (Platform.OS === 'android') {
+  //       const { status } = await MediaLibrary.requestPermissionsAsync();
+  //       if (status !== 'granted') {
+  //         Alert.alert('Permission required', 'Please allow media library access to save images.');
+  //         return;
+  //       }
+  //     }
+  //     const fileUri = FileSystem.cacheDirectory + imageUrl.split('/').pop();
+  //     const downloadResumable = FileSystem.createDownloadResumable(imageUrl, fileUri);
+  //     const { uri } = await downloadResumable.downloadAsync();
+  //     const asset = await MediaLibrary.createAssetAsync(uri);
+  //     await MediaLibrary.createAlbumAsync('Download', asset, false);
+  //     Alert.alert('Downloaded', 'Image saved to your gallery.');
+  //   } catch (error) {
+  //     Alert.alert('Download Error', 'Failed to download image.');
+  //     console.error('Download error:', error);
+  //   }
+  // };
   const handleDownload = async () => {
     try {
-      if (!post.imagesUrl || post.imagesUrl.length === 0) {
-        Alert.alert('No image', 'No image to download.');
+      const currentMedia = ImagesData[currentIndex];
+      if (!currentMedia) {
+        Alert.alert('No media', 'No image or video to download.');
         return;
       }
-      const imageUrl = post.imagesUrl[0];
-      // Ask for permission if needed
+
+      const fileExtension = currentMedia.split('.').pop();
+      const fileName = currentMedia.split('/').pop();
+      const fileUri = FileSystem?.cacheDirectory + fileName;
+
+      // Request permission
       if (Platform.OS === 'android') {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission required', 'Please allow media library access to save images.');
+          Alert.alert('Permission required', 'Please allow media library access to save files.');
           return;
         }
       }
-      const fileUri = FileSystem.cacheDirectory + imageUrl.split('/').pop();
-      const downloadResumable = FileSystem.createDownloadResumable(imageUrl, fileUri);
+
+      // Download
+      const downloadResumable = FileSystem.createDownloadResumable(currentMedia, fileUri);
       const { uri } = await downloadResumable.downloadAsync();
+
+      // Save to media library
       const asset = await MediaLibrary.createAssetAsync(uri);
       await MediaLibrary.createAlbumAsync('Download', asset, false);
-      Alert.alert('Downloaded', 'Image saved to your gallery.');
+
+      Alert.alert('Downloaded', `${fileExtension?.includes('mp4') ? 'Video' : 'Image'} saved to your gallery.`);
     } catch (error) {
-      Alert.alert('Download Error', 'Failed to download image.');
+      Alert.alert('Download Error', 'Failed to download media.');
       console.error('Download error:', error);
     }
   };
+  const WORD_LIMIT = 25;
+  const words = post?.content?.trim().split(' ');
+  const shouldTruncate = words?.length > WORD_LIMIT;
+  const trimmedText = words?.slice(0, WORD_LIMIT).join(' ');
+  const isDefaultImage = !post.user.profile_picture;
 
   return (
     <View style={styles.postContainer}>
@@ -241,7 +285,18 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
       <View style={styles.header}>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.push({ pathname: '/UserProfile', params: { user_id: post.user.id.toString() } })}>
           <View style={styles.headerLeft}>
-            <Image source={{ uri: post.user.profile_picture }} style={styles.profileImage} />
+            <Image
+              source={
+                post.user.profile_picture
+                  ? { uri: post.user.profile_picture }
+                  : require('../../assets/icons/more/User.png')
+              }
+              style={[
+                styles.profileImage,
+                isDefaultImage && { tintColor: 'black' },
+              ]}
+            />
+
             <View>
               <ThemeText style={styles.username}>{post.user.username}</ThemeText>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -284,9 +339,49 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
                     resizeMode="cover"
                     isLooping
                     isMuted={isMuted}
+                    shouldPlay={isPlaying}
+                    onLoadStart={() => setIsBuffering(true)}
+                    onLoad={() => setIsBuffering(false)}
+                    onPlaybackStatusUpdate={(status) => {
+                      if ('isPlaying' in status) {
+                        setIsPlaying(status.isPlaying);
+                      }
+                    }}
                   />
 
-                  {/* Mute/Unmute button */}
+                  {/* Loader */}
+                  {isBuffering && (
+                    <ActivityIndicator
+                      size="large"
+                      color="#fff"
+                      style={styles.videoLoader}
+                    />
+                  )}
+
+                  {/* Play Button */}
+                  {!isBuffering && (
+                    <TouchableOpacity
+                      style={styles.playButton}
+                      onPress={async () => {
+                        const ref = videoRefs.current[index];
+                        if (ref) {
+                          if (isPlaying) {
+                            await ref.pauseAsync();
+                          } else {
+                            await ref.playAsync();
+                          }
+                        }
+                      }}
+                    >
+                      <Image
+                        source={isPlaying ? images.pauseIcon : images.playIcon}
+                        style={styles.playIcon}
+                      />
+                    </TouchableOpacity>
+                  )}
+
+
+                  {/* Mute Button */}
                   <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
                     <Image
                       source={isMuted ? images.mute : images.unmute}
@@ -294,6 +389,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
                     />
                   </TouchableOpacity>
                 </View>
+
               ) : (
                 <TouchableOpacity onPress={() => openImageSlider(index)}>
                   <Image source={{ uri: item }} style={styles.carouselImage} />
@@ -336,11 +432,11 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
             {likeLoading && <ActivityIndicator size="small" color="#ff4444" style={{ marginLeft: 8 }} />}
           </TouchableOpacity>
 
-
-          <TouchableOpacity style={styles.actionItem} onPress={handlePress}>
+          {showComment && <TouchableOpacity style={styles.actionItem} onPress={handlePress}>
             <Image source={images.comment} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
             <ThemeText style={styles.actionText}>{post.recent_comments.length}</ThemeText>
-          </TouchableOpacity>
+          </TouchableOpacity>}
+
 
           <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
             <Image source={images.Share} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
@@ -353,27 +449,22 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu })
           </TouchableOpacity>
         </ThemedView>
       </View>
-      <Text
-        numberOfLines={isExpanded ? undefined : 2}
-        onTextLayout={(e) => {
-          // Detect if content exceeds 2 lines
-          if (e.nativeEvent.lines.length > 2 && !showSeeMore) {
-            setShowSeeMore(true);
-          }
-        }}
-        style={styles.content}
-      >
-        {post.content}
-      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        <Text style={[styles.content,{color:dark?'white':'black'}]}>
+          {isExpanded || !shouldTruncate ? post.content : `${trimmedText}... `}
+          {shouldTruncate && (
+            <Text
+              onPress={() => setIsExpanded(!isExpanded)}
+              style={{ color: dark ? '#fff' : '#000', fontWeight: '600' }}
+            >
+              {isExpanded ? 'See less' : 'See more'}
+            </Text>
+          )}
+        </Text>
+      </View>
 
-      {showSeeMore && (
-        <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
-          <Text style={{ color: '#007BFF', marginTop: -4 }}>
-            {isExpanded ? 'See less' : 'See more'}
-          </Text>
-        </TouchableOpacity>
 
-      )}
+
 
       {/* Full-Screen Image Slider Modal */}
       <Modal visible={modalVisible} transparent={true} animationType="fade">
@@ -432,6 +523,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  videoLoader: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+  },
+
+  playButton: {
+    position: 'absolute',
+    top: '45%',
+    left: '40%',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 30,
+    padding: 15,
+  },
+
+  playIcon: {
+    width: 30,
+    height: 30,
+    tintColor: '#FF0000',
   },
   profileImage: {
     width: 40,
@@ -618,20 +730,20 @@ const styles = StyleSheet.create({
   carouselActiveDot: {
     backgroundColor: '#fff',
   },
-muteButton: {
-  position: 'absolute',
-  bottom: 10,
-  right: 10,
-  backgroundColor: 'rgba(0,0,0,0.5)',
-  padding: 8,
-  borderRadius: 20,
-},
+  muteButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 8,
+    borderRadius: 20,
+  },
 
-muteIcon: {
-  width: 20,
-  height: 20,
-  tintColor: '#fff',
-},
+  muteIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#fff',
+  },
 
 });
 

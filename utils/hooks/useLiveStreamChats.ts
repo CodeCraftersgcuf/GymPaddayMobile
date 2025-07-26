@@ -9,8 +9,8 @@ export const useLiveStreamChats = (liveStreamId: string) => {
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
-
-      const response = await fetch(`https://gympaddry.hmstech.xyz/api/user/live-streams/${liveStreamId}/chats`, {
+      console.log("Live Stream Id in ",liveStreamId)
+      const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/live-streams/${liveStreamId}/chats`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -18,7 +18,7 @@ export const useLiveStreamChats = (liveStreamId: string) => {
       });
 
       const res = await response.json();
-      console.log("response is ",res)
+      console.log("response fpor charr  ",res)
       if (!response.ok) throw new Error(res.message || 'Failed to fetch chats');
 
       return res.data; // Laravel returns { status: true, data: [...] }

@@ -65,9 +65,9 @@ export default function SocialFeedScreen() {
       return response; // ← this will be in `data`
     },
   });
- const [groupedStories, setGroupedStories] = useState<GroupedUserStories[]>([]);
+  const [groupedStories, setGroupedStories] = useState<GroupedUserStories[]>([]);
   const [loading, setLoading] = useState(true);
-const getToken = async () => {
+  const getToken = async () => {
     return await SecureStore.getItemAsync('auth_token');
   }
   useEffect(() => {
@@ -80,9 +80,18 @@ const getToken = async () => {
         });
 
         const json = await response.json();
-        const stories: StoryItem[] = json.stories;
-        const grouped = groupStoriesByUser(stories);
-        setGroupedStories(grouped);
+        // const stories: StoryItem[] = json.stories;
+        const { stories = [], my_stories = [] } = json;
+
+        const groupedStories = groupStoriesByUser(stories); // stories from followed users
+        const myGroupedStories = groupStoriesByUser(my_stories); // your stories (ideally just one user)
+
+        setGroupedStories([
+          ...myGroupedStories, // show your story first
+          ...groupedStories,
+        ]);
+
+        // setGroupedStories(grouped);
       } catch (err) {
         console.error('Error fetching stories:', err);
       } finally {
@@ -107,7 +116,7 @@ const getToken = async () => {
     },
     enabled: !!currentPostId && commentModalVisible,
   });
-  console.log("The Comments Data:", commentData);
+  // console.log("The Comments Data:", commentData);
 
   const {
     mutate: addComment,
@@ -160,7 +169,7 @@ const getToken = async () => {
         })) || [],
       }));
 
-      console.log('✅ Formatted posts', formatted);
+      // console.log('✅ Formatted posts', formatted);
       setPosts(formatted);
     }
   }, [data]);

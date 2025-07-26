@@ -129,8 +129,9 @@ const styles = StyleSheet.create<Styles>({
     marginBottom: 24,
   },
   label: {
-    fontSize: 16,
+    fontSize: 13,
     marginBottom: 16,
+    color:'#00000080'
   },
   sliderContainer: {
     paddingHorizontal: 8,

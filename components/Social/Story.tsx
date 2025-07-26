@@ -4,13 +4,13 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import ThemeText from '../ThemedText';
 import { GroupedUserStories } from '@/utils/types/story';
-// import { GroupedUserStories } from '@/types/story';
 
 interface Props {
   story: GroupedUserStories;
+  userId?: string; // Logged-in user's ID
 }
 
-const Story: React.FC<Props> = ({ story }) => {
+const Story: React.FC<Props> = ({ story, userId }) => {
   const router = useRouter();
 
   const handlePress = () => {
@@ -23,15 +23,17 @@ const Story: React.FC<Props> = ({ story }) => {
     });
   };
 
+  // If the logged-in user is the same as the story owner
+  const isCurrentUser = story.user.id?.toString() === userId?.toString();
+
   return (
     <TouchableOpacity style={styles.container} onPress={handlePress}>
-      <LinearGradient
-        colors={["#FF0000", "#0000FF"]}
-        style={styles.gradient}
-      >
+      <LinearGradient colors={["#FF0000", "#0000FF"]} style={styles.gradient}>
         <Image source={{ uri: story.user.profile_picture_url }} style={styles.avatar} />
       </LinearGradient>
-      <ThemeText style={styles.name}>{story.user.username}</ThemeText>
+      <ThemeText style={styles.name}>
+        {isCurrentUser ? 'My Story' : story.user.username}
+      </ThemeText>
     </TouchableOpacity>
   );
 };

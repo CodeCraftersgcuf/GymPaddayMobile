@@ -11,6 +11,7 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons as Icon } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import LiveStreamingPlayer from '@/components/Social/live/LiveStreamingPlayer';
 import WebView from 'react-native-webview';
 import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
 import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
+import * as SecureStore from 'expo-secure-store';
 
 const { width, height } = Dimensions.get('window');
 
@@ -58,6 +60,38 @@ const User_liveViewMain: React.FC = () => {
 
   ]);
 
+  const [loadingBalance, setLoadingBalance] = useState(true);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        setLoadingBalance(true); // start loading
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) throw new Error('No token founds');
+
+        const response = await fetch('https://gympaddy.hmstech.xyz/api/user/balance', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        const result = await response.json();
+        console.log('Balance fetch result:', result);
+
+        if (response.ok && result.status === 'success') {
+          setBalance(Number(result.balance));
+        } else {
+          Alert.alert('Error', result.message || 'Failed to fetch balance');
+        }
+      } catch (error) {
+        console.error('Balance fetch error:', error);
+        Alert.alert('Error', 'Unable to fetch wallet balance.');
+      } finally {
+        setLoadingBalance(false); // stop loading
+      }
+    })();
+  }, []);
   const themeStyles = {
     backgroundColor: dark ? '#000000' : '#ffffff',
     secondaryBackground: dark ? '#181818' : '#f5f5f5',
@@ -71,9 +105,9 @@ const User_liveViewMain: React.FC = () => {
     if (chats.length > 0) {
       const formatted = chats.map((msg: any) => ({
         id: msg.id.toString(),
-        user: msg.user?.name || 'User',
+        user: msg.user?.fullname || 'User',
         message: msg.message,
-        avatar: msg.user?.avatar || 'https://ui-avatars.com/api/?name=User',
+        avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
       }));
       setChatMessages(formatted);
     }
@@ -81,7 +115,7 @@ const User_liveViewMain: React.FC = () => {
 
   const sendMessage = () => {
     if (!message.trim()) return;
-    sendChatMessage(message.trim());
+    sendChatMessage({message:message.trim()});
     setMessage('');
   };
 
@@ -90,28 +124,47 @@ const User_liveViewMain: React.FC = () => {
     setActivePanel('sendCoins');
   };
 
-  const handleTopupSuccess = (amount: number) => {
-    setBalance(prevBalance => prevBalance + amount);
-    setActivePanel('gifts');
+  const handleTopupSuccess = async (amount: number) => {
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No token found');
+
+      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/top-up', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ amount }),
+      });
+
+      if (!response.ok) {
+        const errRes = await response.json();
+        console.error('❌ Top-up API error:', errRes);
+        alert('Top-up failed: ' + (errRes.message || 'Unknown error'));
+        return;
+      }
+
+      const data = await response.json();
+      console.log('✅ Top-up recorded:', data);
+
+      // Update local balance
+      setBalance(prevBalance => prevBalance + amount);
+      setActivePanel('gifts');
+    } catch (error) {
+      console.error('❌ Top-up request failed:', error);
+      alert('Top-up request failed. Please try again.');
+    }
   };
 
   const handleSendSuccess = (amount: number) => {
-    setBalance(prevBalance => prevBalance - amount);
+    setBalance(prevBalance => prevBalance - (amount*10));
     setActivePanel('none');
     const giftText = `Sent ${selectedGift?.name} x${amount}`;
     // Add gift message to chat
-    sendChatMessage(giftText)
-    if (selectedGift) {
-      const giftMessage: ChatMessage = {
-        id: Date.now().toString(),
-        user: 'You',
-        message: `Sent ${selectedGift.name} x ${amount}`,
-        avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=50&h=50&fit=crop',
-        hasGift: true,
-        giftCount: 1,
-      };
-      setChatMessages(prev => [...prev, giftMessage]);
-    }
+    sendChatMessage({message:giftText,type:"gift",amount:amount*10})
+   
   };
 
   const closePanel = () => {

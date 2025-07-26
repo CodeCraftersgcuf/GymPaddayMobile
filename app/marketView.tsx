@@ -248,7 +248,10 @@ export default function ItemDetailsScreen() {
                 {/* Item Info Card */}
                 <View style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}>
                     <Text style={[styles.itemTitle, { color: theme.text }]}>{title}</Text>
-                    <Text style={styles.itemPrice}>{price}</Text>
+                   <Text style={styles.itemPrice}>
+  N {parseInt(String(price).replace(/[^0-9]/g, ''), 10).toLocaleString()}
+</Text>
+
 
                     <View style={styles.sellerSection}>
                         <Image
@@ -388,7 +391,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     itemPrice: {
-        fontSize: 28,
+        fontSize: 20,
         fontWeight: '700',
         color: '#FF0000',
         marginBottom: 16,
@@ -509,7 +512,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     relatedPrice: {
-        fontSize: 16,
+        fontSize: 12,
         fontWeight: '700',
         color: '#FF0000',
         marginBottom: 8,

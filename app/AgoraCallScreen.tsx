@@ -57,7 +57,7 @@ export function useAgoraCall({
       }, token);
     },
     onSuccess: (res) => {
-      console.log('✅ Call started:', res);
+      // console.log('✅ Call started:', res);
       setCallId(res?.id ?? null);
     },
     onError: (err) => {
@@ -73,7 +73,7 @@ export function useAgoraCall({
       }
     },
     onSettled: () => {
-      console.log('📞 Call ended cleanup');
+      // console.log('📞 Call ended cleanup');
       onCallEnded?.();
     },
   });
@@ -118,21 +118,21 @@ const channel = providedChannelName || `call_${receiverId}`;
 
       engine.registerEventHandler({
         onJoinChannelSuccess: (channel, uid, elapsed) => {
-          console.log(`✅ Local user joined: ${uid} in channel: ${channel} (${elapsed}ms)`);
+          // console.log(`✅ Local user joined: ${uid} in channel: ${channel} (${elapsed}ms)`);
           setJoined(true);
         },
         onUserJoined: (uid, elapsed) => {
-          console.log(`👤 Remote user joined: ${uid} after ${elapsed}ms`);
+          // console.log(`👤 Remote user joined: ${uid} after ${elapsed}ms`);
           setRemoteUid(uid);
           engine.subscribeRemoteVideoStream(uid, true);
           engine.subscribeRemoteAudioStream(uid, true);
         },
         onUserOffline: (uid, reason) => {
-          console.log(`❌ Remote user left: ${uid}, reason: ${reason}`);
+          // console.log(`❌ Remote user left: ${uid}, reason: ${reason}`);
           setRemoteUid(null);
         },
         onLeaveChannel: (stats) => {
-          console.log('🔚 Left channel. Stats:', stats);
+          // console.log('🔚 Left channel. Stats:', stats);
           setJoined(false);
           setRemoteUid(null);
         },

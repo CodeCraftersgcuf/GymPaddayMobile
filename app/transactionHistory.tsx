@@ -37,7 +37,7 @@ export default function TransactionsScreen() {
     await queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
     setRefreshing(false);
   };
-  console.log("The data from API:", apiData);
+  // console.log("The data from API:", apiData);
   // Convert API response to local transaction format
   const allTransactions = useMemo(() => {
     if (!Array.isArray(apiData)) return [];

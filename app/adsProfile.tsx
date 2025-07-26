@@ -80,7 +80,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
     return past.toLocaleDateString();
   }
 
-  console.log("The data from API:", adsApiData);
+  // console.log("The data from API:", adsApiData);
   // Map API data to Ad[]
   const ads: Ad[] = Array.isArray(adsApiData)
     ? adsApiData.map((item) => {
@@ -141,7 +141,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
       alert("Ad not found in the source data.");
       return;
     }
-    console.log("Editing ad:", ad.id, "Original item:", originalItem);
+    // console.log("Editing ad:", ad.id, "Original item:", originalItem);
 
     // Use a single editor screen for both types
     route.push({
@@ -170,7 +170,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
       return await toggleCampaignStatus({ id, action, token });
     },
     onSuccess: (data) => {
-      console.log("Toggle status response:", data);
+      // console.log("Toggle status response:", data);
       // Optionally show a toast/snackbar here
       // Refetch the ad campaigns to update UI
       queryClient.invalidateQueries(['ad-campaigns']);
@@ -238,7 +238,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
   };
 
   const handleViewDetails = (ad: Ad) => {
-    console.log('View details for ad:', ad.id);
+    // console.log('View details for ad:', ad.id);
     route.push({
 
       pathname: '/adsDetail',

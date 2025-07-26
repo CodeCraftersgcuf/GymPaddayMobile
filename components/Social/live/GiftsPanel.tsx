@@ -41,18 +41,18 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
   };
 
   const giftItems: GiftItem[] = [
-    { id: '1', emoji: '🍩', name: 'Donut', price: 20, currency: 'GP' },
-    { id: '2', emoji: '🔥', name: 'Fire', price: 100, currency: 'GP' },
-    { id: '3', emoji: '🍦', name: 'Ice Cream', price: 100, currency: 'GP' },
-    { id: '4', emoji: '💎', name: 'Diamond', price: 100, currency: 'GP' },
-    { id: '5', emoji: '❤️', name: 'Heart', price: 0, currency: 'GP Coins' },
-    { id: '6', emoji: '🧢', name: 'Cap', price: 100, currency: 'GP' },
-    { id: '7', emoji: '🍕', name: 'Pizza', price: 100, currency: 'GP' },
-    { id: '8', emoji: '🍩', name: 'Donut Pro', price: 100, currency: 'GP' },
-    { id: '9', emoji: '🦁', name: 'Lion', price: 0, currency: 'GP Coins' },
-    { id: '10', emoji: '🐱', name: 'Cat', price: 100, currency: 'GP' },
-    { id: '11', emoji: '🐋', name: 'Whale', price: 100, currency: 'GP' },
-    { id: '12', emoji: '🌻', name: 'Sunflower', price: 100, currency: 'GP' },
+    { id: '1', emoji: '🍩', name: 'Donut', price: 10, currency: 'GP' },
+    { id: '2', emoji: '🔥', name: 'Fire', price: 10, currency: 'GP' },
+    { id: '3', emoji: '🍦', name: 'Ice Cream', price: 10, currency: 'GP' },
+    { id: '4', emoji: '💎', name: 'Diamond', price: 10, currency: 'GP' },
+    { id: '5', emoji: '❤️', name: 'Heart', price: 10, currency: 'GP Coins' },
+    { id: '6', emoji: '🧢', name: 'Cap', price: 10, currency: 'GP' },
+    { id: '7', emoji: '🍕', name: 'Pizza', price: 10, currency: 'GP' },
+    { id: '8', emoji: '🍩', name: 'Donut Pro', price: 10, currency: 'GP' },
+    { id: '9', emoji: '🦁', name: 'Lion', price: 10, currency: 'GP Coins' },
+    { id: '10', emoji: '🐱', name: 'Cat', price: 10, currency: 'GP' },
+    { id: '11', emoji: '🐋', name: 'Whale', price: 10, currency: 'GP' },
+    { id: '12', emoji: '🌻', name: 'Sunflower', price: 10, currency: 'GP' },
   ];
 
   const renderGiftItem = ({ item }: { item: GiftItem }) => {
@@ -67,9 +67,16 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
           isSelected && { borderWidth: 2, borderColor: '#FF0000' },
         ]}
         onPress={() => {
+          const totalCost = item.price * quantity;
+          if (totalCost > balance) {
+            alert("You don’t have enough balance, please top up first.");
+            return;
+          }
+
           setSelectedGiftId(item.id);
           onGiftSelect({ ...item, quantity });
         }}
+
       >
         <Text style={styles.giftEmoji}>{item.emoji}</Text>
         <View style={styles.priceContainer}>
@@ -83,11 +90,20 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
           <View style={styles.quantityControl}>
             <TouchableOpacity
               onPress={() => {
+                const newQty = quantity + 1;
+                const totalCost = item.price * newQty;
+
+                if (totalCost > balance) {
+                  alert("Not enough balance for this quantity.");
+                  return;
+                }
+
                 setGiftQuantities((prev) => ({
                   ...prev,
-                  [item.id]: Math.max(1, quantity - 1),
+                  [item.id]: newQty,
                 }));
               }}
+
             >
               <Text style={styles.quantityBtn}>−</Text>
             </TouchableOpacity>
@@ -219,7 +235,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   priceText: {
-    fontSize: 12,
+    fontSize: 8,
     fontWeight: '600',
   },
   quantityControl: {

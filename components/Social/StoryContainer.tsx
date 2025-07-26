@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { use, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList } from 'react-native';
 import Story from './Story';
 // import { GroupedUserStories } from '@/types/story';
@@ -19,7 +19,7 @@ const StoryContainer: React.FC<Props> = ({ stories }) => {
   const router = useRouter();
   const { dark } = useTheme();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
-
+  const [user,setUser]=useState();
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 
   React.useEffect(() => {
@@ -28,6 +28,7 @@ const StoryContainer: React.FC<Props> = ({ stories }) => {
         const userDataStr = await SecureStore.getItemAsync('user_data');
         if (userDataStr) {
           const userData = JSON.parse(userDataStr);
+          setUser(userData);
           if (userData.profile_picture_url) {
             setProfileImage(userData.profile_picture_url);
           } else {
@@ -57,7 +58,7 @@ const StoryContainer: React.FC<Props> = ({ stories }) => {
           <View style={[styles.addButton, { backgroundColor: dark ? '#222' : 'red' }]}>
             <ThemeText style={styles.addButtonText}>+</ThemeText>
           </View>
-          <ThemeText style={styles.storyName}>My Story</ThemeText>
+          <ThemeText style={styles.storyName}>Add Story</ThemeText>
         </TouchableOpacity>
 
         {/* Other User Stories */}
@@ -65,7 +66,7 @@ const StoryContainer: React.FC<Props> = ({ stories }) => {
           data={stories}
           keyExtractor={(item) => item.user.id.toString()}
           horizontal
-          renderItem={({ item }) => <Story story={item} />}
+          renderItem={({ item }) => <Story story={item} userId={user?.id} />}
         />
       </ScrollView>
     </View>

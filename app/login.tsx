@@ -26,6 +26,7 @@ import { useMutation } from "@tanstack/react-query";
 import { loginUser } from "@/utils/mutations/auth";
 
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const Login = () => {const [checkingAuth, setCheckingAuth] = React.useState(true);
 
@@ -34,19 +35,29 @@ const Login = () => {const [checkingAuth, setCheckingAuth] = React.useState(true
   const { dark } = useTheme();
 useEffect(() => {
   const checkAuth = async () => {
+    const hasSeenOnboarding = await AsyncStorage.getItem("hasSeenOnboarding");
+
+    // 🚫 If onboarding hasn't been seen, don't auto-login!
+    if (!hasSeenOnboarding) {
+      console.log("⛔ Onboarding not yet completed. Showing login.");
+      setCheckingAuth(false);
+      return;
+    }
+
     const token = await SecureStore.getItemAsync("auth_token");
     const userData = await SecureStore.getItemAsync("user_data");
 
     if (token && userData) {
-      console.log("✅ User already logged in. Redirecting...");
+      console.log("✅ Auto-logging in...");
       route.replace("/(tabs)");
     } else {
-      setCheckingAuth(false); // allow login UI to show
+      setCheckingAuth(false); // show login UI
     }
   };
 
   checkAuth();
 }, []);
+
 
   const mutation = useMutation({
     mutationFn: loginUser,

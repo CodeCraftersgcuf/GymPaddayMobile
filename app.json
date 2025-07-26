@@ -13,26 +13,43 @@
       "supportsTablet": true
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
+      "package": "com.pejul.gympaddy",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.hamzabilal.gym",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET",
-        "MODIFY_AUDIO_SETTINGS",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS"
       ]
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
+      "@stream-io/video-react-native-sdk",
+
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "$(PRODUCT_NAME) requires camera access to capture video.",
+          "microphonePermission": "$(PRODUCT_NAME) requires microphone access to capture audio."
+        }
+      ],
+
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://storage.googleapis.com/download.flutter.io",
+              "https://android-sdk.stream-io-cdn.com/maven",
+              "$rootDir/../../../node_modules/@notifee/react-native/android/libs"
+            ]
+          }
+        }
+      ],
+
       "expo-router",
       [
         "expo-splash-screen",
@@ -48,6 +65,11 @@
       "expo-video",
       "expo-web-browser"
     ],
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
     "experiments": {
       "typedRoutes": true
     },
@@ -56,7 +78,6 @@
       "eas": {
         "projectId": "21de3420-55a3-45a9-965b-e7d2ef7e4bcb"
       }
-    },
-    "owner": ""
+    }
   }
 }
