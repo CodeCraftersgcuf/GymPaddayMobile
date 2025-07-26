@@ -71,14 +71,11 @@ export default function MessageChat() {
     queryKey: ['chatMessages', conversation_id],
     queryFn: async () => {
       const token = await getToken();
-      console.log("Token for chat messages:", token);
-      console.log("Conversation ID for chat messages:", conversation_id);
       if (!token) throw new Error('No token found');
       return fetchChatMessages(token, conversation_id);
     },
     enabled: !!conversation_id,
   });
-  console.log("Fetched chat messages:", data);
   const [lastCallId, setLastCallId] = useState<number | null>(null);
 
   const [incomingCall, setIncomingCall] = useState<null | {
@@ -91,21 +88,15 @@ export default function MessageChat() {
     receiver_uid: number;
     caller_uid?: number;
   }>(null);
-
-  // console.log("Fetched messages:", data);
-  // const receiverId=1;
-
   const firstMessage = data?.messages?.[0];
 
   const senderImage = firstMessage?.sender?.profile_picture_url || '';
   const receiverImage = firstMessage?.receiver?.profile_picture_url || '';
   const receiverName = firstMessage?.receiver?.fullname || 'User';
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
-  // Transform fetched data
+
   const messages = data?.messages?.map((msg: any) => {
-    // Try all possible keys for image
     let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
-    // If backend returns only the path, prepend storage URL
     if (imageUrl && !imageUrl.startsWith('http')) {
       imageUrl = `https://gympaddy.hmstech.xyz/storage/${imageUrl}`;
     }
@@ -121,7 +112,7 @@ export default function MessageChat() {
     }
   }) || [];
 
-  // Send message mutation
+
   const sendMessageMutation = useMutation({
     mutationFn: async (payload: { text: string; imageUri?: string | null }) => {
       const token = await getToken();
@@ -154,8 +145,6 @@ export default function MessageChat() {
           });
         }
         console.log('Sending message with image:', payload.text, payload.imageUri);
-
-        // Do NOT set Content-Type header, let fetch set it for multipart
         const response = await fetch('https://gympaddy.hmstech.xyz/api/user/chat-messages', {
           method: 'POST',
           headers: {
@@ -188,15 +177,11 @@ export default function MessageChat() {
       console.log('Send message error:', err);
     }
   });
-
-  // Handle send button
   const handleSendMessage = () => {
     if ((newMessage.trim() || attachedImage) && !sendMessageMutation.isLoading) {
       sendMessageMutation.mutate({ text: newMessage.trim(), imageUri: attachedImage });
     }
   };
-
-  // Auto-scroll after new messages
   useEffect(() => {
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
   }, [messages.length]);
@@ -212,7 +197,7 @@ export default function MessageChat() {
         });
 
         const { call } = await res.json();
-        console.log('Incoming call:', call);
+        // console.log('Incoming call:', call);
 
         if (
           call &&
@@ -237,107 +222,58 @@ export default function MessageChat() {
       } catch (error) {
         console.log('Incoming call check failed:', error);
       }
-    }, 3000); // check every 3 seconds
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [lastCallId]);
-
-
-
   const handleVideoCall = async () => {
-    // setShowVideoCallPopup(true);
     try {
-      const receiverId = user_id;
-      const token = await getToken();
+      const receiverId = user_id; // Make sure this is defined
+      const token = await SecureStore.getItemAsync('auth_token');
 
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-daily-call', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          receiver_id: receiverId,
-          type: 'video', // or 'video'
-        }),
-      });
-
-      const { call } = await response.json();
-
-      if (!response.ok || !call?.room_url) {
-        throw new Error('Call initiation failed');
-      }
-
+      if (!token) throw new Error('Authentication token not found');
+      console.log("hanndled video clicked")
       router.push({
-        pathname: '/daily-call-screen',
+        pathname: '/StreamCallInitiateScreen',
         params: {
-          roomUrl: call.room_url,
-          type: 'caller',
-          callType: call.type,
-          channelName: call.channel_name
+          receiver_id: receiverId,
+          call_type: 'video',
+          receiver_avatar: otherUser?.profile_picture_url,
+          receiver_name: otherUser?.fullname ?? otherUser?.username
         },
       });
 
-    } catch (err) {
-      console.error('Voice call error:', err);
+    } catch (err: any) {
+      console.error('Video call error:', err);
       Alert.alert('Call Error', err.message || 'Unknown error');
     }
+
   };
   const [channelName, setChannelName] = useState('');
-
   const handleVoiceCall = async () => {
     try {
-      const receiverId = user_id;
-      const token = await getToken();
+      const receiverId = user_id; // Make sure this is defined
+      const token = await SecureStore.getItemAsync('auth_token');
 
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-daily-call', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          receiver_id: receiverId,
-          type: 'voice', // or 'video'
-        }),
-      });
-
-      const { call } = await response.json();
-
-      if (!response.ok || !call?.room_url) {
-        throw new Error('Call initiation failed');
-      }
+      if (!token) throw new Error('Authentication token not found');
+      console.log("handle voice clicked");
 
       router.push({
-        pathname: '/daily-call-screen',
+        pathname: '/StreamCallInitiateScreen',
         params: {
-          roomUrl: call.room_url,
-          type: 'caller',
-          callType: call.type,
-          channelName:call.channel_name
+          receiver_id: receiverId,
+          call_type: 'voice', // or 'voice', depending on your backend naming
+          receiver_avatar: otherUser?.profile_picture_url,
+          receiver_name: otherUser?.fullname ?? otherUser?.username
         },
       });
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Voice call error:', err);
       Alert.alert('Call Error', err.message || 'Unknown error');
     }
   };
 
-
-  const proceedVideoCall = () => {
-    setShowVideoCallPopup(false);
-    setShowVideoCall(true);
-  };
-
-  const closeVideoCallPopup = () => {
-    setShowVideoCallPopup(false);
-  };
-
-  const endCall = () => {
-    setShowVideoCall(false);
-    setShowVoiceCall(false);
-  };
   const hanldeViewProfile = (id: any) => {
     router.push({
       pathname: '/UserProfile',
@@ -406,132 +342,6 @@ export default function MessageChat() {
     );
   };
 
-
-  // Video Call Popup Component
-  // const VideoCallPopup = () => (
-  //   <Modal
-  //     visible={showVideoCallPopup}
-  //     transparent={true}
-  //     animationType="fade"
-  //   >
-  //     <View style={styles.popupOverlay}>
-  //       <View style={[styles.popupContainer, { backgroundColor: theme.background }]}>
-  //         <View style={styles.popupIcon}>
-  //           <MaterialIcons name="videocam" size={32} color="#4CAF50" />
-  //         </View>
-
-  //         <Text style={[styles.popupTitle, { color: theme.text }]}>
-  //           You are about to start a video call, and the charge for this call is not collected by GymPaddy but it will be sent directly to the wallet of the receiver
-  //         </Text>
-
-  //         <View style={[styles.costContainer, { backgroundColor: theme.secondary }]}>
-  //           <Text style={[styles.costLabel, { color: theme.text }]}>Cost</Text>
-  //           <Text style={[styles.costValue, { color: theme.textSecondary }]}>30GP/min</Text>
-  //         </View>
-
-  //         <View style={styles.popupButtons}>
-  //           <TouchableOpacity
-  //             style={styles.proceedButton}
-  //             onPress={proceedVideoCall}
-  //           >
-  //             <Text style={styles.proceedButtonText}>Proceed</Text>
-  //           </TouchableOpacity>
-  //           <TouchableOpacity
-  //             style={[styles.closeButton, { backgroundColor: theme.secondary }]}
-  //             onPress={closeVideoCallPopup}
-  //           >
-  //             <Text style={[styles.closeButtonText, { color: theme.textSecondary }]}>Close</Text>
-  //           </TouchableOpacity>
-  //         </View>
-  //       </View>
-  //     </View>
-  //   </Modal>
-  // );
-
-
-
-  // 🟢 Video Call Screen Component
-  // const VideoCallScreen = () => {
-  //   const { joined, localUid, remoteUid, endCall, channelName } = useAgoraCall({
-  //     receiverId: Number(user_id),
-  //     callType: 'video',
-  //     onCallEnded: () => setShowVideoCall(false),
-  //   });
-
-  //   return (
-  //     <Modal visible={showVideoCall} animationType="slide">
-  //       <View style={styles.callScreen}>
-  //         {joined && remoteUid !== null ? (
-  //           <RtcSurfaceView
-  //             style={styles.callBackground}
-  //             channelId={remoteUid}
-  //             uid={remoteUid}
-  //             renderMode={RenderModeType.RenderModeHidden}
-  //           />
-  //         ) : (
-  //           <Image source={{ uri: receiverImage }} style={styles.callBackground} />
-  //         )}
-
-  //         <View style={styles.callOverlay} />
-
-  //         <SafeAreaView style={styles.callContainer}>
-  //           {joined && localUid !== null ? (
-  //             <RtcSurfaceView
-  //               style={styles.smallVideo}
-  //               channelId={localUid}
-  //               uid={localUid}
-  //               renderMode={RenderModeType.RenderModeHidden}
-  //             />
-  //           ) : (
-  //             <Image source={{ uri: senderImage }} style={styles.smallVideo} />
-  //           )}
-
-  //           <View style={styles.callControls}>
-  //             <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-  //               <Image source={images.liveClose} style={styles.iconStyle} />
-  //             </TouchableOpacity>
-  //           </View>
-  //         </SafeAreaView>
-  //       </View>
-  //     </Modal>
-  //   );
-
-  // };
-
-  // 🟢 Voice Call Screen Component
-  // const VoiceCallScreen = () => {
-  //   const { joined, endCall } = useAgoraCall({
-  //     receiverId: Number(user_id),
-  //     callType: 'voice',
-  //     onCallEnded: () => setShowVoiceCall(false),
-  //   });
-
-  //   return (
-  //     <Modal visible={showVoiceCall} animationType="slide">
-  //       <LinearGradient colors={['#FF3B30', '#8E44AD']} style={{ flex: 1 }}>
-  //         <View style={styles.voiceCallScreen}>
-  //           <SafeAreaView style={styles.voiceCallContainer}>
-  //             <View style={styles.voiceCallContent}>
-  //               <Image source={{ uri: receiverImage }} style={styles.voiceCallAvatar} />
-  //               <Text style={styles.voiceCallName}>{receiverName}</Text>
-  //               <Text style={styles.voiceCallStatus}>
-  //                 {joined ? 'Connected' : 'Calling...'}
-  //               </Text>
-  //             </View>
-  //             <View style={styles.callControls}>
-  //               <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-  //                 <Image source={images.liveClose} style={styles.iconStyle} />
-  //               </TouchableOpacity>
-  //             </View>
-  //           </SafeAreaView>
-  //         </View>
-  //       </LinearGradient>
-  //     </Modal>
-  //   );
-  // };
-
-
-
   const otherUser = data?.messages?.length
     ? (data.messages.find((m: any) => m.direction === 'received')?.sender
       || data.messages[0].receiver)
@@ -549,45 +359,7 @@ export default function MessageChat() {
     }, 3000);
     return () => clearInterval(interval);
   }, [refetch]);
-  const renderCallScreen = () => {
-    if (incomingCall?.type === 'Voice') {
-      return (
-        <VoiceCallScreenT
-          receiverId={incomingCall.caller_id}
-          type="receiver"
-          channelName={incomingCall.channel_name}
-          uid={receiverUid}
-          onCallEnded={() => {
-            setShowVoiceCall(false);
-            setIncomingCall(null);
-          }}
-        />
-      );
-    }
-
-    if (showVoiceCall) {
-      return (
-        <VoiceCallScreenT
-          uid={callerUid}
-          type="caller"
-          receiverId={Number(user_id)}
-          channelName={channelName}
-          onCallEnded={() => setShowVoiceCall(false)}
-        />
-      );
-    }
-
-    if (showVideoCall) {
-      return <VideoCallScreen />;
-    }
-
-    return null;
-  };
-
-  // Add this state for attached image at the top of the component
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-
-  // Add this function to pick image from gallery
   const handlePickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -615,16 +387,6 @@ export default function MessageChat() {
           </View>
         )}
 
-        {incomingCall && (
-          <VoiceCallScreenT
-            receiverId={incomingCall?.caller_id}
-            channelName={incomingCall.channel_name}
-            onCallEnded={() => {
-              setShowVoiceCall(false);
-              setIncomingCall(null);
-            }}
-          />
-        )}
 
         {!isLoading && (
           // {true && (
@@ -661,44 +423,44 @@ export default function MessageChat() {
             </View>
 
             {/* Profile Card */}
-            <View style={[styles.profileCard, { backgroundColor: dark ? '#181818' : 'white' }]} >
-              <Image
-                source={{ uri: otherUser?.profile_picture_url }}
-                style={styles.profileImage}
-              />
-              <Text style={styles.profileName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
-              <View style={styles.profileStats}>
-                <View style={styles.stat}>
-                  <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
-                  <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
-                    0 Followers
-                  </Text>
-                </View>
-                <View style={styles.stat}>
-                  {/* <Text style={styles.statIcon}>📝</Text> */}
-                  <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
-                  <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
-                    0 Posts
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity onPress={() => hanldeViewProfile(12)} style={styles.viewProfileButton}>
-                <Text style={styles.viewProfileText}>View Profile</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Messages */}
             <FlatList
               ref={flatListRef}
               data={messages}
               style={styles.messagesContainer}
               keyExtractor={(item) => item.id}
               scrollEnabled={true}
-              renderItem={renderMessage}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
               refreshing={refreshing}
               onRefresh={handleRefresh}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+              ListHeaderComponent={
+                <View style={[styles.profileCard, { backgroundColor: dark ? '#181818' : 'white' }]}>
+                  <Image
+                    source={{ uri: otherUser?.profile_picture_url }}
+                    style={styles.profileImage}
+                  />
+                  <Text style={styles.profileName}>
+                    {otherUser?.fullname ?? otherUser?.username ?? 'User'}
+                  </Text>
+
+                  <View style={styles.profileStats}>
+                    <View style={styles.stat}>
+                      <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
+                      <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>0 Followers</Text>
+                    </View>
+                    <View style={styles.stat}>
+                      <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
+                      <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>0 Posts</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity onPress={() => hanldeViewProfile(12)} style={styles.viewProfileButton}>
+                    <Text style={styles.viewProfileText}>View Profile</Text>
+                  </TouchableOpacity>
+                </View>
+              }
+              renderItem={renderMessage}
             />
+
 
             {/* Image preview above input bar */}
             {attachedImage && (
@@ -746,7 +508,7 @@ export default function MessageChat() {
               >
                 <Image
                   source={images.gallery || images.notifcationIcon}
-                  style={{ width: 25, height: 25,  }}
+                  style={{ width: 25, height: 25, }}
                 />
               </TouchableOpacity>
               <TextInput
@@ -777,13 +539,6 @@ export default function MessageChat() {
             </View>
           </>
         )}
-
-        {/* <VideoCallPopup /> */}
-        {/* Modals */}
-        {/* {showVideoCall && <VideoCallScreen />} */}
-        {/* {showVoiceCall && <VoiceCallScreen />} */}
-        {/* <VoiceCallScreen /> */}
-        {/* {renderCallScreen()} */}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

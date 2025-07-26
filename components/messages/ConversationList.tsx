@@ -74,7 +74,19 @@ export default function ConversationList({
           onPress={() => onConversationPress(item.id)}
         >
           <View style={styles.avatarWrapper}>
-           <Image source={{ uri: item.other_user?.profile_picture_url || item.user.profile_img }} style={styles.avatar} />
+         <Image
+  source={
+    item.other_user?.profile_picture_url?.trim()
+      ? { uri: item.other_user.profile_picture_url }
+      : require('@/assets/icons/more/User.png')
+  }
+  style={[
+    styles.avatar,
+    !item.other_user?.profile_picture_url?.trim() && { tintColor: 'black' }
+  ]}
+/>
+
+
 
             {item.user.online && <View style={styles.online} />}
           </View>

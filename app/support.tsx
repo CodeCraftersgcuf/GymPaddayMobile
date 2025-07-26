@@ -41,15 +41,8 @@ export default function SupportScreen() {
     const [selectedCategory, setSelectedCategory] = useState('');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: '1',
-            text: 'An agent will be with you shortly',
-            isUser: false,
-            timestamp: 'Mar 31, 7:05 PM',
-            avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-        },
-    ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+
 
 useEffect(() => {
   (async () => {
@@ -413,10 +406,24 @@ useEffect(() => {
                                 <TouchableOpacity
                                     key={category}
                                     style={styles.categoryOption}
-                                    onPress={() => {
-                                        setSelectedCategory(category);
-                                        setShowCategoryModal(false);
-                                    }}
+                                   onPress={() => {
+  setSelectedCategory(category);
+  setShowCategoryModal(false);
+
+  // Only show agent welcome message if it's not already added
+  const hasWelcome = messages.some(msg => msg.id === 'agent_welcome');
+  if (!hasWelcome) {
+    const agentMsg: Message = {
+      id: 'agent_welcome',
+      text: 'An agent will be with you shortly',
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
+    };
+    updateMessages([...messages, agentMsg]);
+  }
+}}
+
                                 >
                                     <Text style={styles.categoryOptionText}>{category}</Text>
                                     <View style={[

@@ -9,6 +9,7 @@ import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/
 
 
 import * as SecureStore from 'expo-secure-store';
+import { Feather } from '@expo/vector-icons';
 
 
 interface TabHeaderProps {
@@ -81,17 +82,25 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
           </Pressable>
         )}
         {children}
-        {notificationID && (
-          <Pressable onPress={() => router.push('/notification')}>
-            <ThemedView style={themeStyles.notificationView}>
-              <Image
-                source={images.bellIcon}
-                tintColor={dark ? 'white' : 'black'}
-                style={styles.notifcationIcon}
-              />
-            </ThemedView>
-          </Pressable>
-        )}
+       {notificationID && (
+  <View style={{ flexDirection: 'row', gap: 10 }}>
+    <Pressable onPress={() => router.push('/search')}>
+      <ThemedView style={themeStyles.notificationView}>
+        <Feather name="search" size={20} color={dark ? '#fff' : '#000'} />
+      </ThemedView>
+    </Pressable>
+    <Pressable onPress={() => router.push('/notification')}>
+      <ThemedView style={themeStyles.notificationView}>
+        <Image
+          source={images.bellIcon}
+          tintColor={dark ? 'white' : 'black'}
+          style={styles.notifcationIcon}
+        />
+      </ThemedView>
+    </Pressable>
+  </View>
+)}
+
       </ThemedView>
     </ThemedView>
   );

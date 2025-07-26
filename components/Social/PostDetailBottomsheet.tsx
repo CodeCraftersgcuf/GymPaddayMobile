@@ -27,7 +27,7 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
     const bottomSheetRef = useRef<BottomSheet>(null);
     const { dark } = useTheme();
     const [userId, setUserId] = useState<string | null>(null);
-    console.log("PostDetailBottomSheet IdCan:", idCan);
+    // console.log("PostDetailBottomSheet IdCan:", idCan);
 
     useEffect(() => {
         const fetchUserId = async () => {

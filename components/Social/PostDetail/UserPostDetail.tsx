@@ -6,6 +6,9 @@ import { useTheme } from '@/contexts/themeContext'
 import ThemeText from '@/components/ThemedText'
 import { useRouter } from 'expo-router'
 import BoostAdModal from '../Boost/BoostAdModal'
+import axios from 'axios'
+import * as SecureStore from 'expo-secure-store';
+import { useQueryClient } from '@tanstack/react-query'
 
 const UserPostDetail: React.FC<{
   idCan: {
@@ -16,7 +19,7 @@ const UserPostDetail: React.FC<{
   const router = useRouter();
   const { dark } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
-
+  const clientQuery = useQueryClient();
   console.log("Post Id in UserPostDetail:", idCan.postId);
 
   const post_id = idCan.postId; // Assuming postId is passed as a prop
@@ -39,9 +42,45 @@ const UserPostDetail: React.FC<{
     // router.push({ pathname: '/createpost', params: { postId: idCan.postId } })
     router.push("/createpost");
   }
-  const handleDeletePost = () => {
-    Alert.alert('Post deleted');
-  }
+  const handleDeletePost = async () => {
+    Alert.alert(
+      'Confirm Deletion',
+      'Are you sure you want to delete this post?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await SecureStore.getItemAsync('auth_token');
+              if (!token) {
+                Alert.alert('Error', 'Authentication token not found');
+                return;
+              }
+
+              await axios.delete(`https://gympaddy.hmstech.xyz/api/user/posts/${idCan.postId}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+
+              await clientQuery.invalidateQueries(['userPosts']); // ✅ fixed typo from invalidateQuerie → invalidateQueries
+              Alert.alert('Success', 'Post deleted successfully');
+              router.back(); // or navigate somewhere else if needed
+            } catch (error) {
+              console.error('Delete Error:', error);
+              Alert.alert('Error', 'Failed to delete post');
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
   const Options = [
     {

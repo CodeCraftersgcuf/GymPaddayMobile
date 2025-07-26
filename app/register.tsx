@@ -76,30 +76,30 @@ export default function Register() {
   };
 
   const handleRegister = (values: any) => {
-  const formData = new FormData();
+    const formData = new FormData();
 
-  formData.append('username', values.username);
-  formData.append('fullname', values.fullName);
-  formData.append('email', values.email);
-  formData.append('phone', values.phone);
-  formData.append('age', values.age.toString());
-  formData.append('gender', values.gender.toLowerCase());
-  formData.append('password', values.password);
-  formData.append('password_confirmation', values.password);
+    formData.append('username', values.username);
+    formData.append('fullname', values.fullName);
+    formData.append('email', values.email);
+    formData.append('phone', values.phone);
+    formData.append('age', values.age.toString());
+    formData.append('gender', values.gender.toLowerCase());
+    formData.append('password', values.password);
+    formData.append('password_confirmation', values.password);
 
-  if (profileImage) {
-    const uriParts = profileImage.split('.');
-    const fileType = uriParts[uriParts.length - 1];
+    if (profileImage) {
+      const uriParts = profileImage.split('.');
+      const fileType = uriParts[uriParts.length - 1];
 
-    formData.append('profile_picture', {
-      uri: profileImage,
-      name: `profile.${fileType}`,
-      type: `image/${fileType}`,
-    } as any);
-  }
+      formData.append('profile_picture', {
+        uri: profileImage,
+        name: `profile.${fileType}`,
+        type: `image/${fileType}`,
+      } as any);
+    }
 
-  mutation.mutate({ data: formData });
-};
+    mutation.mutate({ data: formData });
+  };
 
 
   const handleSheetChanges = useCallback((index: number) => {
@@ -123,11 +123,12 @@ export default function Register() {
       transform: [{ translateY: -60 }],
       borderRadius: 10,
       elevation: 5,
+      marginBottom:-40,
       shadowColor: themedark ? 'white' : 'black',
       padding: 10,
     },
     logo: { width: 70, height: 70 },
-    formContainer: { transform: [{ translateY: -40 }] },
+    formContainer: { transform: [{ translateY: 0 }] },
     title: {
       fontSize: 24,
       fontWeight: "bold",
@@ -137,7 +138,7 @@ export default function Register() {
       fontSize: 14,
       color: "gray",
       textAlign: "center",
-      marginBottom: 20,
+      marginBottom: 0,
     },
     form: { marginTop: 20, paddingHorizontal: 15 },
     registerButton: {
@@ -213,12 +214,16 @@ export default function Register() {
 
   const mutation = useMutation({
     mutationFn: registerUser,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const formData = variables.data as FormData;
+      const email = formData.get("email") as string;
+
       Toast.show({
-        type: 'success',
-        text1: 'Registered successfully!',
+        type: "success",
+        text1: "Registered successfully!",
       });
-      router.push("/login");
+
+      router.push({ pathname: "/verify-otp", params: { email } });
     },
     onError: (error) => showApiErrorToast(error, "Registration failed"),
   });
@@ -240,15 +245,16 @@ export default function Register() {
               <ThemedView style={styles.logoContainer}>
                 <Image source={images.logo} style={styles.logo} />
               </ThemedView>
-              <TouchableOpacity onPress={pickImage} style={{ alignSelf: 'center', marginBottom: 20 }}>
+              <TouchableOpacity onPress={pickImage} style={{ alignSelf: 'center', marginBottom:0 }}>
                 <Image
-                  source={profileImage || require('../assets/images/placeholder.png')} // 👈 Add placeholder fallback
+                  source={profileImage || require('../assets/icons/more/User.png')} // 
                   style={{
-                    width: 100,
-                    height: 100,
+                    width: 80,
+                    height: 80,
                     borderRadius: 50,
-                    borderWidth: 2,
-                    borderColor: '#FF0000',
+                    borderWidth: 1,
+                    borderColor: dark ? "white":"black",
+                    tintColor:dark ? "white":"black"
                   }}
                 />
               </TouchableOpacity>

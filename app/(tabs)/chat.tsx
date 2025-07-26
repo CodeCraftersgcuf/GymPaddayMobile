@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/themeContext';
 import { useMessages } from '@/components/messages/MessageContext';
@@ -46,7 +46,7 @@ export default function Chat() {
       return fetchConnectedUsers(token);
     },
   });
-  console.log("The data from API:", data?.conversations);
+  // console.log("The data from API:", data?.conversations);
 
   // Transform API data to ConversationList format
   const apiConversations = data?.conversations?.map((conv: any) => ({
@@ -84,7 +84,7 @@ export default function Chat() {
           ])
         ).values()
       )
-      : users;
+      : [];
 
   // Filtering by username or last message
   const filteredConversations = apiConversations
@@ -159,12 +159,21 @@ export default function Chat() {
               <ActivityIndicator size="large" color={dark ? 'white' : 'black'} />
             </View>
           ) : (
-            <ConversationList
-              conversations={filteredConversations}
-              onConversationPress={handleConversationPress}
-              refreshing={refreshing || isRefetching}
-              onRefresh={onRefresh}
-            />
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 30 }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={refreshing || isRefetching} onRefresh={onRefresh} />
+              }
+            >
+              <ConversationList
+                conversations={filteredConversations}
+                onConversationPress={handleConversationPress}
+              />
+            </ScrollView>
+
           )}
         </ThemedView>
       </ThemedView>

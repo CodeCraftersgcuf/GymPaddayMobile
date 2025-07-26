@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import * as SecureStore from 'expo-secure-store';
 
 interface StreamingCardProps {
   dark: boolean;
@@ -23,12 +24,39 @@ export default function StreamingCard({
   const router = useRouter();
   const [facing, setFacing] = useState<CameraType>('front');
   const [permission, requestPermission] = useCameraPermissions();
+  const [liveMinutes, setLiveMinutes] = useState<number | null>(null);
+  const MAX_MINUTES = 720;
   const hasMinFollowers = true;
 
   useEffect(() => {
     if (!permission?.granted) {
       requestPermission();
     }
+  }, []);
+
+  useEffect(() => {
+    const fetchLiveMinutes = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) return;
+
+        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/minutes', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) throw new Error('Failed to fetch minutes');
+
+        const data = await res.json();
+        setLiveMinutes(data?.data?.live_stream_minute ?? 0);
+      } catch (err) {
+        console.error('❌ Error fetching minutes:', err);
+      }
+    };
+
+    fetchLiveMinutes();
   }, []);
 
   if (!permission) return <Text>Requesting permission...</Text>;
@@ -42,21 +70,17 @@ export default function StreamingCard({
       </View>
     );
   }
+const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
 
   return (
     <View style={styles.container}>
       {/* Camera Preview */}
       <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.cameraPreview}
-          facing={facing}
-        >
+        <CameraView style={styles.cameraPreview} facing={facing}>
           <TouchableOpacity
             style={styles.flipCamera}
             onPress={() =>
-              setFacing((prev) =>
-                prev === 'back' ? 'front' : 'back'
-              )
+              setFacing((prev) => (prev === 'back' ? 'front' : 'back'))
             }
           >
             <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
@@ -72,10 +96,22 @@ export default function StreamingCard({
         style={styles.infoCard}
       >
         <Text style={styles.durationText}>Live streaming duration left this month</Text>
-        <Text style={styles.hoursText}>5 Hrs</Text>
+        <Text style={styles.hoursText}>
+          {liveMinutes !== null ? `${(liveMinutes / 60).toFixed(1)} Hrs` : 'Loading...'}
+        </Text>
 
         <View style={styles.progressBar}>
-          <View style={styles.progressFill} />
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width:
+                  liveMinutes !== null
+                    ? `${Math.min((liveMinutes / MAX_MINUTES) * 100, 100)}%`
+                    : '0%',
+              },
+            ]}
+          />
         </View>
 
         <Text style={styles.purchaseText}>
@@ -83,7 +119,7 @@ export default function StreamingCard({
         </Text>
 
         <View style={styles.priceContainer}>
-          <Text style={styles.priceText}>30GP/30 Minute</Text>
+          <Text style={styles.priceText}>30GP / 30 Minutes</Text>
           <TouchableOpacity style={styles.buyButton} onPress={onBuyMinutes}>
             <Text style={styles.buyButtonText}>Buy Now</Text>
           </TouchableOpacity>
@@ -122,34 +158,21 @@ export default function StreamingCard({
         />
       </TouchableOpacity>
 
-      {/* Go Live Buttons */}
+      {/* Go Live Button */}
       <TouchableOpacity
-        style={[
-          styles.goLiveButton,
-          {
-            backgroundColor: hasMinFollowers ? '#FF0000' : '#CCCCCC',
-            opacity: hasMinFollowers ? 1 : 0.6,
-          },
-        ]}
-        onPress={onGoLive}
-        disabled={!hasMinFollowers}
-      >
-        <Text style={styles.goLiveButtonText}>Go Live</Text>
-      </TouchableOpacity>
+  style={[
+    styles.goLiveButton,
+    {
+      backgroundColor: canGoLive ? '#FF0000' : '#CCCCCC',
+      opacity: canGoLive ? 1 : 0.6,
+    },
+  ]}
+  onPress={onGoLive}
+  disabled={!canGoLive}
+>
+  <Text style={styles.goLiveButtonText}>Go Live</Text>
+</TouchableOpacity>
 
-      <TouchableOpacity
-        style={[
-          styles.goLiveButton,
-          {
-            backgroundColor: hasMinFollowers ? '#FF0000' : '#CCCCCC',
-            opacity: hasMinFollowers ? 1 : 0.6,
-          },
-        ]}
-        onPress={() => router.push('/userLiveViewMain')}
-        disabled={!hasMinFollowers}
-      >
-        <Text style={styles.goLiveButtonText}>Go Live User View</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -200,7 +223,6 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    width: '60%',
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
   },

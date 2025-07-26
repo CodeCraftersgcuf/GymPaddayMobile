@@ -2,7 +2,11 @@ import { DarkTheme, DefaultTheme } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { StatusBar } from "expo-status-bar";
+// import { StatusBar } from "expo-status-bar";
+import * as SecureStore from 'expo-secure-store';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { ThemeProvider, useTheme } from "@/contexts/themeContext";
@@ -13,6 +17,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, View } from "react-native";
+import NotificationManager from "./NotificationManager";
 
 // ✅ Create the client only once
 const queryClient = new QueryClient();
@@ -21,7 +26,8 @@ const queryClient = new QueryClient();
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-   const router = useRouter();
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
   const pathname = usePathname();
 
   const [isAppReady, setAppReady] = useState(false);
@@ -29,17 +35,32 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     // SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+  const [userDetails, setUserDetails] = useState<any>(null);
 
   useEffect(() => {
-    const checkOnboarding = async () => {
+    const checkOnboardingAndAuth = async () => {
       const hasSeen = await AsyncStorage.getItem("hasSeenOnboarding");
+      const storedToken = await SecureStore.getItemAsync("auth_token");
+      const storedUser = await SecureStore.getItemAsync("user_data");
+
       if (!hasSeen && pathname !== "/OnboardingScreen") {
         router.replace("/OnboardingScreen");
       }
+      console.log("stored user", JSON.parse(storedUser))
+
+      if (storedToken) setToken(storedToken);
+      if (storedUser) {
+        try {
+          setUserDetails(JSON.parse(storedUser));
+        } catch (e) {
+          console.error("Failed to parse user_data from SecureStore", e);
+        }
+      }
+
       setAppReady(true);
     };
 
-    checkOnboarding();
+    checkOnboardingAndAuth();
   }, []);
 
   useEffect(() => {
@@ -58,6 +79,7 @@ export default function RootLayout() {
 
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <MessageProvider>
@@ -102,11 +124,17 @@ export default function RootLayout() {
               <Stack.Screen name="daily-call-screen" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             </Stack>
+            {token && userDetails && (
+              <NotificationManager token={token} user={userDetails} />
+            )}
+
+
             <Toast /> {/* ✅ Add this here */}
           </SafeAreaProvider>
 
         </MessageProvider>
       </ThemeProvider>
     </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

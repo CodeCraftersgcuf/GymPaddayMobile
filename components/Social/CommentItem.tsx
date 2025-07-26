@@ -47,7 +47,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
           </Text>
           <View style={styles.commentActions}>
             <TouchableOpacity style={styles.replyButton}>
-              <Text style={[styles.replyText, { color: subtextColor }]}>Reply</Text>
+              {/* <Text style={[styles.replyText, { color: subtextColor }]}>Reply</Text> */}
             </TouchableOpacity>
             <View style={styles.likesContainer}>
               <Image source={images.SocialIcons} style={{ height: 20, width: 20 }} />
@@ -67,7 +67,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
               key={`${reply.id}-${index}`}
               comment={reply}
               darkMode={darkMode}
-              isReply={true}
+              isReply={false}
             />
           ))}
         </View>

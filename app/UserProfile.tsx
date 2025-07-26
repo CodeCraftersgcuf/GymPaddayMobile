@@ -26,6 +26,9 @@ import { followUnfollowUser, getFollowerList, getFollowingList } from '@/utils/q
 import { useTheme } from '@/contexts/themeContext';
 import { ChatMessagePayload, sendChatMessage } from '@/utils/mutations/chat';
 import Toast from 'react-native-toast-message';
+import { Video } from 'expo-av';
+import { blockUser, restrictUser } from '@/utils/utils/userPrivacyStorage';
+// import { blockUser, restrictUser } from '@/utils/userPrivacyStorage'; // adjust path
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
@@ -76,6 +79,7 @@ function getMediaByType(posts, type: 'image' | 'video') {
           ...firstMedia,
           postIndex,
           mediaIndex: 0, // always first
+          postId: post.id,
         };
       }
 
@@ -278,6 +282,7 @@ export default function ProfileScreen() {
   const videoMedia = getMediaByType(data?.posts, 'video');
   const renderMediaGrid = () => {
     const mediaArray = activeTab === 'posts' ? imageMedia : videoMedia;
+
     if (!mediaArray.length) {
       return (
         <View style={{ alignItems: 'center', padding: 40 }}>
@@ -287,42 +292,51 @@ export default function ProfileScreen() {
         </View>
       );
     }
+
     return (
       <View style={styles.gridContainer}>
         {mediaArray.map((mediaItem, idx) => (
           <TouchableOpacity
             key={`${mediaItem.postIndex}-${mediaItem.mediaIndex}`}
             style={styles.gridItem}
+            activeOpacity={0.8}
             onPress={() =>
               router.push({
-                pathname: '/MediaViewer',
+                pathname: '/SinglePostScreen',
                 params: {
-                  index: idx.toString(),
-                  type: activeTab,
-                  url: mediaItem.url,
-                  media_type: mediaItem.media_type,
-                  postIndex: mediaItem.postIndex?.toString() ?? '0',
-                  mediaIndex: mediaItem.mediaIndex?.toString() ?? '0',
-                },
+                  postId: mediaItem?.postId
+                }
               })
             }
-            activeOpacity={0.8}
           >
-            <Image
-              source={{ uri: mediaItem.url }}
-              style={styles.gridImage}
-              resizeMode="cover"
-            />
-            {mediaItem.media_type === 'video' && (
-              <View style={styles.playButton}>
-                <Icon name="play" size={24} color="#ffffff" />
+            {mediaItem.media_type === 'video' ? (
+              <View>
+                <Video
+                  source={{ uri: mediaItem.url }}
+                  style={styles.gridImage}
+                  resizeMode="cover"
+                  shouldPlay={false}
+                  isMuted
+                  isLooping={false}
+                  useNativeControls={false}
+                />
+                <View style={styles.playButton}>
+                  <Icon name="play" size={24} color="#fff" />
+                </View>
               </View>
+            ) : (
+              <Image
+                source={{ uri: mediaItem.url }}
+                style={styles.gridImage}
+                resizeMode="cover"
+              />
             )}
           </TouchableOpacity>
         ))}
       </View>
     );
   };
+
 
   // --- End of hooks and logic ---
 
@@ -479,15 +493,40 @@ export default function ProfileScreen() {
               <Text style={[styles.bottomSheetOptionText, { color: theme.text }]}>Listings</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.bottomSheetOption}>
+            {/*  */}
+
+            <TouchableOpacity
+              style={styles.bottomSheetOption}
+              onPress={async () => {
+                await restrictUser(user_id?.toString());
+                Toast.show({
+                  type: 'info',
+                  text1: 'User Restricted',
+                  text2: 'This user is now restricted.',
+                });
+                bottomSheetRef.current?.close();
+              }}
+            >
               <Icon name="warning-outline" size={24} color="#ff4444" />
               <Text style={[styles.bottomSheetOptionText, { color: '#ff4444' }]}>Restrict</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.bottomSheetOption}>
+            <TouchableOpacity
+              style={styles.bottomSheetOption}
+              onPress={async () => {
+                await blockUser(user_id?.toString());
+                Toast.show({
+                  type: 'error',
+                  text1: 'User Blocked',
+                  text2: 'You have blocked this user.',
+                });
+                bottomSheetRef.current?.close();
+              }}
+            >
               <MaterialIcons name="block" size={24} color="#ff4444" />
               <Text style={[styles.bottomSheetOptionText, { color: '#ff4444' }]}>Block User</Text>
             </TouchableOpacity>
+
           </BottomSheetView>
         </BottomSheet>
 
