@@ -42,8 +42,10 @@ const VerifyOtpScreen = () => {
       Toast.show({
         type: 'success',
         text1: 'OTP Verified!',
+        text2: 'Account created successfully. Please login.',
       });
-      router.replace("/login"); // Update if needed
+      // Use replace to prevent going back to signup flow
+      router.replace("/login");
     },
     onError: (error: any) => {
       Toast.show({

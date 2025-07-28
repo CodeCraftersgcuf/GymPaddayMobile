@@ -277,7 +277,7 @@ export default function Register() {
         text1: "Registered successfully!",
       });
 
-      router.push({ pathname: "/verify-otp", params: { email } });
+      router.replace({ pathname: "/verify-otp", params: { email } });
     },
     onError: (error) => showApiErrorToast(error, "Registration failed"),
   });
