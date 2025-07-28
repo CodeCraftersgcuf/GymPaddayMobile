@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, Text } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import { Notification } from '@/components/types';
 import NotificationItem from '@/components/more/notifications/NotificationItem';
@@ -58,6 +58,14 @@ export default function NotificationsScreen() {
     <NotificationItem notification={item} onPress={handleNotificationPress} />
   );
 
+  const renderEmptyState = () => (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 300 }}>
+      <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, textAlign: 'center' }}>
+        No notification data found
+      </Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={[styles.container, dark ? styles.containerDark : styles.containerLight]}>
       <Header title={'Notifications'} showBackButton={true} onBackPress={() => router.back()} />
@@ -71,6 +79,7 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={renderEmptyState}
         />
       )}
     </SafeAreaView>

@@ -215,7 +215,32 @@ export default function SocialFeedScreen() {
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
+    
+    // Refresh posts
     await refetch();
+    
+    // Refresh stories
+    try {
+      const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/get/stories`, {
+        headers: {
+          Authorization: `Bearer ${await getToken()}`,
+        },
+      });
+
+      const json = await response.json();
+      const { stories = [], my_stories = [] } = json;
+
+      const groupedStories = groupStoriesByUser(stories);
+      const myGroupedStories = groupStoriesByUser(my_stories);
+
+      setGroupedStories([
+        ...myGroupedStories,
+        ...groupedStories,
+      ]);
+    } catch (err) {
+      console.error('Error refreshing stories:', err);
+    }
+    
     setRefreshing(false);
   }, [refetch]);
 
@@ -256,6 +281,7 @@ export default function SocialFeedScreen() {
           title="Socials"
           admin={{ profile: "https://randomuser.me/api/portraits/men/45.jpg", userId: '12345' }}
           notificationID="notif123"
+          refreshing={refreshing} // Pass refreshing state to TabHeader
         />
 
         <ScrollView
@@ -272,7 +298,7 @@ export default function SocialFeedScreen() {
             />
           }
         >
-          <StoryContainer stories={groupedStories ?? []} />
+          <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />
           <PostContainer
             posts={posts}
             onCommentPress={handleCommentPress}

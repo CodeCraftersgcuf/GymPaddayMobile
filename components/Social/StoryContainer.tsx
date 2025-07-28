@@ -13,9 +13,10 @@ import * as SecureStore from 'expo-secure-store';
 
 interface Props {
   stories: GroupedUserStories[];
+  refreshing?: boolean; // Add refreshing prop
 }
 
-const StoryContainer: React.FC<Props> = ({ stories }) => {
+const StoryContainer: React.FC<Props> = ({ stories, refreshing }) => {
   const router = useRouter();
   const { dark } = useTheme();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
@@ -42,7 +43,7 @@ const StoryContainer: React.FC<Props> = ({ stories }) => {
         setProfileImage(defatulImage); // fallback to prop
       }
     })();
-  }, []);
+  }, [refreshing]); // Add refreshing as dependency
 
   return (
     <View style={styles.container}>

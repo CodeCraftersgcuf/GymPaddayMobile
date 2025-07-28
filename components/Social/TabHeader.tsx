@@ -17,9 +17,10 @@ interface TabHeaderProps {
   admin?: { profile?: string; userId?: string };
   notificationID?: string;
   children?: React.ReactNode;
+  refreshing?: boolean; // Add refreshing prop to trigger re-render
 }
 
-const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, children }) => {
+const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, children, refreshing }) => {
   const [fontsLoaded] = useFonts({
     Caveat_400Regular,
     Caveat_700Bold,
@@ -49,17 +50,17 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
           if (userData.profile_picture_url) {
             setProfileImage(userData.profile_picture_url);
           } else {
-            setProfileImage(defatulImage); // fallback to prop
+            setProfileImage(defatulImage);
           }
         } else {
-          setProfileImage(defatulImage); // fallback to prop
+          setProfileImage(defatulImage);
         }
       } catch (error) {
         console.error('Error loading user data:', error);
-        setProfileImage(defatulImage); // fallback to prop
+        setProfileImage(defatulImage);
       }
     })();
-  }, []);
+  }, [refreshing]); // Add refreshing as dependency
   const themeStyles = StyleSheet.create({
     notificationView: {
       backgroundColor: dark ? '#212121' : '#e5e5e5',

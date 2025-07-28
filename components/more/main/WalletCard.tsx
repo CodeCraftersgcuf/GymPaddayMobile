@@ -18,7 +18,7 @@ interface WalletCardProps {
   onWithdraw: () => void;
   onTransaction: () => void;
   userName: string;
-  userImage: string;
+  userImage: string | null; // Allow null type
   loading?: boolean; // optional loading state
 }
 
@@ -31,7 +31,7 @@ export default function WalletCard({
   onTransaction,
   userName,
   userImage,
-  loading = false, // default to false if not provided
+  loading = false,
 }: WalletCardProps) {
   const { dark } = useTheme();
   const [profileImage, setProfileImage] = useState<string | null>(userImage);
@@ -40,6 +40,16 @@ export default function WalletCard({
   const formatBalance = (amount: number) => {
     return new Intl.NumberFormat('en-US').format(amount);
   };
+  const getHiddenBalance = (amount: number) => {
+    if (amount === 0) return '*';
+    const balanceString = amount.toString();
+    return '*'.repeat(balanceString.length);
+  };
+
+  React.useEffect(() => {
+    setProfileImage(userImage); // Update when userImage prop changes
+  }, [userImage]);
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -59,14 +69,14 @@ export default function WalletCard({
         setProfileImage(userImage); // fallback to prop
       }
     })();
-  }, []);
+  }, [userImage]); // Add userImage as dependency
 
 
 
   return (
     <View style={styles.container}>
       <ImageBackground
-        source={require('../../../assets/images/walletbg.jpg')} // adjust path based on your file structure
+        source={require('../../../assets/images/walletbg.jpg')}
         resizeMode="cover"
         style={styles.cardContainer}
         imageStyle={{ borderRadius: 20 }}>
@@ -82,7 +92,7 @@ export default function WalletCard({
           <Text style={styles.balanceLabel}>Balance</Text>
           <View style={styles.balanceRow}>
             <Text style={styles.balanceAmount}>
-             {loading ? 'Fetching...' : `GP ${isBalanceHidden ? '***,***' : formatBalance(balance)}`}
+              {loading ? 'Fetching...' : `GP ${isBalanceHidden ? getHiddenBalance(balance) : formatBalance(balance)}`}
             </Text>
             <TouchableOpacity onPress={onToggleBalance} style={styles.eyeButton}>
               <AntDesign

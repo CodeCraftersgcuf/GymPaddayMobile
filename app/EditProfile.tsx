@@ -75,7 +75,19 @@ export default function EditProfileScreen() {
     onSuccess: async (response: any) => {
       // ✅ Update SecureStore with latest data if available
       if (response?.user) {
+        // Update both user_data and profile image in local storage
         await SecureStore.setItemAsync('user_data', JSON.stringify(response.user));
+        
+        // If the response contains an updated profile picture URL, update local state
+        if (response.user.profile_picture_url) {
+          setProfileImage(response.user.profile_picture_url);
+        }
+        
+        // If we uploaded a new image and it was successfully saved, update the stored image
+        if (profileImage && !profileImage.startsWith('http') && response.user.profile_picture_url) {
+          // The new image has been uploaded and we got back the server URL
+          setProfileImage(response.user.profile_picture_url);
+        }
       }
       Toast.show({
         type: 'success',

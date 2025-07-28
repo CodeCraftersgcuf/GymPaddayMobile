@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Pressable,
   ScrollView,
+  Text,
 } from "react-native";
 import { useTheme } from "../contexts/themeContext";
 import { Image } from "expo-image";
@@ -42,6 +43,7 @@ const validationSchema = Yup.object().shape({
   password: Yup.string()
     .min(8, "Password must be at least 8 characters")
     .required("Password is required"),
+  profileImage: Yup.string().required("Profile image is required"),
 });
 
 let themedark = false;
@@ -56,6 +58,8 @@ export default function Register() {
   const router = useRouter();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImageError, setProfileImageError] = useState<string>('');
+
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -72,10 +76,21 @@ export default function Register() {
 
     if (!result.canceled) {
       setProfileImage(result.assets[0].uri);
+      setProfileImageError(''); // Clear error when image is selected
+      // Update formik field value
+      if (formSetFieldValue) {
+        formSetFieldValue('profileImage', result.assets[0].uri);
+      }
     }
   };
 
   const handleRegister = (values: any) => {
+    // Check if profile image is selected
+    if (!profileImage) {
+      setProfileImageError('Profile image is required');
+      return;
+    }
+
     const formData = new FormData();
 
     formData.append('username', values.username);
@@ -87,16 +102,15 @@ export default function Register() {
     formData.append('password', values.password);
     formData.append('password_confirmation', values.password);
 
-    if (profileImage) {
-      const uriParts = profileImage.split('.');
-      const fileType = uriParts[uriParts.length - 1];
+    // Profile image is now required
+    const uriParts = profileImage.split('.');
+    const fileType = uriParts[uriParts.length - 1];
 
-      formData.append('profile_picture', {
-        uri: profileImage,
-        name: `profile.${fileType}`,
-        type: `image/${fileType}`,
-      } as any);
-    }
+    formData.append('profile_picture', {
+      uri: profileImage,
+      name: `profile.${fileType}`,
+      type: `image/${fileType}`,
+    } as any);
 
     mutation.mutate({ data: formData });
   };
@@ -169,6 +183,46 @@ export default function Register() {
       fontSize: 12,
     },
     linkText: { color: "#FF0000" },
+    imagePickerContainer: {
+      position: 'relative',
+      alignSelf: 'center',
+    },
+    profileImagePreview: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      borderWidth: 2,
+    },
+    addImageOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: 22,
+      height: 22,
+      borderRadius: 15,
+      backgroundColor: '#FF0000',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    addImageText: {
+      color: 'white',
+      fontSize: 15,
+      fontWeight: 'bold',
+    },
+    requiredText: {
+      textAlign: 'center',
+      fontSize: 12,
+      marginTop: 5,
+    },
+    errorText: {
+      color: '#FF0000',
+      fontSize: 12,
+      textAlign: 'center',
+      marginTop: 2,
+    },
+    disabledButton: {
+      opacity: 0.6,
+    },
   });
 
   const genderStyles = StyleSheet.create({
@@ -245,19 +299,35 @@ export default function Register() {
               <ThemedView style={styles.logoContainer}>
                 <Image source={images.logo} style={styles.logo} />
               </ThemedView>
-              <TouchableOpacity onPress={pickImage} style={{ alignSelf: 'center', marginBottom:0 }}>
-                <Image
-                  source={profileImage || require('../assets/icons/more/User.png')} // 
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 50,
-                    borderWidth: 1,
-                    borderColor: dark ? "white":"black",
-                    tintColor:dark ? "white":"black"
-                  }}
-                />
-              </TouchableOpacity>
+              
+              {/* Required Profile Image Section */}
+              <View style={{ alignSelf: 'center', marginBottom: 10 }}>
+                <TouchableOpacity onPress={pickImage} style={styles.imagePickerContainer}>
+                  <Image
+                    source={profileImage ? { uri: profileImage } : require('../assets/icons/more/User.png')}
+                    style={[
+                      styles.profileImagePreview,
+                      {
+                        tintColor: profileImage ? undefined : (dark ? "white" : "black"),
+                        borderColor: profileImageError ? "#FF0000" : (dark ? "white" : "black"),
+                      }
+                    ]}
+                  />
+                  {!profileImage && (
+                    <View style={styles.addImageOverlay}>
+                      <Text style={styles.addImageText}>+</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                
+                {/* Required text and error message */}
+                <Text style={[styles.requiredText, { color: dark ? "#999" : "#666" }]}>
+                  Profile Photo Required *
+                </Text>
+                {profileImageError ? (
+                  <Text style={styles.errorText}>{profileImageError}</Text>
+                ) : null}
+              </View>
 
               <ThemedView style={styles.formContainer}>
                 <ThemeText style={styles.title}>Register</ThemeText>
@@ -274,6 +344,7 @@ export default function Register() {
                     age: "",
                     gender: "",
                     password: "",
+                    profileImage: "",
                   }}
                   validationSchema={validationSchema}
                   onSubmit={handleRegister}
@@ -290,80 +361,101 @@ export default function Register() {
                     useEffect(() => {
                       setFormSetFieldValue(() => setFieldValue);
                     }, [setFieldValue]);
-                    return (<>
-                      <ThemedView style={styles.form}>
-                        <FloatingLabelInput
-                          label="Username"
-                          value={values.username}
-                          onChangeText={handleChange("username")}
-                          autoComplete="off"
-                          onBlur={handleBlur("username")}
-                          error={touched.username && errors.username ? errors.username : ""}
-                        />
-                        <FloatingLabelInput
-                          label="Full Name"
-                          value={values.fullName}
-                          onChangeText={handleChange("fullName")}
-                          autoComplete="off"
-                          onBlur={handleBlur("fullName")}
-                          error={touched.fullName && errors.fullName ? errors.fullName : ""}
-                        />
-                        <FloatingLabelInput
-                          label="Email"
-                          value={values.email}
-                          onChangeText={handleChange("email")}
-                          autoComplete="off"
-                          onBlur={handleBlur("email")}
-                          keyboardType="email-address"
-                          error={touched.email && errors.email ? errors.email : ""}
-                        />
-                        <FloatingLabelInput
-                          label="Phone Number"
-                          value={values.phone}
-                          onChangeText={handleChange("phone")}
-                          autoComplete="off"
-                          onBlur={handleBlur("phone")}
-                          keyboardType="phone-pad"
-                          error={touched.phone && errors.phone ? errors.phone : ""}
-                        />
-                        <FloatingLabelInput
-                          label="Age"
-                          value={values.age}
-                          onChangeText={handleChange("age")}
-                          autoComplete="off"
-                          onBlur={handleBlur("age")}
-                          keyboardType="numeric"
-                          error={touched.age && errors.age ? errors.age : ""}
-                        />
-                        <FloatingLabelGenderPicker
-                          label="Gender"
-                          value={values.gender}
-                          error={touched.gender && errors.gender ? errors.gender : ""}
-                          onPress={() => bottomSheetRef.current?.snapToIndex(0)}
-                        />
 
-                        <FloatingLabelInput
-                          label="Password"
-                          value={values.password}
-                          onChangeText={handleChange("password")}
-                          autoComplete="off"
-                          onBlur={handleBlur("password")}
-                          isPassword
-                          error={touched.password && errors.password ? errors.password : ""}
-                        />
+                    // Update profile image validation
+                    useEffect(() => {
+                      if (profileImage) {
+                        setFieldValue('profileImage', profileImage);
+                      }
+                    }, [profileImage, setFieldValue]);
 
-                        <Pressable onPress={() => handleSubmit()} style={styles.registerButton}>
-                          <ThemeText style={styles.registerButtonText}>Register</ThemeText>
-                        </Pressable>
+                    return (
+                      <>
+                        <ThemedView style={styles.form}>
+                          <FloatingLabelInput
+                            label="Username"
+                            value={values.username}
+                            onChangeText={handleChange("username")}
+                            autoComplete="off"
+                            onBlur={handleBlur("username")}
+                            error={touched.username && errors.username ? errors.username : ""}
+                          />
+                          <FloatingLabelInput
+                            label="Full Name"
+                            value={values.fullName}
+                            onChangeText={handleChange("fullName")}
+                            autoComplete="off"
+                            onBlur={handleBlur("fullName")}
+                            error={touched.fullName && errors.fullName ? errors.fullName : ""}
+                          />
+                          <FloatingLabelInput
+                            label="Email"
+                            value={values.email}
+                            onChangeText={handleChange("email")}
+                            autoComplete="off"
+                            onBlur={handleBlur("email")}
+                            keyboardType="email-address"
+                            error={touched.email && errors.email ? errors.email : ""}
+                          />
+                          <FloatingLabelInput
+                            label="Phone Number"
+                            value={values.phone}
+                            onChangeText={handleChange("phone")}
+                            autoComplete="off"
+                            onBlur={handleBlur("phone")}
+                            keyboardType="phone-pad"
+                            error={touched.phone && errors.phone ? errors.phone : ""}
+                          />
+                          <FloatingLabelInput
+                            label="Age"
+                            value={values.age}
+                            onChangeText={handleChange("age")}
+                            autoComplete="off"
+                            onBlur={handleBlur("age")}
+                            keyboardType="numeric"
+                            error={touched.age && errors.age ? errors.age : ""}
+                          />
+                          <FloatingLabelGenderPicker
+                            label="Gender"
+                            value={values.gender}
+                            error={touched.gender && errors.gender ? errors.gender : ""}
+                            onPress={() => bottomSheetRef.current?.snapToIndex(0)}
+                          />
 
-                        <TouchableOpacity onPress={() => router.push("/")}>
-                          <ThemeText style={styles.loginText}>Login</ThemeText>
-                        </TouchableOpacity>
-                      </ThemedView>
+                          <FloatingLabelInput
+                            label="Password"
+                            value={values.password}
+                            onChangeText={handleChange("password")}
+                            autoComplete="off"
+                            onBlur={handleBlur("password")}
+                            isPassword
+                            error={touched.password && errors.password ? errors.password : ""}
+                          />
 
-                      {/* BottomSheet for Gender */}
+                          <Pressable 
+                            onPress={() => {
+                              if (!profileImage) {
+                                setProfileImageError('Profile image is required');
+                              }
+                              handleSubmit();
+                            }} 
+                            style={[
+                              styles.registerButton,
+                              (!profileImage || Object.keys(errors).length > 0) && styles.disabledButton
+                            ]}
+                            disabled={!profileImage || Object.keys(errors).length > 0}
+                          >
+                            <ThemeText style={styles.registerButtonText}>
+                              {mutation.isPending ? "Registering..." : "Register"}
+                            </ThemeText>
+                          </Pressable>
 
-                    </>)
+                          <TouchableOpacity onPress={() => router.push("/")}>
+                            <ThemeText style={styles.loginText}>Login</ThemeText>
+                          </TouchableOpacity>
+                        </ThemedView>
+                      </>
+                    );
                   }}
                 </Formik>
               </ThemedView>
@@ -379,6 +471,7 @@ export default function Register() {
           </ThemedView>
         </SafeAreaView>
       </ScrollView>
+      
       <BottomSheet
         ref={bottomSheetRef}
         snapPoints={['35%']}

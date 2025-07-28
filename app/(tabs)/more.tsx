@@ -7,7 +7,8 @@ import {
   SafeAreaView,
   Image,
   Alert,
-  TouchableOpacity
+  TouchableOpacity,
+  RefreshControl
 } from 'react-native';
 import WalletCard from '@/components/more/main/WalletCard';
 import SettingItem from '@/components/more/main/SettingItem';
@@ -30,6 +31,7 @@ export default function More() {
   const [balance, setBalance] = useState<number>(0);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [openTheme, setopenTheme] = useState(false)
+  const [refreshing, setRefreshing] = useState(false);
   const route = useRouter();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
@@ -87,6 +89,42 @@ export default function More() {
         setLoadingBalance(false); // stop loading
       }
     })();
+  }, []);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      setLoadingBalance(true);
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No token found');
+
+      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/balance', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        setBalance(Number(result.balance));
+      }
+
+      // Also refresh user profile data including profile image
+      const userDataStr = await SecureStore.getItemAsync('user_data');
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        if (userData.profile_picture_url) {
+          setProfileImage(userData.profile_picture_url);
+        }
+      }
+    } catch (error) {
+      console.error('Refresh balance error:', error);
+    } finally {
+      setLoadingBalance(false);
+      setRefreshing(false);
+    }
   }, []);
 
 
@@ -182,7 +220,19 @@ export default function More() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : '#FAFAFA' }]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF3B30']}
+            tintColor="#FF3B30"
+            title="Pull to refresh"
+            titleColor={dark ? '#fff' : '#000'}
+          />
+        }
+      >
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
           <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Wallet</Text>
@@ -200,9 +250,8 @@ export default function More() {
           onWithdraw={handleWithdraw}
           onTransaction={handleTransaction}
           userName={userProfile.name}
-          userImage={userProfile.image}
-          loading={loadingBalance} // 👈 pass loading state
-
+          userImage={profileImage} // Use profileImage state instead of userProfile.image
+          loading={loadingBalance}
         />
 
         {/* Settings Section */}
