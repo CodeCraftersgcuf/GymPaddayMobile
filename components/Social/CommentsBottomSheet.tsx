@@ -45,14 +45,13 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   postId,
   onClose,
   onAddComment,
-  loading = false // <-- default to false
-
+  loading = false
 }) => {
   const { dark } = useTheme();
   const [newComment, setNewComment] = React.useState('');
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<FlatList>(null);
 
   // Animate in when visible changes
   useEffect(() => {
@@ -90,8 +89,9 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const handleSendComment = () => {
     if (newComment.trim() && postId !== null && onAddComment) {
       onAddComment(newComment, postId);
-      setNewComment('');
-      // Scroll to bottom after sending
+      setNewComment(''); // Clear input immediately
+      
+      // Scroll to bottom to show the new comment
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -156,6 +156,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
           </View>
         ) : (
           <FlatList
+            ref={scrollViewRef}
             style={styles.commentsList}
             data={comments}
             keyExtractor={(item, index) => `${item.id}-${index}`}
@@ -170,7 +171,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
               </View>
             }
             contentContainerStyle={{ flexGrow: 1 }}
-            scrollEnabled={false}
+            scrollEnabled={true}
           />
         )}
 

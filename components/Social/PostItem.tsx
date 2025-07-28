@@ -300,8 +300,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
             <View>
               <ThemeText style={styles.username}>{post.user.username}</ThemeText>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <Text style={styles.time}>Lagos, Nigeria</Text>
-                <Text style={styles.time}>•</Text>
+                {/* <Text style={styles.time}>Lagos, Nigeria</Text> */}
+                {/* <Text style={styles.time}>•</Text> */}
                 <Text style={styles.time}>{formatTimestamp(post.timestamp)}</Text>
               </View>
             </View>

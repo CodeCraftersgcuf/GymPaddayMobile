@@ -78,6 +78,11 @@ export default function EditProfileScreen() {
         // Update both user_data and profile image in local storage
         await SecureStore.setItemAsync('user_data', JSON.stringify(response.user));
         
+        // Also update the username in SecureStore if it changed
+        if (response.user.username) {
+          await SecureStore.setItemAsync('username', response.user.username);
+        }
+        
         // If the response contains an updated profile picture URL, update local state
         if (response.user.profile_picture_url) {
           setProfileImage(response.user.profile_picture_url);

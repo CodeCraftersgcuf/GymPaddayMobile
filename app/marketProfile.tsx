@@ -98,6 +98,7 @@ const ProfileScreen: React.FC = () => {
                 const userDataStr = await SecureStore.getItemAsync('user_data');
                 if (userDataStr) {
                     const userData = JSON.parse(userDataStr);
+                    setUsername(userData.username || userData.fullname || "User");
                     if (userData.profile_picture_url) {
                         setProfileImage(userData.profile_picture_url);
                     } else {
@@ -105,18 +106,13 @@ const ProfileScreen: React.FC = () => {
                     }
                 } else {
                     setProfileImage(dummyImage);
+                    setUsername("User");
                 }
             } catch (error) {
                 console.error('Error loading user data:', error);
                 setProfileImage(dummyImage);
+                setUsername("User");
             }
-        })();
-    }, []);
-
-    React.useEffect(() => {
-        (async () => {
-            const storedUsername = await SecureStore.getItemAsync('username');
-            setUsername(storedUsername || "User");
         })();
     }, []);
 
@@ -299,8 +295,24 @@ const ProfileScreen: React.FC = () => {
     // Handler for pull-to-refresh
     const onRefresh = async () => {
         setRefreshing(true);
+        
         // Refetch the query
         await refetch();
+        
+        // Also refresh user data including username
+        try {
+            const userDataStr = await SecureStore.getItemAsync('user_data');
+            if (userDataStr) {
+                const userData = JSON.parse(userDataStr);
+                setUsername(userData.username || userData.fullname || "User");
+                if (userData.profile_picture_url) {
+                    setProfileImage(userData.profile_picture_url);
+                }
+            }
+        } catch (error) {
+            console.error('Error refreshing user data:', error);
+        }
+        
         setRefreshing(false);
     };
 

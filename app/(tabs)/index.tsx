@@ -49,6 +49,7 @@ function LoadingIndicator({ text = "Loading..." }) {
 export default function SocialFeedScreen() {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [currentComments, setCurrentComments] = useState<any[]>([]);
+  const [optimisticComments, setOptimisticComments] = useState<any[]>([]);
   const [currentPostId, setCurrentPostId] = useState<number | null>(null);
   const [idCan, setidCan] = useState({});
   const [refreshing, setRefreshing] = useState(false);
@@ -123,7 +124,7 @@ export default function SocialFeedScreen() {
     isPending: isAddingComment,
     error: addCommentError
   } = useMutation({
-    mutationFn: async ({ text, postId }) => {
+    mutationFn: async ({ text, postId, tempId }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error("No token");
       return createComment({
@@ -132,11 +133,67 @@ export default function SocialFeedScreen() {
       });
     },
     onSuccess: async (res, variables) => {
-      // Optionally: refetch comments after adding
-      await refetchComments();
+      // Don't remove optimistic comment or refetch - just log success
+      console.log('Comment added successfully to backend');
+      // The optimistic comment will remain in the UI
+    },
+    onError: (error, variables) => {
+      // Only remove the optimistically added comment from UI on error
+      console.error('Error adding comment, removing from UI:', error);
+      setOptimisticComments(prev => 
+        prev.filter(comment => comment.id !== variables.tempId)
+      );
     }
   });
 
+  const handleAddComment = async (text: string, postId: number) => {
+    // Get current user data for optimistic comment
+    const getCurrentUser = async () => {
+      try {
+        const userData = await SecureStore.getItemAsync('user_data');
+        return userData ? JSON.parse(userData) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const user = await getCurrentUser();
+    
+    // Create temporary comment for immediate UI update
+    const tempComment = {
+      id: `temp_${Date.now()}`,
+      userId: user?.id?.toString() || 'current_user',
+      username: user?.username || 'You',
+      profileImage: user?.profile_picture_url || '',
+      text: text,
+      timestamp: new Date().toISOString(),
+      likes: 0,
+      replies: []
+    };
+
+    // Add optimistic comment immediately
+    setOptimisticComments(prev => [...prev, tempComment]);
+
+    // Send to backend
+    addComment({ text, postId, tempId: tempComment.id });
+
+    console.log('Adding comment to post:', postId, text);
+  };
+
+  const handleCommentPress = (comments: any[], postId: number) => {
+    setCurrentPostId(postId);
+    setCommentModalVisible(true);
+    // Clear any existing optimistic comments when opening new comment modal
+    setOptimisticComments([]);
+    refetchComments();
+  };
+
+  const handleCloseComments = () => {
+    setCommentModalVisible(false);
+    setCurrentPostId(null);
+    // Clear optimistic comments when closing modal
+    setOptimisticComments([]);
+  };
 
   useEffect(() => {
     if (data && data.data) {
@@ -173,27 +230,6 @@ export default function SocialFeedScreen() {
       setPosts(formatted);
     }
   }, [data]);
-
-
-
-  const handleCommentPress = (comments: any[], postId: number) => {
-    setCurrentPostId(postId);
-    setCommentModalVisible(true);
-    refetchComments();
-  };
-
-  const handleCloseComments = () => {
-    setCommentModalVisible(false);
-    setCurrentPostId(null);
-  };
-
-  const handleAddComment = (text: string, postId: number) => {
-    // Call the mutation
-    addComment({ text, postId });
-
-    console.log('Adding comment to post:', postId, text);
-  };
-
 
   const handleStartLive = () => {
     route.push('/goLive');
@@ -307,11 +343,11 @@ export default function SocialFeedScreen() {
         </ScrollView>
         <CommentsBottomSheet
           visible={commentModalVisible}
-          comments={mapApiCommentsToInternal(commentData)}
+          comments={[...mapApiCommentsToInternal(commentData), ...optimisticComments]}
           postId={currentPostId}
           onClose={handleCloseComments}
           onAddComment={handleAddComment}
-          loading={isLoadingComments || isAddingComment}
+          loading={isLoadingComments}
         />
 
 
