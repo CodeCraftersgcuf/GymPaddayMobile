@@ -116,13 +116,14 @@ export default function ItemDetailsScreen() {
         listing?.user?.profile_picture_url ||
         'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg';
 
-        console.log("Seller Image:", sellerImage);
+    console.log("Seller Image:", sellerImage);
     // Prepare other fields
     const title = listing?.title || '...';
     const price = listing?.price ? `N${listing.price}` : '';
     const location = listing?.location || '';
     const description = listing?.description || '';
     const sellerName = listing?.user?.name || 'User';
+    const sellerId = listing?.user_id || 18;
 
 
     // Loading and error handling
@@ -147,6 +148,15 @@ export default function ItemDetailsScreen() {
 
     const handleBack = () => {
         router.back();
+    };
+
+
+    const handleNavigateToUserProfile = () => {
+        console.log("Navigating to user profile with ID:", sellerId);
+        router.push({
+            pathname: '/UserProfile',
+            params: { user_id: String(sellerId) }, // Ensure sellerId is a string
+        });
     };
 
     const handleSendMessage = async () => {
@@ -248,12 +258,11 @@ export default function ItemDetailsScreen() {
                 {/* Item Info Card */}
                 <View style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}>
                     <Text style={[styles.itemTitle, { color: theme.text }]}>{title}</Text>
-                   <Text style={styles.itemPrice}>
-  N {parseInt(String(price).replace(/[^0-9]/g, ''), 10).toLocaleString()}
-</Text>
+                    <Text style={styles.itemPrice}>
+                        N {parseInt(String(price).replace(/[^0-9]/g, ''), 10).toLocaleString()}
+                    </Text>
 
-
-                    <View style={styles.sellerSection}>
+                    <TouchableOpacity style={styles.sellerSection} onPress={handleNavigateToUserProfile}>
                         <Image
                             source={{ uri: sellerImage }}
                             style={styles.sellerImage}
@@ -266,7 +275,7 @@ export default function ItemDetailsScreen() {
                                 <Text style={[styles.sellerLocation, { color: theme.textSecondary }]}>{location}</Text>
                             </View>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Description */}

@@ -12,7 +12,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
- 
+
 } from 'react-native';
 import Modal from 'react-native-modal'; // ✅ Correct
 
@@ -201,7 +201,7 @@ export default function MarketplaceScreen() {
 
     // router.push("/marketProfile");
   };
-  const handleMarketProfile =()=>{
+  const handleMarketProfile = () => {
     router.push("/marketProfile");
   }
 
@@ -247,22 +247,24 @@ export default function MarketplaceScreen() {
           ₦{Intl.NumberFormat('en-NG').format(Math.floor(item.price))}
         </Text>
 
-        <TouchableOpacity onPress={() => router.push('/marketView')} style={styles.sellerInfo}>
-          <ImageWithLoading
-            source={{ uri: item.sellerAvatar || dummyImage }}
-            style={styles.sellerAvatar}
-          />
-          <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', gap: 12 }}>
-            <Text style={[styles.sellerName, { color: theme.textSecondary }]}>
-              {item.seller}
-            </Text>
-            <Text style={[styles.timeAgo, { color: theme.textSecondary }]}>
-              {item.timeAgo}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+        {/* <TouchableOpacity onPress={() => router.push('/marketView')} style={styles.sellerInfo}> */}
+        <TouchableOpacity style={styles.sellerInfo}>
+
+        <ImageWithLoading
+          source={{ uri: item.sellerAvatar || dummyImage }}
+          style={styles.sellerAvatar}
+        />
+        <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', gap: 12 }}>
+          <Text style={[styles.sellerName, { color: theme.textSecondary }]}>
+            {item.seller}
+          </Text>
+          <Text style={[styles.timeAgo, { color: theme.textSecondary }]}>
+            {item.timeAgo}
+          </Text>
+        </View>
     </TouchableOpacity>
+      </View >
+    </TouchableOpacity >
   );
 
   // --- Loading state ---
@@ -407,43 +409,43 @@ export default function MarketplaceScreen() {
           )}
         </View>
       </ScrollView>
-    <Modal
-  isVisible={showLocationSheet}
-  onBackdropPress={() => setShowLocationSheet(false)}
-  onSwipeComplete={() => setShowLocationSheet(false)}
-  swipeDirection="down"
-  style={styles.modal}
->
-  <View style={styles.bottomSheetContent}>
-    {nigeriaLocations.map(loc => (
-      <TouchableOpacity key={loc.id} onPress={() => {
-        setSelectedLocation(loc.id);
-        setShowLocationSheet(false);
-      }}>
-        <Text style={styles.bottomSheetItem}>{loc.name}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-</Modal>
+      <Modal
+        isVisible={showLocationSheet}
+        onBackdropPress={() => setShowLocationSheet(false)}
+        onSwipeComplete={() => setShowLocationSheet(false)}
+        swipeDirection="down"
+        style={styles.modal}
+      >
+        <View style={styles.bottomSheetContent}>
+          {nigeriaLocations.map(loc => (
+            <TouchableOpacity key={loc.id} onPress={() => {
+              setSelectedLocation(loc.id);
+              setShowLocationSheet(false);
+            }}>
+              <Text style={styles.bottomSheetItem}>{loc.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
 
-<Modal
-  isVisible={showCategorySheet}
-  onBackdropPress={() => setShowCategorySheet(false)}
-  onSwipeComplete={() => setShowCategorySheet(false)}
-  swipeDirection="down"
-  style={styles.modal}
->
-  <View style={styles.bottomSheetContent}>
-    {categories.map(cat => (
-      <TouchableOpacity key={cat.id} onPress={() => {
-        setSelectedCategory(cat.id);
-        setShowCategorySheet(false);
-      }}>
-        <Text style={styles.bottomSheetItem}>{cat.title}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-</Modal>
+      <Modal
+        isVisible={showCategorySheet}
+        onBackdropPress={() => setShowCategorySheet(false)}
+        onSwipeComplete={() => setShowCategorySheet(false)}
+        swipeDirection="down"
+        style={styles.modal}
+      >
+        <View style={styles.bottomSheetContent}>
+          {categories.map(cat => (
+            <TouchableOpacity key={cat.id} onPress={() => {
+              setSelectedCategory(cat.id);
+              setShowCategorySheet(false);
+            }}>
+              <Text style={styles.bottomSheetItem}>{cat.title}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
 
 
       {/* Floating Action Button */}
@@ -457,7 +459,7 @@ export default function MarketplaceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-   
+
     paddingBottom: 60,
   },
   header: {
@@ -659,23 +661,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
- modal: {
-  justifyContent: 'flex-end',
-  margin: 0, // removes default margin
-},
-bottomSheetContent: {
-  backgroundColor: 'white',
-  padding: 20,
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  maxHeight: '50%', // optional: prevents full screen takeover
-},
-bottomSheetItem: {
-  paddingVertical: 14,
-  fontSize: 16,
-  borderBottomWidth: 1,
-  borderBottomColor: '#eee',
-},
+  modal: {
+    justifyContent: 'flex-end',
+    margin: 0, // removes default margin
+  },
+  bottomSheetContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '50%', // optional: prevents full screen takeover
+  },
+  bottomSheetItem: {
+    paddingVertical: 14,
+    fontSize: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
 
 });
 
