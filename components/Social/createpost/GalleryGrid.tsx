@@ -16,6 +16,7 @@ interface GalleryGridProps {
   selectedMedia: GalleryMedia[];
   onMediaSelect: (media: GalleryMedia) => void;
   onGalleryButtonPress: () => void;
+  onCameraButtonPress: () => void; // Add this prop
   onViewMedia: (media: GalleryMedia) => void;
 }
 
@@ -24,6 +25,7 @@ export default function GalleryGrid({
   selectedMedia, 
   onMediaSelect, 
   onGalleryButtonPress,
+  onCameraButtonPress, // Add this parameter
   onViewMedia 
 }: GalleryGridProps) {
   const screenWidth = Dimensions.get('window').width;
@@ -55,6 +57,15 @@ export default function GalleryGrid({
         >
           <Ionicons name='image-outline' size={24} color="#666" />
           <Text style={styles.galleryButtonText}>Add Media</Text>
+        </TouchableOpacity>
+
+        {/* Camera button */}
+        <TouchableOpacity 
+          style={[styles.galleryButton, { width: imageSize, height: imageSize }]}
+          onPress={onCameraButtonPress}
+        >
+          <Ionicons name='camera-outline' size={24} color="#666" />
+          <Text style={styles.galleryButtonText}>Camera</Text>
         </TouchableOpacity>
 
         {/* Gallery media */}

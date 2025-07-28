@@ -137,7 +137,7 @@ export default function Register() {
       transform: [{ translateY: -60 }],
       borderRadius: 10,
       elevation: 5,
-      marginBottom:-40,
+      marginBottom: -40,
       shadowColor: themedark ? 'white' : 'black',
       padding: 10,
     },
@@ -191,7 +191,7 @@ export default function Register() {
       width: 100,
       height: 100,
       borderRadius: 50,
-      borderWidth: 2,
+      // borderWidth: 2,
     },
     addImageOverlay: {
       position: 'absolute',
@@ -299,18 +299,15 @@ export default function Register() {
               <ThemedView style={styles.logoContainer}>
                 <Image source={images.logo} style={styles.logo} />
               </ThemedView>
-              
+
               {/* Required Profile Image Section */}
               <View style={{ alignSelf: 'center', marginBottom: 10 }}>
                 <TouchableOpacity onPress={pickImage} style={styles.imagePickerContainer}>
                   <Image
-                    source={profileImage ? { uri: profileImage } : require('../assets/icons/more/User.png')}
+                    source={profileImage ? { uri: profileImage } : require('../assets/icons/more/profileImage.png')}
                     style={[
                       styles.profileImagePreview,
-                      {
-                        tintColor: profileImage ? undefined : (dark ? "white" : "black"),
-                        borderColor: profileImageError ? "#FF0000" : (dark ? "white" : "black"),
-                      }
+
                     ]}
                   />
                   {!profileImage && (
@@ -319,7 +316,7 @@ export default function Register() {
                     </View>
                   )}
                 </TouchableOpacity>
-                
+
                 {/* Required text and error message */}
                 <Text style={[styles.requiredText, { color: dark ? "#999" : "#666" }]}>
                   Profile Photo Required *
@@ -432,13 +429,13 @@ export default function Register() {
                             error={touched.password && errors.password ? errors.password : ""}
                           />
 
-                          <Pressable 
+                          <Pressable
                             onPress={() => {
                               if (!profileImage) {
                                 setProfileImageError('Profile image is required');
                               }
                               handleSubmit();
-                            }} 
+                            }}
                             style={[
                               styles.registerButton,
                               (!profileImage || Object.keys(errors).length > 0) && styles.disabledButton
@@ -471,7 +468,7 @@ export default function Register() {
           </ThemedView>
         </SafeAreaView>
       </ScrollView>
-      
+
       <BottomSheet
         ref={bottomSheetRef}
         snapPoints={['35%']}

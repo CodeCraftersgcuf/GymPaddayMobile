@@ -277,27 +277,62 @@ export default function CreatePostScreen() {
     }
   };
 
-  const pickMedia = async (type: 'photo' | 'video' | 'mixed') => {
+  const handleCameraButtonPress = async () => {
     try {
-      let mediaTypes = ImagePicker.MediaTypeOptions.All;
-      if (type === 'photo') {
-        mediaTypes = ImagePicker.MediaTypeOptions.Images;
-      } else if (type === 'video') {
+      if (Platform.OS === 'web') {
+        Alert.alert('Info', 'Camera is not available on web platform.');
+        return;
+      }
+
+      // Request camera permissions
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'We need camera access to take photos and videos. Please grant permission in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => ImagePicker.requestCameraPermissionsAsync() },
+          ]
+        );
+        return;
+      }
+
+      // Show action sheet to choose camera type
+      Alert.alert(
+        'Camera',
+        'Choose what you want to capture',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Take Photo', onPress: () => takeFromCamera('photo') },
+          { text: 'Record Video', onPress: () => takeFromCamera('video') },
+        ]
+      );
+    } catch (error) {
+      console.error('Error handling camera button press:', error);
+      Alert.alert('Error', 'Failed to open camera. Please try again.');
+    }
+  };
+
+  const takeFromCamera = async (type: 'photo' | 'video') => {
+    try {
+      let mediaTypes = ImagePicker.MediaTypeOptions.Images;
+      if (type === 'video') {
         mediaTypes = ImagePicker.MediaTypeOptions.Videos;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const result = await ImagePicker.launchCameraAsync({
         mediaTypes,
-        allowsMultipleSelection: true,
+        allowsEditing: true,
+        aspect: [4, 3],
         quality: 0.8,
         videoQuality: ImagePicker.VideoQuality?.High || 1,
         videoMaxDuration: 30,
-        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const newMedia: GalleryMedia[] = result.assets.map((asset, index) => ({
-          id: `picked_${Date.now()}_${index}`,
+          id: `camera_${Date.now()}_${index}`,
           uri: asset.uri,
           width: asset.width || 300,
           height: asset.height || 400,
@@ -306,29 +341,29 @@ export default function CreatePostScreen() {
         }));
 
         setSelectedMedia(prev => [...prev, ...newMedia]);
-        console.log('Media picked successfully:', newMedia.length, 'items');
+        console.log('Camera media captured successfully:', newMedia.length, 'items');
 
         Alert.alert(
           'Success',
-          `${newMedia.length} media item(s) added to your post!`,
+          `${type === 'photo' ? 'Photo' : 'Video'} captured and added to your post!`,
           [{ text: 'OK' }]
         );
       } else {
-        console.log('Media selection cancelled or no assets selected');
+        console.log('Camera capture cancelled');
       }
     } catch (error) {
-      console.error('Error picking media:', error);
+      console.error('Error taking from camera:', error);
 
       if (error.message?.includes('permission')) {
         Alert.alert(
           'Permission Error',
-          'Unable to access media library. Please check your permissions in device settings.',
+          'Unable to access camera. Please check your permissions in device settings.',
           [{ text: 'OK' }]
         );
       } else {
         Alert.alert(
           'Error',
-          'Failed to select media. Please try again or select from gallery below.',
+          'Failed to capture media. Please try again.',
           [{ text: 'OK' }]
         );
       }
@@ -481,6 +516,7 @@ export default function CreatePostScreen() {
         selectedMedia={selectedMedia}
         onMediaSelect={handleMediaSelect}
         onGalleryButtonPress={handleGalleryButtonPress}
+        onCameraButtonPress={handleCameraButtonPress}
         onViewMedia={handleMediaView}
       />
       <MediaViewModal

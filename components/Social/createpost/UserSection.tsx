@@ -50,7 +50,7 @@ export default function UserSection({ postText, onTextChange }: UserSectionProps
         />
         <TextInput
           style={[styles.textInput, { color: dark ? 'white' : 'black' }]}
-          placeholder="What is on your mind?"
+          placeholder=" Let's see what you got!"
           placeholderTextColor={"#999"}
           multiline
           value={postText}
