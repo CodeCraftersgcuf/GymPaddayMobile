@@ -22,6 +22,7 @@ import WebView from 'react-native-webview';
 import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
 import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
 import { Alert } from 'react-native';
+import { TextInput } from 'react-native-gesture-handler';
 
 interface LiveStreamingViewProps {
   dark: boolean;
@@ -61,27 +62,53 @@ export default function LiveStreamingView({
       );
     },
     onSuccess: (data) => {
-      console.log('✅ Live token fetched:', data);
+      // console.log('✅ Live token fetched:', data);
     },
     onError: (error) => {
       console.error('❌ Live token error:', error);
     },
   });
+
+
   const [audienceModalVisible, setAudienceModalVisible] = useState(false);
   const { data: chats = [], isLoading } = useLiveStreamChats(livestreamId);
   const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(livestreamId);
-  console.log("chats", chats)
+  // console.log("chats", chats)
   useEffect(() => {
-    if (chats.length > 0) {
-      const formatted = chats.map((msg: any) => ({
+  if (chats.length > 0) {
+    let giftTotal = 0;
+
+    const formatted = chats.map((msg: any) => {
+      if (msg.type === 'gift') {
+        giftTotal += 1;
+      }
+
+      return {
         id: msg.id.toString(),
         user: msg.user?.fullname || 'User',
         message: msg.message,
         avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
-      }));
-      setChatMessages(formatted);
-    }
-  }, [chats]);
+        hasGift: msg.type === 'gift',
+        giftCount: msg.amount,
+
+        // ✅ Add reply_to data (if exists)
+        reply_to: msg.reply_to
+          ? {
+              id: msg.reply_to.id,
+              message: msg.reply_to.message,
+              user: {
+                fullname: msg.reply_to.user?.fullname || 'User',
+              },
+            }
+          : null,
+      };
+    });
+
+    setChatMessages(formatted);
+    setTotalGifts(giftTotal);
+  }
+}, [chats]);
+
 
   const audienceQuery = useQuery({
     queryKey: ['audience', livestreamId],
@@ -122,23 +149,64 @@ export default function LiveStreamingView({
   }, []);
   useEffect(() => {
     if (audienceQuery.data) {
-      console.log('Audience API response:', audienceQuery.data);
+      // console.log('Audience API response:', audienceQuery.data);
     }
   }, [audienceQuery.data]);
-useEffect(() => {
-  const onBackPress = () => {
-    Alert.alert(
-      'End Live Stream?',
-      'Please end the live stream before leaving.',
-      [{ text: 'OK', style: 'cancel' }]
-    );
-    return true; // prevent default behavior
+  useEffect(() => {
+    const onBackPress = () => {
+      Alert.alert(
+        'End Live Stream?',
+        'Please end the live stream before leaving.',
+        [{ text: 'OK', style: 'cancel' }]
+      );
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => subscription.remove(); // cleanup
+  }, []);
+
+  //adding new features
+  const [duration, setDuration] = useState(0);
+  const [audienceCount, setAudienceCount] = useState(0);
+  const [totalGifts, setTotalGifts] = useState(0);
+  const [insightsModalVisible, setInsightsModalVisible] = useState(false);
+
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDuration((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/live-streams/${livestreamId}/audience-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        console.log("testing audiance count", data)
+        if (res.ok) setAudienceCount(data.count || 0);
+      } catch (err) {
+        console.log("🔴 Error fetching audience count", err);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [livestreamId]);
 
-  const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+  //adding new feature reply to user chaty
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replyModalVisible, setReplyModalVisible] = useState(false);
 
-  return () => subscription.remove(); // cleanup
-}, []);
 
 
   return (
@@ -179,29 +247,64 @@ useEffect(() => {
           />
         )}
 
-   <View style={styles.chatOverlay}>
-        <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.chatOverlay}>
+          <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
           {chatMessages.map((chat) => (
-            <View key={chat.id} style={styles.chatMessage}>
-              <Image source={{ uri: chat.avatar }} style={styles.avatar} />
-              <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-                <Text style={styles.username}>{chat.user}</Text>
-                <View style={styles.messageRow}>
-                  <Text style={styles.messageText}>{chat.message}</Text>
-                  {chat.hasGift && (
-                    <View style={styles.giftContainer}>
-                      <Text style={styles.giftEmoji}>🎁</Text>
-                      <View style={styles.giftBadge}>
-                        <Text style={styles.giftCount}>x{chat.giftCount}</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
+  <TouchableOpacity
+    key={chat.id}
+    onLongPress={() => {
+      setReplyTo(chat);
+      setReplyText('');
+      setReplyModalVisible(true);
+    }}
+  >
+    <View style={styles.chatMessage}>
+      <Image source={{ uri: chat.avatar }} style={styles.avatar} />
+      <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+        <Text style={styles.username}>{chat.user}</Text>
+
+        {/* Reply Preview Box */}
+        {chat.reply_to && (
+          <View style={styles.replyPreview}>
+            <Text style={styles.replyUserText}>
+              Replying to {chat.reply_to.user?.fullname || 'User'}
+            </Text>
+            <Text style={styles.replyMessageText} numberOfLines={1}>
+              {chat.reply_to.message}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.messageRow}>
+          <Text style={styles.messageText}>{chat.message}</Text>
+
+          {chat.hasGift && (
+            <View style={styles.giftContainer}>
+              <Text style={styles.giftEmoji}>🎁</Text>
+              <View style={styles.giftBadge}>
+                <Text style={styles.giftCount}>x{chat.giftCount}</Text>
               </View>
             </View>
-          ))}
-        </ScrollView>
+          )}
+        </View>
       </View>
+    </View>
+  </TouchableOpacity>
+))}
+
+          </ScrollView>
+        </View>
+
+        {replyTo && (
+          <View style={styles.replyBox}>
+            <Text style={styles.replyUser}>Replying to: {replyTo.user}</Text>
+            <Text style={styles.replyContent} numberOfLines={1}>{replyTo.message}</Text>
+            <TouchableOpacity onPress={() => setReplyTo(null)}>
+              <Text style={{ color: 'red' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
       </View>
 
       {/* Controls */}
@@ -222,6 +325,20 @@ useEffect(() => {
             View Audience
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.viewAudienceButton}
+          onPress={() => setInsightsModalVisible(true)}
+        >
+          <Text
+            style={[
+              styles.viewAudienceButtonText,
+              { color: dark ? '#FFF' : '#000' },
+            ]}
+          >
+            View Insights
+          </Text>
+        </TouchableOpacity>
+
 
       </View>
       <Modal
@@ -271,7 +388,172 @@ useEffect(() => {
 
         </View>
       </Modal>
-   
+      <Modal
+        isVisible={insightsModalVisible}
+        onBackdropPress={() => setInsightsModalVisible(false)}
+        style={{ margin: 0, justifyContent: 'flex-end' }}
+      >
+        <View
+          style={{
+            backgroundColor: '#fff',
+            padding: 20,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxHeight: '90%',
+          }}
+        >
+          <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 16 }}>
+            📊 Live Stream Insights
+          </Text>
+
+          {/* Stats Section */}
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              rowGap: 16,
+              columnGap: 12,
+              marginBottom: 20,
+            }}
+          >
+            {[
+              { label: '👁️ Viewers', value: audienceCount },
+              { label: '⏱️ Duration', value: formatDuration(duration) },
+              { label: '🎁 Total Gifts', value: totalGifts },
+              { label: '🪙 GP Coins', value: totalGifts * 10 },
+              { label: '💬 Comments', value: chatMessages.length },
+            ].map((item, idx) => (
+              <View
+                key={idx}
+                style={{
+                  width: '48%',
+                  padding: 12,
+                  borderRadius: 12,
+                  backgroundColor: '#f9f9f9',
+                  shadowColor: '#000',
+                  shadowOpacity: 0.05,
+                  shadowRadius: 4,
+                  shadowOffset: { width: 0, height: 2 },
+                  elevation: 2,
+                }}
+              >
+                <Text style={{ fontSize: 14, color: '#555' }}>{item.label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', marginTop: 4 }}>
+                  {item.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Audience List */}
+          <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>
+            🧑‍🤝‍🧑 Audience Members
+          </Text>
+
+          {audienceQuery.isLoading ? (
+            <ActivityIndicator size="large" color="#000" />
+          ) : Array.isArray(audienceQuery.data?.data) &&
+            audienceQuery.data.data.length > 0 ? (
+            <ScrollView style={{ maxHeight: 300 }}>
+              {audienceQuery.data.data.map((audience: any) => (
+                <View
+                  key={audience.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 12,
+                    backgroundColor: '#f2f2f2',
+                    marginBottom: 10,
+                    borderRadius: 10,
+                    shadowColor: '#000',
+                    shadowOpacity: 0.05,
+                    shadowRadius: 4,
+                    shadowOffset: { width: 0, height: 1 },
+                    elevation: 1,
+                    gap: 12,
+                  }}
+                >
+                  <Image
+                    source={{
+                      uri: audience.user?.profile_picture
+                        ? audience.user.profile_picture.includes('http')
+                          ? audience.user.profile_picture
+                          : `${audience.user.profile_picture}`
+                        : 'https://yourdomain.com/default-avatar.png',
+                    }}
+                    style={{ width: 44, height: 44, borderRadius: 22 }}
+                  />
+                  <View>
+                    <Text style={{ fontWeight: '600', fontSize: 16 }}>
+                      {audience.user?.fullname || 'Unnamed User'}
+                    </Text>
+                    <Text style={{ color: '#666', fontSize: 13 }}>
+                      {audience.user?.email || 'No email'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          ) : (
+            <Text
+              style={{
+                color: '#888',
+                textAlign: 'center',
+                paddingVertical: 20,
+                fontStyle: 'italic',
+              }}
+            >
+              No audience found.
+            </Text>
+          )}
+        </View>
+      </Modal>
+
+      {/*  chat reply mopdal */}
+      <Modal
+        isVisible={replyModalVisible}
+        onBackdropPress={() => setReplyModalVisible(false)}
+        style={{ margin: 0, justifyContent: 'flex-end' }}
+      >
+        <View style={{ backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Reply to {replyTo?.user}</Text>
+          <Text style={{ marginBottom: 10, color: '#555' }}>{replyTo?.message}</Text>
+
+          <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 8, marginBottom: 10 }}>
+            <TextInput
+              placeholder="Type your reply..."
+              value={replyText}
+              onChangeText={setReplyText}
+              multiline
+              style={{ height: 80, textAlignVertical: 'top' }}
+            />
+          </View>
+
+          <TouchableOpacity
+            onPress={() => {
+              if (replyText.trim()) {
+                sendChatMessage({ message: replyText, reply_to: replyTo?.id }); // Optional: include reply ID
+                setReplyModalVisible(false);
+                setReplyTo(null);
+                setReplyText('');
+              } else {
+                Alert.alert('Error', 'Please type a message before sending.');
+              }
+            }}
+            style={{
+              backgroundColor: '#007AFF',
+              padding: 12,
+              borderRadius: 8,
+              alignItems: 'center'
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Send Reply</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+
 
     </View>
   );
@@ -344,6 +626,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 30,
     gap: 15,
+    marginTop: 10
   },
   endLiveButton: {
     flex: 1,
@@ -388,4 +671,36 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  replyBox: {
+    backgroundColor: '#222',
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    borderRadius: 10,
+  },
+  replyUser: {
+    color: '#bbb',
+    fontSize: 12,
+  },
+  replyContent: {
+    color: '#eee',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  replyPreview: {
+    backgroundColor: '#333',
+    padding: 6,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  replyUserText: {
+    fontSize: 11,
+    color: '#aaa',
+  },
+  replyMessageText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '500',
+  },
+
 });

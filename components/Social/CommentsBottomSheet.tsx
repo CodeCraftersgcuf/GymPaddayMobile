@@ -34,7 +34,7 @@ interface CommentsBottomSheetProps {
   comments: Comment[];
   postId: number | null;
   onClose: () => void;
-  onAddComment?: (text: string, postId: number) => void;
+  onAddComment?: (text: string, postId: number, parentId?: string) => void;
   loading?: boolean; // <-- add this
 
 }
@@ -52,6 +52,8 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<FlatList>(null);
+  const [replyToCommentId, setReplyToCommentId] = React.useState<string | null>(null);
+  const [replyToUsername, setReplyToUsername] = React.useState<string | null>(null);
 
   // Animate in when visible changes
   useEffect(() => {
@@ -88,9 +90,9 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
 
   const handleSendComment = () => {
     if (newComment.trim() && postId !== null && onAddComment) {
-      onAddComment(newComment, postId);
+      onAddComment(newComment, postId, replyToCommentId);
       setNewComment(''); // Clear input immediately
-      
+
       // Scroll to bottom to show the new comment
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -102,115 +104,137 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const textColor = dark ? '#FFFFFF' : '#000000';
   const inputBackgroundColor = dark ? '#333333' : '#F0F0F0';
   const borderColor = dark ? '#333333' : '#E0E0E0';
+  const handleReplyPress = (commentId: string, username: string) => {
+    setReplyToCommentId(commentId);
+    setReplyToUsername(username);
+  };
 
- return (
-  <Animated.View
-    style={[
-      styles.overlay,
-      {
-        opacity: fadeAnim,
-        backgroundColor: dark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)'
-      }
-    ]}
-  >
-    <TouchableOpacity
-      style={styles.backdropTouchable}
-      activeOpacity={1}
-      onPress={onClose}
-    />
-
+  return (
     <Animated.View
       style={[
-        styles.bottomSheet,
+        styles.overlay,
         {
-          backgroundColor,
-          transform: [
-            {
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [300, 0]
-              })
-            }
-          ]
+          opacity: fadeAnim,
+          backgroundColor: dark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)'
         }
       ]}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardAvoidContainer}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      <TouchableOpacity
+        style={styles.backdropTouchable}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+
+      <Animated.View
+        style={[
+          styles.bottomSheet,
+          {
+            backgroundColor,
+            transform: [
+              {
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [300, 0]
+                })
+              }
+            ]
+          }
+        ]}
       >
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: borderColor }]}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Comments</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Image source={images.CreatePlus} style={{ height: 20, width: 20, transform: [{ rotate: '45deg' }] }} tintColor={textColor} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Comments List or Loader */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={textColor} style={{ marginVertical: 30 }} />
-            <Text style={{ color: textColor, textAlign: 'center' }}>Loading comments...</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardAvoidContainer}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        >
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: borderColor }]}>
+            <Text style={[styles.headerTitle, { color: textColor }]}>Comments</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Image source={images.CreatePlus} style={{ height: 20, width: 20, transform: [{ rotate: '45deg' }] }} tintColor={textColor} />
+            </TouchableOpacity>
           </View>
-        ) : (
-          <FlatList
-            ref={scrollViewRef}
-            style={styles.commentsList}
-            data={comments}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
-            renderItem={({ item }) => (
-              <CommentItem comment={item} darkMode={dark} />
-            )}
-            ListEmptyComponent={
-              <View style={styles.noComments}>
-                <Text style={[styles.noCommentsText, { color: textColor }]}>
-                  No comments yet. Be the first to comment!
-                </Text>
-              </View>
-            }
-            contentContainerStyle={{ flexGrow: 1 }}
-            scrollEnabled={true}
-          />
-        )}
 
-        <View style={styles.bottomPadding} />
+          {/* Comments List or Loader */}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={textColor} style={{ marginVertical: 30 }} />
+              <Text style={{ color: textColor, textAlign: 'center' }}>Loading comments...</Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={scrollViewRef}
+              style={styles.commentsList}
+              data={comments}
+              keyExtractor={(item, index) => `${item.id}-${index}`}
+              renderItem={({ item }) => (
+                <CommentItem
+                  comment={item}
+                  darkMode={dark}
+                  onReplyPress={handleReplyPress}
+                />
+              )}
+              ListEmptyComponent={
+                <View style={styles.noComments}>
+                  <Text style={[styles.noCommentsText, { color: textColor }]}>
+                    No comments yet. Be the first to comment!
+                  </Text>
+                </View>
+              }
+              contentContainerStyle={{ flexGrow: 1 }}
+              scrollEnabled={true}
+            />
+          )}
 
-        {/* Input Area */}
-        <View style={[styles.inputContainer, { backgroundColor, borderTopColor: borderColor }]}>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: inputBackgroundColor,
-                color: textColor,
-                borderColor: borderColor
-              }
-            ]}
-            placeholder="Type a message"
-            placeholderTextColor={dark ? '#999999' : '#777777'}
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              {
-                backgroundColor: dark ? '#333333' : '#DDDDDD',
-              }
-            ]}
-            onPress={handleSendComment}
-            disabled={!newComment.trim()}
-          >
-            <Image source={images.notifcationIcon} style={{ height: 20, width: 20 }} />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+          <View style={styles.bottomPadding} />
+
+          {replyToUsername && (
+            <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
+              <Text style={{ color: textColor }}>
+                Replying to <Text style={{ fontWeight: 'bold' }}>@{replyToUsername}</Text>
+              </Text>
+              <TouchableOpacity onPress={() => {
+                setReplyToCommentId(null);
+                setReplyToUsername(null);
+              }}>
+                <Text style={{ color: '#ff0000', marginTop: 4 }}>Cancel Reply</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Input Area */}
+          <View style={[styles.inputContainer, { backgroundColor, borderTopColor: borderColor }]}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: inputBackgroundColor,
+                  color: textColor,
+                  borderColor: borderColor
+                }
+              ]}
+              placeholder="Type a message"
+              placeholderTextColor={dark ? '#999999' : '#777777'}
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                {
+                  backgroundColor: dark ? '#333333' : '#DDDDDD',
+                }
+              ]}
+              onPress={handleSendComment}
+              disabled={!newComment.trim()}
+            >
+              <Image source={images.notifcationIcon} style={{ height: 20, width: 20 }} />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Animated.View>
     </Animated.View>
-  </Animated.View>
-);
+  );
 
 };
 

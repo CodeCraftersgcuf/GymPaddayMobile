@@ -48,11 +48,11 @@ export default function LiveStreamDiscoverScreen() {
         <Section title="Top Live Streams" />
         {renderSectionContent()}
 
-        <Section title="Followers Live Streams" />
+        {/* <Section title="Followers Live Streams" />
         {renderSectionContent()}
 
         <Section title="Discover" />
-        {renderSectionContent()}
+        {renderSectionContent()} */}
 
         {/* You can add more filtered sections if needed */}
       </ScrollView>

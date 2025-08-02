@@ -12,7 +12,7 @@ interface Props {
 
 const Story: React.FC<Props> = ({ story, userId }) => {
   const router = useRouter();
-
+// console.log("story",story)
   const handlePress = () => {
     console.log('Story pressed:', story.stories);
     router.push({

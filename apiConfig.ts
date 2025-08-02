@@ -78,6 +78,7 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/ad-insights/${id}`,
     },
     MARKETPLACE_LISTINGS: {
+      GetBusinessStatus:API_DOMAIN+'/user/get-business-status',
       BoostListing: (id: number) =>
         API_DOMAIN + `/user/marketplace-listings/${id}/boost`,
 

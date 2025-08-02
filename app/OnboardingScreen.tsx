@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,37 +15,59 @@ const { width, height } = Dimensions.get('window');
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const [step, setStep] = useState(0);
+
+  const handleNext = () => setStep(prev => prev + 1);
 
   const handleProceed = async () => {
-    await AsyncStorage.setItem("hasSeenOnboarding", "true");
-    router.replace("/login"); // 👈 go to your main screen
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+    router.replace('/login');
   };
+
+  // Your slide data
+  const slides = [
+    {
+      image: require('../assets/images/iphone-mock.png'),
+      title: 'Connect via Socials',
+      description:
+        'With gym paddy socials, share your thoughts, comment on post, like a post and meet people of like interests via socials',
+    },
+    {
+      image: require('../assets/images/onboarding2.png'), // ✅ use correct path & name
+      title: 'Buy and Sell With Ease',
+      description:
+        'With gym paddy socials, share your thoughts, comment on post, like a post and meet people of like interests via socials',
+    },
+  ];
+
+  const { image, title, description } = slides[step];
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topSection}>
-        <Image
-          source={require('../assets/images/iphone-mock.png')} // ✅ Your mock image
-          resizeMode="contain"
-          style={styles.phoneImage}
-        />
+        <Image source={image} resizeMode="contain" style={styles.phoneImage} />
       </View>
 
       <View style={styles.bottomSheet}>
         <View style={styles.dotsContainer}>
-          <View style={[styles.dot, styles.activeDot]} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
+          {slides.map((_, index) => (
+            <View
+              key={index}
+              style={[styles.dot, step === index && styles.activeDot]}
+            />
+          ))}
         </View>
 
-        <Text style={styles.title}>Connect via Socials</Text>
-        <Text style={styles.description}>
-          With gym paddy socials, share your thoughts, comment on post, like a post and meet people of like interests via socials
-        </Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.description}>{description}</Text>
 
-        <TouchableOpacity style={styles.button} onPress={handleProceed}>
-          <Text style={styles.buttonText}>Proceed</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={step === slides.length - 1 ? handleProceed : handleNext}
+        >
+          <Text style={styles.buttonText}>
+            {step === slides.length - 1 ? 'Proceed' : 'Next'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -61,7 +83,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: -30,
   },
   phoneImage: {
     width: width * 0.95,

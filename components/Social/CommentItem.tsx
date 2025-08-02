@@ -1,8 +1,6 @@
 import { images } from '@/constants';
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-
-
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 interface Comment {
@@ -20,14 +18,13 @@ interface CommentItemProps {
   comment: Comment;
   darkMode: boolean;
   isReply?: boolean;
+  onReplyPress?: (commentId: string, username: string) => void; // ✅ Add this
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = false }) => {
+const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = false, onReplyPress }) => {
   const textColor = darkMode ? '#FFFFFF' : '#000000';
   const subtextColor = darkMode ? '#AAAAAA' : '#777777';
-  const accentColor = '#3B82F6';
   const replyPadding = isReply ? 40 : 0;
-  console.log("Replies : ", comment.replies)
 
   return (
     <View style={[styles.commentContainer, { marginLeft: replyPadding }]}>
@@ -46,8 +43,11 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
             {comment.text}
           </Text>
           <View style={styles.commentActions}>
-            <TouchableOpacity style={styles.replyButton}>
-              {/* <Text style={[styles.replyText, { color: subtextColor }]}>Reply</Text> */}
+            <TouchableOpacity
+              style={styles.replyButton}
+              onPress={() => onReplyPress?.(comment.id, comment.username)} // ✅ Fire the reply action
+            >
+              <Text style={[styles.replyText, { color: subtextColor }]}>Reply</Text>
             </TouchableOpacity>
             <View style={styles.likesContainer}>
               <Image source={images.SocialIcons} style={{ height: 20, width: 20 }} />
@@ -67,7 +67,8 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
               key={`${reply.id}-${index}`}
               comment={reply}
               darkMode={darkMode}
-              isReply={false}
+              isReply={true}
+              onReplyPress={onReplyPress} // ✅ Pass down
             />
           ))}
         </View>

@@ -9,6 +9,14 @@ export const getMarketplaceListings = async (token: string): Promise<any> => {
     token
   );
 };
+export const getBusinessStatus = async (token: string): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.USER.MARKETPLACE_LISTINGS.GetBusinessStatus,
+    "GET",
+    undefined,
+    token
+  );
+};
 
 export const getMarketplaceListingById = async (
   id: number,

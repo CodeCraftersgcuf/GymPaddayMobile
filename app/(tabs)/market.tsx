@@ -23,8 +23,8 @@ import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 
 //Code Related to the integration
-import { useQuery } from '@tanstack/react-query';
-import { getMarketplaceListings } from '@/utils/queries/marketplace';
+import { QueryClient, useQuery } from '@tanstack/react-query';
+import { getBusinessStatus, getMarketplaceListingById, getMarketplaceListings } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 
@@ -51,6 +51,7 @@ export default function MarketplaceScreen() {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [showLocationSheet, setShowLocationSheet] = useState(false);
   const [showCategorySheet, setShowCategorySheet] = useState(false);
+ const queryClient = new QueryClient();
 
   const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
   const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
@@ -111,7 +112,15 @@ export default function MarketplaceScreen() {
     },
     enabled: !!token,
   });
-  console.log("listing data", data)
+  const { data:businessData } = useQuery({
+    queryKey: ['get-business-status'],
+    queryFn: async () => {
+      if (!token) throw new Error('No auth token');
+      return await getBusinessStatus(token);
+    },
+    enabled: !!token,
+  });
+  console.log("Business Data", businessData)
 
   // Add refresh state (optional, but not strictly needed with isFetching)
   const [refreshing, setRefreshing] = useState(false);
@@ -123,7 +132,6 @@ export default function MarketplaceScreen() {
   };
 
   // --- Map API data to local listing structure ---
-  const API_BASE_URL = 'http://127.0.0.1:8000/storage/';
 
   // Map local category id to API category name for filtering
   const categoryIdToApiName: Record<string, string> = {
@@ -192,7 +200,7 @@ export default function MarketplaceScreen() {
 
   const topListings = filteredListings.filter((item) => item.is_featured);
   const allListings = filteredListings;
-  console.log("topListings", filteredListings)
+  // console.log("topListings", filteredListings)
   const handleItemPress = (item: any) => {
     router.push({
       pathname: '/marketView',
@@ -204,6 +212,19 @@ export default function MarketplaceScreen() {
   const handleMarketProfile = () => {
     router.push("/marketProfile");
   }
+React.useEffect(() => {
+  if (token && Array.isArray(data?.data)) {
+    data.data.forEach((item: any) => {
+      console.log('Prefetching listing:', item.id);
+      queryClient.prefetchQuery({
+        queryKey: ['marketplace-listing', item.id, token],
+        queryFn: async () => {
+          return getMarketplaceListingById(Number(item.id), token);
+        },
+      });
+    });
+  }
+}, [data, token]);
 
   // Add this helper component for image loading indicator
   function ImageWithLoading({ source, style, ...props }) {
@@ -447,11 +468,16 @@ export default function MarketplaceScreen() {
         </View>
       </Modal>
 
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/addListing')}>
+      {
+        businessData?.data?.isApproved && (
+          <TouchableOpacity style={styles.fab} onPress={() => router.push('/addListing')}>
+            <AntDesign name="plus" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        )
+      }
+      {/* <TouchableOpacity style={styles.fab} onPress={() => router.push('/addListing')}>
         <AntDesign name="plus" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </SafeAreaView>
   );
 }

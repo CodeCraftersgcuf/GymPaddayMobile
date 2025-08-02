@@ -33,7 +33,7 @@ export const settingsData: SettingItem[] = [
   },
   {
     id: 'business-settings',
-    title: 'Business Settings',
+    title: 'Upgrade to Business Account',
     icon: images.moreBag,
     backgroundColor: '#34C759',
   },

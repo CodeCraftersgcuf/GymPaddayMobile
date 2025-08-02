@@ -3,17 +3,23 @@ import * as SecureStore from 'expo-secure-store';
 
 interface SendLiveStreamMessagePayload {
   message: string;
-  type?: string; // optional, default is "message"
-  amount?:string
+  type?: string; // "message", "gift", etc.
+  amount?: string;
+  reply_to?: string; // optional reply-to message ID
 }
 
 export const useSendLiveStreamMessage = (liveStreamId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ message, type = 'message',amount="10" }: SendLiveStreamMessagePayload) => {
+    mutationFn: async ({ message, type = 'message', amount = '10', reply_to }: SendLiveStreamMessagePayload) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
+
+      const payload: Record<string, any> = { message, type, amount };
+      if (reply_to) {
+        payload.reply_to_id = reply_to;
+      }
 
       const response = await fetch(
         `https://gympaddy.hmstech.xyz/api/user/live-streams/${liveStreamId}/chats`,
@@ -24,7 +30,7 @@ export const useSendLiveStreamMessage = (liveStreamId: string) => {
             Accept: 'application/json',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ message, type,amount }),
+          body: JSON.stringify(payload),
         }
       );
 

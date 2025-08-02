@@ -10,9 +10,6 @@ import {
   RefreshControl,
   ActivityIndicator, // <-- add this
 } from 'react-native';
-
-
-
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostContainer from '@/components/Social/PostContainer';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
@@ -25,7 +22,7 @@ import PostDetailBottomsheet from '@/components/Social/PostDetailBottomsheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUserPosts } from '@/utils/queries/posts';
 import * as SecureStore from 'expo-secure-store';
 import { getPostComments } from '@/utils/queries/comments';
@@ -33,6 +30,8 @@ import { useMutation } from '@tanstack/react-query';
 import { createComment } from '@/utils/mutations/comments';
 import { groupStoriesByUser } from '@/utils/groupStories';
 import { GroupedUserStories, StoryItem } from '@/utils/types/story';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { fetchUserProfile } from '@/utils/queries/profile';
 
 // LoadingIndicator component
 function LoadingIndicator({ text = "Loading..." }) {
@@ -56,16 +55,41 @@ export default function SocialFeedScreen() {
   const { dark } = useTheme();
   const route = useRouter();
   const [posts, setPosts] = useState<PostData[]>([]);
+  const queryClient = useQueryClient();
 
-  const { data, isLoading, refetch } = useQuery({
+  // const { data, isLoading, refetch } = useQuery({
+  //   queryKey: ['userPosts'],
+  //   queryFn: async () => {
+  //     const token = await SecureStore.getItemAsync('auth_token');
+  //     if (!token) throw new Error('No auth token found');
+  //     const response = await getUserPosts(token);
+  //     return response;
+  //   },
+  // });
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    refetch,
+  } = useInfiniteQuery({
     queryKey: ['userPosts'],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 1 }) => {
       const token = await SecureStore.getItemAsync('auth_token');
-      if (!token) throw new Error('No auth token found');
-      const response = await getUserPosts(token);
-      return response; // ← this will be in `data`
+      return getUserPosts(token, pageParam); // Accepts page number
+    },
+    initialPageParam: 1, // ✅ Required
+    getNextPageParam: (lastPage) => {
+      if (lastPage?.next_page_url) {
+        const url = new URL(lastPage.next_page_url);
+        return parseInt(url.searchParams.get('page') || '') || undefined;
+      }
+      return undefined;
     },
   });
+
+
   const [groupedStories, setGroupedStories] = useState<GroupedUserStories[]>([]);
   const [loading, setLoading] = useState(true);
   const getToken = async () => {
@@ -79,30 +103,22 @@ export default function SocialFeedScreen() {
             Authorization: `Bearer ${await getToken()}`,
           },
         });
-
         const json = await response.json();
-        // const stories: StoryItem[] = json.stories;
         const { stories = [], my_stories = [] } = json;
-
-        const groupedStories = groupStoriesByUser(stories); // stories from followed users
-        const myGroupedStories = groupStoriesByUser(my_stories); // your stories (ideally just one user)
-
+        const groupedStories = groupStoriesByUser(stories);
+        const myGroupedStories = groupStoriesByUser(my_stories);
         setGroupedStories([
-          ...myGroupedStories, // show your story first
+          ...myGroupedStories,
           ...groupedStories,
         ]);
-
-        // setGroupedStories(grouped);
       } catch (err) {
         console.error('Error fetching stories:', err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchStories();
   }, []);
-  // Query for comments (enabled only when modal visible and postId set)
   const {
     data: commentData,
     isLoading: isLoadingComments,
@@ -118,17 +134,17 @@ export default function SocialFeedScreen() {
     enabled: !!currentPostId && commentModalVisible,
   });
   // console.log("The Comments Data:", commentData);
-
+  console.log("post comments", commentData);
   const {
     mutate: addComment,
     isPending: isAddingComment,
     error: addCommentError
   } = useMutation({
-    mutationFn: async ({ text, postId, tempId }) => {
+    mutationFn: async ({ text, postId, tempId, parentId }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error("No token");
       return createComment({
-        data: { post_id: postId, content: text },
+        data: { post_id: postId, content: text, parent_id: parentId },
         token
       });
     },
@@ -140,13 +156,13 @@ export default function SocialFeedScreen() {
     onError: (error, variables) => {
       // Only remove the optimistically added comment from UI on error
       console.error('Error adding comment, removing from UI:', error);
-      setOptimisticComments(prev => 
+      setOptimisticComments(prev =>
         prev.filter(comment => comment.id !== variables.tempId)
       );
     }
   });
 
-  const handleAddComment = async (text: string, postId: number) => {
+  const handleAddComment = async (text: string, postId: number, parentId?: string) => {
     // Get current user data for optimistic comment
     const getCurrentUser = async () => {
       try {
@@ -158,7 +174,7 @@ export default function SocialFeedScreen() {
     };
 
     const user = await getCurrentUser();
-    
+
     // Create temporary comment for immediate UI update
     const tempComment = {
       id: `temp_${Date.now()}`,
@@ -168,14 +184,45 @@ export default function SocialFeedScreen() {
       text: text,
       timestamp: new Date().toISOString(),
       likes: 0,
-      replies: []
-    };
+      replies: [],
+      parentId: parentId || null
 
-    // Add optimistic comment immediately
-    setOptimisticComments(prev => [...prev, tempComment]);
+    };
+    setOptimisticComments(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)); // deep clone since it's nested
+
+      if (parentId) {
+        // Insert into the correct parent's replies
+        const insertReply = (comments: any[]) => {
+          for (let comment of comments) {
+            if (comment.id == parentId) {
+              comment.replies = [...(comment.replies || []), tempComment];
+              return true;
+            }
+            if (comment.replies?.length) {
+              const found = insertReply(comment.replies);
+              if (found) return true;
+            }
+          }
+          return false;
+        };
+
+        const found = insertReply(updated);
+
+        if (!found) {
+          console.warn("Parent not found in optimistic comments");
+          return [...updated, tempComment]; // fallback to top level
+        }
+
+        return updated;
+      }
+
+      // No parentId means it's a top-level comment
+      return [...updated, tempComment];
+    });
 
     // Send to backend
-    addComment({ text, postId, tempId: tempComment.id });
+    addComment({ text, postId, tempId: tempComment.id, parentId });
 
     console.log('Adding comment to post:', postId, text);
   };
@@ -196,10 +243,10 @@ export default function SocialFeedScreen() {
   };
 
   useEffect(() => {
-    if (data && data.data) {
-      const postsArray = data.data; // ← this is the array of posts
+    if (data?.pages) {
+      const allPosts = data.pages.flatMap(page => page.data); // assuming response has .data field
 
-      const formatted = postsArray.map((post: any) => ({
+      const formatted = allPosts.map((post: any) => ({
         id: post.id,
         user: {
           id: post.user?.id,
@@ -226,10 +273,10 @@ export default function SocialFeedScreen() {
         })) || [],
       }));
 
-      // console.log('✅ Formatted posts', formatted);
       setPosts(formatted);
     }
   }, [data]);
+
 
   const handleStartLive = () => {
     route.push('/goLive');
@@ -251,10 +298,10 @@ export default function SocialFeedScreen() {
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    
+
     // Refresh posts
     await refetch();
-    
+
     // Refresh stories
     try {
       const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/get/stories`, {
@@ -276,14 +323,14 @@ export default function SocialFeedScreen() {
     } catch (err) {
       console.error('Error refreshing stories:', err);
     }
-    
+
     setRefreshing(false);
   }, [refetch]);
 
   // Show loading indicator while user posts are loading
-  if (isLoading) {
-    return <LoadingIndicator text="Loading posts..." />;
-  }
+  // if (isLoading) {
+  //   return <LoadingIndicator text="Loading posts..." />;
+  // }
 
   const handleHidePost = () => {
     console.log('Hiding post:', idCan);
@@ -306,6 +353,26 @@ export default function SocialFeedScreen() {
       replies: mapApiCommentsToInternal(item.replies || [])
     }));
   };
+  useEffect(() => {
+  const prefetchProfiles = async () => {
+    const token = await SecureStore.getItemAsync('auth_token');
+    if (!token) return;
+
+    const uniqueUserIds = Array.from(new Set(posts.map(post => post.user?.id)));
+
+    for (const id of uniqueUserIds) {
+    console.log('Prefetching profile for user ID:', id);
+      queryClient.prefetchQuery({
+        queryKey: ['userProfile', id],
+        queryFn: () => fetchUserProfile(token, id),
+      });
+    }
+  };
+
+  if (posts.length > 0) {
+    prefetchProfiles();
+  }
+}, [posts]);
 
 
   return (
@@ -323,6 +390,16 @@ export default function SocialFeedScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+
+            if (isBottom && hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          scrollEventThrottle={400}
+
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -340,6 +417,13 @@ export default function SocialFeedScreen() {
             onCommentPress={handleCommentPress}
             handleMenu={handleMenu}
           />
+          {isFetchingNextPage && (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#ff0000" />
+              <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
+            </View>
+          )}
+
         </ScrollView>
         <CommentsBottomSheet
           visible={commentModalVisible}
@@ -347,7 +431,7 @@ export default function SocialFeedScreen() {
           postId={currentPostId}
           onClose={handleCloseComments}
           onAddComment={handleAddComment}
-          loading={isLoadingComments}
+          loading={false}
         />
 
 

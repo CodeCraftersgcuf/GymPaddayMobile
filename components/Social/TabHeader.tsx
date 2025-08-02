@@ -31,15 +31,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
-
-  const hanldeViewProfile = (id: any) => {
-    // router.push({
-    //   pathname: '/UserProfile',
-    //   params: { user_id: id },
-    // })
-
-    router.push('/EditProfile');
-  }
+const [userId, setUserId] = useState<string | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -47,6 +39,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
         const userDataStr = await SecureStore.getItemAsync('user_data');
         if (userDataStr) {
           const userData = JSON.parse(userDataStr);
+          setUserId(userData.id.toString());
           if (userData.profile_picture_url) {
             setProfileImage(userData.profile_picture_url);
           } else {
@@ -72,6 +65,15 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
       height: 35,
     },
   });
+
+  const hanldeViewProfile = (id: any) => {
+    // router.push({
+    //   pathname: '/UserProfile',
+    //   params: { user_id: id },
+    // })
+router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } })
+    // router.push('/EditProfile');
+  }
 
   return (
     <ThemedView darkColor="black" style={styles.header}>

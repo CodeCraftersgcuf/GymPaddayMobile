@@ -276,6 +276,47 @@ export default function CreatePostScreen() {
       Alert.alert('Error', 'Failed to open media picker. Please try again.');
     }
   };
+  const pickMedia = async (type: 'photo' | 'video' | 'mixed') => {
+  try {
+    let mediaTypes = ImagePicker.MediaTypeOptions.Images;
+    if (type === 'video') {
+      mediaTypes = ImagePicker.MediaTypeOptions.Videos;
+    } else if (type === 'mixed') {
+      mediaTypes = ImagePicker.MediaTypeOptions.All;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+      videoQuality: ImagePicker.VideoQuality?.High || 1,
+      videoMaxDuration: 30,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const newMedia: GalleryMedia[] = result.assets.map((asset, index) => ({
+        id: `picker_${Date.now()}_${index}`,
+        uri: asset.uri,
+        width: asset.width || 300,
+        height: asset.height || 400,
+        mediaType: asset.type === 'video' ? 'video' : 'photo',
+        duration: asset.duration,
+      }));
+
+      setSelectedMedia(prev => [...prev, ...newMedia]);
+      console.log('Media picked successfully:', newMedia.length, 'items');
+
+      Alert.alert('Success', 'Media added to your post!', [{ text: 'OK' }]);
+    } else {
+      console.log('Media picker cancelled');
+    }
+  } catch (error) {
+    console.error('Error picking media:', error);
+    Alert.alert('Error', 'Failed to pick media. Please try again.');
+  }
+};
+
 
   const handleCameraButtonPress = async () => {
     try {
@@ -472,7 +513,7 @@ export default function CreatePostScreen() {
   };
 
   // Show loading state while fetching post data in edit mode
-  if (loading || (isEditMode && isLoadingPost)) {
+  if ((isEditMode && isLoadingPost)) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
         <View style={styles.loadingContainer}>
