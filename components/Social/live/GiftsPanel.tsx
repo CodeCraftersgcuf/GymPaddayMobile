@@ -64,7 +64,7 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
         style={[
           styles.giftCard,
           { backgroundColor: themeStyles.cardBackground },
-          isSelected && { borderWidth: 2, borderColor: '#FF0000' },
+          isSelected && { borderWidth: 2, borderColor: '#940304' },
         ]}
         onPress={() => {
           const totalCost = item.price * quantity;
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     padding: 10,
     paddingVertical: 16,
     borderRadius: 8,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     alignItems: 'center',
     justifyContent: 'center',
     margin: 16,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 4,
     borderColor: '#888',
-    color: '#FF0000',
+    color: '#940304',
   },
   quantityValue: {
     fontSize: 14,

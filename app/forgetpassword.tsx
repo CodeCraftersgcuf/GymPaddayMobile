@@ -54,7 +54,7 @@ const forgetpassword = () => {
     <SafeAreaView style={styles.container}>
       <ThemedView style={{ flex: 1 }}>
         <LinearGradient
-          colors={["#FF0000", "#840000"]}
+          colors={["#940304", "#840000"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ height: 150 }}
@@ -143,7 +143,7 @@ const forgetpassword = () => {
                       onPress={() => handleSubmit()}
                       disabled={mutation.isPending}
                       style={{
-                        backgroundColor: mutation.isPending ? '#FF0000AA' : '#FF0000',
+                        backgroundColor: mutation.isPending ? '#940304AA' : '#940304',
                         paddingVertical: 15,
                         borderRadius: 10,
                         opacity: mutation.isPending ? 0.6 : 1,

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HorizontalStreamList from '@/components/HorizontalStreamList';
 import { useLiveStreams } from '@/utils/useLiveStreams';
 import { router } from 'expo-router';
+import LiveStreamFeed from '@/components/LiveStreamFeed';
 
 const Section = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
@@ -36,7 +37,8 @@ export default function LiveStreamDiscoverScreen() {
     }
 
     if (data && data.length > 0) {
-      return <HorizontalStreamList streams={data} />;
+      // return <HorizontalStreamList streams={data} />;
+         return <LiveStreamFeed streams={data} />;
     }
 
     return <EmptyStreamPlaceholder />;
@@ -47,14 +49,6 @@ export default function LiveStreamDiscoverScreen() {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <Section title="Top Live Streams" />
         {renderSectionContent()}
-
-        {/* <Section title="Followers Live Streams" />
-        {renderSectionContent()}
-
-        <Section title="Discover" />
-        {renderSectionContent()} */}
-
-        {/* You can add more filtered sections if needed */}
       </ScrollView>
 
       <TouchableOpacity style={styles.fab} onPress={
@@ -71,10 +65,11 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '400',
-    marginLeft: 16,
+    marginLeft: 12,
     marginTop: 16,
+    marginBottom:10,
   },
   fab: {
     position: 'absolute',

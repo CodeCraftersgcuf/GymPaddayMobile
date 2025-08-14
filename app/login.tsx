@@ -115,7 +115,7 @@ if (checkingAuth) {
     <SafeAreaView style={styles.container}>
       <ThemedView style={{ flex: 1 }}>
         <LinearGradient
-          colors={["#FF0000", "#840000"]}
+          colors={["#940304", "#840000"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ height: 150 }}
@@ -231,7 +231,7 @@ if (checkingAuth) {
                     <Pressable
                       onPress={() => handleSubmit()}
                       style={{
-                        backgroundColor: "#FF0000",
+                        backgroundColor: "#940304",
                         paddingVertical: 15,
                         borderRadius: 10,
                       }}
@@ -298,13 +298,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
   forgotPassword: {
-    color: "#EF4444",
+    color: "#940304",
     textAlign: "right",
     marginBottom: 16,
     fontSize: 14,
   },
   registerText: {
-    color: "#EF4444",
+    color: "#940304",
     textAlign: "center",
     fontSize: 14,
     marginTop: 16,

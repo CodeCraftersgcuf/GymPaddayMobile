@@ -56,7 +56,7 @@ export default function AdPreview() {
   }, [token, postId]);
 
   if (loading || !token) {
-    return <ActivityIndicator style={{ flex: 1 }} size="large" color="#FF0000" />;
+    return <ActivityIndicator style={{ flex: 1 }} size="large" color="#940304" />;
   }
 
   if (!post) {
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   progressBarFill: {
     width: '20%',
     height: '100%',
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderRadius: 10,
   },
   heading: {
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeDot: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
   },
   captionBox: {
     backgroundColor: '#f2f2f2',
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   nextButton: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     paddingVertical: 15,
     borderRadius: 10,
     marginTop: 'auto',

@@ -221,7 +221,7 @@ export default function LiveStreamingView({
       </View>
       <View style={styles.streamContainer}>
         {fetchLiveVideoCallToken.isPending && (
-          <ActivityIndicator size="large" color="#FF0000" />
+          <ActivityIndicator size="large" color="#940304" />
         )}
 
         {fetchLiveVideoCallToken.data && (
@@ -630,7 +630,7 @@ const styles = StyleSheet.create({
   },
   endLiveButton: {
     flex: 1,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderRadius: 10,
     paddingVertical: 15,
     alignItems: 'center',
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   giftBadge: {
-    backgroundColor: '#ff0000',
+    backgroundColor: '#940304',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,

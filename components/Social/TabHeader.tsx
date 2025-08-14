@@ -7,6 +7,7 @@ import { images } from '@/constants';
 import { useRouter } from 'expo-router';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 
+import logoNew from '../../assets/images/logo-old.png';
 
 import * as SecureStore from 'expo-secure-store';
 import { Feather } from '@expo/vector-icons';
@@ -77,7 +78,7 @@ router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } 
 
   return (
     <ThemedView darkColor="black" style={styles.header}>
-      <ThemeText style={{ fontFamily: 'Caveat_400Regular', fontSize: 34, color: 'red' }}>{title}</ThemeText>
+<Image source={logoNew} style={styles.logo} resizeMode="contain" />
       <ThemedView style={styles.alignCenter}>
         {admin?.profile && (
           <Pressable onPress={() => hanldeViewProfile(admin.userId ?? 12)}>
@@ -130,6 +131,14 @@ const styles = StyleSheet.create({
     width: 25,
     height: 25,
   },
+  logo: {
+  width: 120, // ✅ Adjust as needed
+  height: 60,
+  textAlign:'left',
+  marginLeft:-20
+  
+},
+
 });
 
 export default TabHeader;

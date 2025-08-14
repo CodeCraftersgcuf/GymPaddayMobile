@@ -21,7 +21,7 @@ export default function GiftItem({ gift }: GiftItemProps) {
       styles.container,
       dark ? styles.containerDark : styles.containerLight,
       {
-        borderLeftColor: isReceived ? '#22C55E' : '#EF4444',
+        borderLeftColor: isReceived ? '#22C55E' : '#940304',
       }
     ]}>
       <View style={styles.content}>
@@ -40,7 +40,7 @@ export default function GiftItem({ gift }: GiftItemProps) {
       </View>
       <Text style={[
         styles.amount,
-        { color: isReceived ? '#22C55E' : '#EF4444' }
+        { color: isReceived ? '#22C55E' : '#940304' }
       ]}>
         {formatAmount(gift.amount, isReceived)}
       </Text>

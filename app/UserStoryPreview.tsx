@@ -129,6 +129,7 @@ const UserStoryPreview = () => {
     }
   };
 const playMusicAfterMediaLoads = async () => {
+  console.log('playMusicAfterMediaLoads and current stories', currentStory);
   if (currentStory?.music_url) {
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -141,6 +142,28 @@ const playMusicAfterMediaLoads = async () => {
     }
   }
 };
+useEffect(() => {
+  const preloadNextStory = async () => {
+    const nextStory = stories[currentIndex + 1];
+    if (!nextStory) return;
+
+    const nextUrl = fixUrl(nextStory.full_media_url);
+
+    if (nextStory.media_type === 'photo') {
+      // Preload image
+      Image.prefetch(nextUrl);
+    } else if (nextStory.media_type === 'video') {
+      // For video: download into cache (lightweight, optional)
+      try {
+        await Video.prefetchAsync(nextUrl); // ✅ Best option
+      } catch (e) {
+        console.warn('Failed to preload video:', e);
+      }
+    }
+  };
+
+  preloadNextStory();
+}, [currentIndex]);
 
 
   const renderMedia = () => {
@@ -154,12 +177,17 @@ const playMusicAfterMediaLoads = async () => {
             cacheKey={`story-${currentStory.id}`} // makes it unique per story
             style={styles.media}
             resizeMode="cover"
-onLoadEnd={async () => {
+onLoad={async () => {
   setIsMediaLoaded(true);
+  if (!isPaused) {
+    await videoRef.current?.playAsync?.();
+  }
+
   if (currentStory?.music_url) {
-    await playMusicAfterMediaLoads(); // only after image loaded
+    await playMusicAfterMediaLoads(); // <-- THIS LINE FIXES THE MUSIC
   }
 }}
+
             
           />
           {!isMediaLoaded && (
@@ -170,6 +198,7 @@ onLoadEnd={async () => {
         </>
       );
     }
+
 
     return (
       <>
@@ -182,12 +211,18 @@ onLoadEnd={async () => {
           resizeMode="cover"
           shouldPlay={!isPaused}
           style={styles.media}
-          onLoad={() => {
-            setIsMediaLoaded(true);
-            if (!isPaused) {
-              videoRef.current?.playAsync?.();
-            }
-          }}
+onLoad={async () => {
+  setIsMediaLoaded(true);
+  if (!isPaused) {
+    await videoRef.current?.playAsync?.();
+  }
+
+  if (currentStory?.music_url) {
+    console.log("Video loaded, calling playMusicAfterMediaLoads");
+    await playMusicAfterMediaLoads();
+  }
+}}
+// }}
           onPlaybackStatusUpdate={(status) => {
             if (status.isLoaded) {
               if (status.didJustFinish) {

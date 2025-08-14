@@ -76,6 +76,16 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       ],
     };
   });
+  const handleStartLive = () => {
+  toggleMenu();
+  onStartLive?.(); // call if defined
+};
+
+const handleCreatePost = () => {
+  toggleMenu();
+  onCreatePost?.(); // call if defined
+};
+
 
   return (
     <>
@@ -92,7 +102,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       <View style={styles.container}>
         {/* Live Button */}
         <Animated.View style={[styles.menuButton, liveButtonStyle,{marginBottom:0},{right:15}]}>
-          <TouchableOpacity style={styles.button} onPress={onStartLive}>
+{/* Live Button */}
+<TouchableOpacity style={styles.button} onPress={handleStartLive}>
             <Text style={styles.buttonText}>Start Live</Text>
             <View style={[styles.ImagesButton, styles.liveButton]}>
               <Image
@@ -106,7 +117,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
 
         {/* Post Button */}
         <Animated.View style={[styles.menuButton, postButtonStyle]}>
-          <TouchableOpacity style={styles.button} onPress={onCreatePost}>
+{/* Post Button */}
+<TouchableOpacity style={styles.button} onPress={handleCreatePost}>
             <Text style={styles.buttonText}>Create Post</Text>
             <View style={[styles.ImagesButton, styles.postButton]}>
               <Image
@@ -147,7 +159,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#ff0000',
+    backgroundColor: '#940304',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,

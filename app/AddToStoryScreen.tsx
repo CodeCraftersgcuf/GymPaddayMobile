@@ -94,7 +94,7 @@ export default function AddToStoryScreen() {
   };
 
   if (loading)
-    return <ActivityIndicator style={{ flex: 1 }} color="#FF0000" />;
+    return <ActivityIndicator style={{ flex: 1 }} color="#940304" />;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   cameraButton: {
     marginTop: 8,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   },
   selected: {
     borderWidth: 3,
-    borderColor: '#FF0000',
+    borderColor: '#940304',
   },
   videoOverlay: {
     position: 'absolute',
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     alignSelf: 'center',
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,

@@ -196,7 +196,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
                 setReplyToCommentId(null);
                 setReplyToUsername(null);
               }}>
-                <Text style={{ color: '#ff0000', marginTop: 4 }}>Cancel Reply</Text>
+                <Text style={{ color: '#940304', marginTop: 4 }}>Cancel Reply</Text>
               </TouchableOpacity>
             </View>
           )}

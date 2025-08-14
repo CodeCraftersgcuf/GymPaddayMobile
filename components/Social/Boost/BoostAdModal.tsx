@@ -210,7 +210,7 @@ const createStyles = (dark: boolean) => {
     mainTitle: {
       fontSize: 22,
       fontWeight: 'bold',
-      color: '#FF0000',
+      color: '#940304',
       textAlign: 'left',
     },
     benefitsContainer: {
@@ -226,7 +226,7 @@ const createStyles = (dark: boolean) => {
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: '#FF0000',
+      backgroundColor: '#940304',
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 16,
@@ -252,7 +252,7 @@ const createStyles = (dark: boolean) => {
       color: dark ? '#cccccc' : '#666666',
     },
     proceedButton: {
-      backgroundColor: '#FF0000',
+      backgroundColor: '#940304',
       marginHorizontal: 20,
       marginVertical: 30,
       paddingVertical: 16,

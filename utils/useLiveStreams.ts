@@ -19,6 +19,8 @@ export const useLiveStreams = () => {
       if (!response.ok) throw new Error('Failed to fetch live streams');
 
       const data = await response.json();
+      console.log("stream data",data)
+      // console.log("stream data with laytest post object",data.data[0].latest_post)
       return data;
     },
   });

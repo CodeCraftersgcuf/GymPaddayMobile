@@ -39,7 +39,7 @@ function LoadingIndicator({ text = "Loading..." }) {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: dark ? '#000' : '#fff' }}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      <ActivityIndicator size="large" color="#ff0000" />
+      <ActivityIndicator size="large" color="#940304" />
       <Text style={{ color: dark ? '#fff' : '#000', fontSize: 18, marginTop: 16 }}>{text}</Text>
     </View>
   );
@@ -243,39 +243,49 @@ export default function SocialFeedScreen() {
   };
 
   useEffect(() => {
-    if (data?.pages) {
-      const allPosts = data.pages.flatMap(page => page.data); // assuming response has .data field
+  if (data?.pages) {
+    const allPosts = data.pages.flatMap(page => page.data); // assuming response has .data field
 
-      const formatted = allPosts.map((post: any) => ({
-        id: post.id,
+    const formatted = allPosts.map((post: any) => ({
+      id: post.id,
+      user: {
+        id: post.user?.id,
+        username: post.user?.username,
+        profile_picture: post.user?.profile_picture_url,
+      },
+      content: post.content || post.title || '',
+      imagesUrl: post.media
+        ?.filter((m: any) => m.media_type === 'image')
+        .map((m: any) => m.url) || [],
+      videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
+      timestamp: post.created_at,
+      likes_count: post.likes?.length || 0,
+      comments_count: post.comments?.length || 0,
+      view_count: 0,
+      share_count: 0,
+      likes: post.likes?.map((like: any) => ({
+        id: like.id,
         user: {
-          id: post.user?.id,
-          username: post.user?.username,
-          profile_picture: post.user?.profile_picture_url,
+          id: like.user?.id,
+          username: like.user?.username || 'Unknown',
+          fullname: like.user?.fullname || '',
+          profile_picture_url: like.user?.profile_picture_url || '',
+        }
+      })) || [],
+      recent_comments: post.comments?.slice(0, 2).map((comment: any) => ({
+        id: comment.id,
+        user: {
+          username: comment.user?.username || 'Unknown',
+          profile_picture: comment.user?.profile_picture_url || '',
         },
-        content: post.content || post.title || '',
-        imagesUrl: post.media
-          ?.filter((m: any) => m.media_type === 'image')
-          .map((m: any) => m.url) || [],
-        videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
-        timestamp: post.created_at,
-        likes_count: post.likes?.length || 0,
-        comments_count: post.comments?.length || 0,
-        view_count: 0,
-        share_count: 0,
-        recent_comments: post.comments?.slice(0, 2).map((comment: any) => ({
-          id: comment.id,
-          user: {
-            username: comment.user?.username || 'Unknown',
-            profile_picture: comment.user?.profile_picture_url || '',
-          },
-          text: comment.content || '',
-        })) || [],
-      }));
+        text: comment.content || '',
+      })) || [],
+    }));
 
-      setPosts(formatted);
-    }
-  }, [data]);
+    setPosts(formatted);
+  }
+}, [data]);
+
 
 
   const handleStartLive = () => {
@@ -392,7 +402,7 @@ export default function SocialFeedScreen() {
           showsVerticalScrollIndicator={false}
           onScroll={({ nativeEvent }) => {
             const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+            const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 60;
 
             if (isBottom && hasNextPage && !isFetchingNextPage) {
               fetchNextPage();
@@ -404,8 +414,8 @@ export default function SocialFeedScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#ff0000']}
-              tintColor={'#ff0000'}
+              colors={['#940304']}
+              tintColor={'#940304'}
               title="Pull to refresh"
               titleColor={dark ? '#ffffff' : '#000000'}
             />
@@ -418,8 +428,8 @@ export default function SocialFeedScreen() {
             handleMenu={handleMenu}
           />
           {isFetchingNextPage && (
-            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-              <ActivityIndicator size="small" color="#ff0000" />
+            <View style={{ paddingVertical: 20, alignItems: 'center',marginBottom:100,zIndex:100 }}>
+              <ActivityIndicator size="small" color="#940304" />
               <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
             </View>
           )}
@@ -473,7 +483,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#ff0000',
+    color: '#940304',
     fontStyle: 'italic',
   },
   headerRight: {
@@ -503,11 +513,11 @@ const styles = StyleSheet.create({
     height: 60,
     width: 60,
     borderRadius: 30,
-    backgroundColor: '#ff0000', // Red background for the button
+    backgroundColor: '#940304', // Red background for the button
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5, // Shadow for Android
-    shadowColor: '#ff0000', // Shadow color for iOS
+    shadowColor: '#940304', // Shadow color for iOS
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 4,

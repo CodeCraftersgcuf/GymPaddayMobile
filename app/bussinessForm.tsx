@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     inputError: {
-        borderColor: '#FF0000',
+        borderColor: '#940304',
     },
     textArea: {
         height: 80,
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     errorText: {
-        color: '#FF0000',
+        color: '#940304',
         fontSize: 12,
         marginTop: 5,
     },
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
         paddingBottom: 30,
     },
     saveButton: {
-        backgroundColor: '#FF0000',
+        backgroundColor: '#940304',
         borderRadius: 25,
         paddingVertical: 18,
         justifyContent: 'center',

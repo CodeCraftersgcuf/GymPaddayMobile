@@ -156,7 +156,7 @@ export default function Register() {
     },
     form: { marginTop: 20, paddingHorizontal: 15 },
     registerButton: {
-      backgroundColor: "#FF0000",
+      backgroundColor: "#940304",
       paddingVertical: 15,
       borderRadius: 10,
       marginTop: 16,
@@ -168,7 +168,7 @@ export default function Register() {
       fontSize: 16,
     },
     loginText: {
-      color: "#FF0000",
+      color: "#940304",
       textAlign: "center",
       fontSize: 14,
       marginTop: 16,
@@ -182,7 +182,7 @@ export default function Register() {
       paddingHorizontal: 30,
       fontSize: 12,
     },
-    linkText: { color: "#FF0000" },
+    linkText: { color: "#940304" },
     imagePickerContainer: {
       position: 'relative',
       alignSelf: 'center',
@@ -200,7 +200,7 @@ export default function Register() {
       width: 22,
       height: 22,
       borderRadius: 15,
-      backgroundColor: '#FF0000',
+      backgroundColor: '#940304',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -215,7 +215,7 @@ export default function Register() {
       marginTop: 5,
     },
     errorText: {
-      color: '#FF0000',
+      color: '#940304',
       fontSize: 12,
       textAlign: 'center',
       marginTop: 2,
@@ -242,7 +242,7 @@ export default function Register() {
       shadowRadius: 4,
     },
     selectedCard: {
-      borderColor: "#FF0000",
+      borderColor: "#940304",
       borderWidth: 2,
     },
     genderImage: {
@@ -253,7 +253,7 @@ export default function Register() {
     },
     genderTextWrapper: {
       width: "100%",
-      backgroundColor: "#FF0000",
+      backgroundColor: "#940304",
       paddingVertical: 10,
       alignItems: "center",
       borderBottomLeftRadius: 20,
@@ -289,7 +289,7 @@ export default function Register() {
         <SafeAreaView style={styles.container}>
           <ThemedView>
             <LinearGradient
-              colors={["#FF0000", "#840000"]}
+              colors={["#940304", "#840000"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.headerGradient}

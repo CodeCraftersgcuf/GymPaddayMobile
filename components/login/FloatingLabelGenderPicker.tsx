@@ -30,7 +30,7 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
     backgroundColor: dark ? 'black' : 'white' ,
     color: labelAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: dark ? ["white", "#FF0000"] : ["black", "#FF0000"],
+      outputRange: dark ? ["white", "#940304"] : ["black", "#940304"],
     }),
     top: labelAnim.interpolate({
       inputRange: [0, 1],
@@ -66,10 +66,10 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
       top: 18,
     },
     errorBorder: {
-      borderColor: "#FF0000",
+      borderColor: "#940304",
     },
     errorText: {
-      color: "#FF0000",
+      color: "#940304",
       fontSize: 12,
       marginTop: 4,
     },

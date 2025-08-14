@@ -288,8 +288,8 @@ export default function CreatePostScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes,
       allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
+      aspect: [18, 32],
+      quality: 0.6,
       videoQuality: ImagePicker.VideoQuality?.High || 1,
       videoMaxDuration: 30,
     });

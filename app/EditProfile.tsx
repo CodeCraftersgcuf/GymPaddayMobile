@@ -227,7 +227,7 @@ export default function EditProfileScreen() {
       shadowRadius: 4,
     },
     selectedCard: {
-      borderColor: "#FF0000",
+      borderColor: "#940304",
       borderWidth: 2,
     },
     genderImage: {
@@ -238,7 +238,7 @@ export default function EditProfileScreen() {
     },
     genderTextWrapper: {
       width: "100%",
-      backgroundColor: "#FF0000",
+      backgroundColor: "#940304",
       paddingVertical: 10,
       alignItems: "center",
       borderBottomLeftRadius: 20,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#940304',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   saveButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#940304',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

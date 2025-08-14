@@ -10,67 +10,67 @@ import {
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 
-const { width } = Dimensions.get('window');
-const cardWidth = (width - 40) / 2;
+const { width, height } = Dimensions.get('window');
 
 interface Props {
-  profileUrl: string;
+  postImageUrl: string;
+  profilePictureUrl: string;
   title: string;
   userName: string;
   viewers?: number;
   timeAgo?: string;
-  channelName: string; // required now
+  channelName: string;
   id?: string;
 }
 
 const LiveCard: React.FC<Props> = ({
-  profileUrl,
+  postImageUrl,
+  profilePictureUrl,
   id,
   title,
   userName,
   viewers = 20,
-  timeAgo = '1hr ago',
+  timeAgo = 'Live now',
   channelName,
 }) => {
   const router = useRouter();
 
-const handlePress = async () => {
-  if (!channelName || !id) return;
+  const handlePress = async () => {
+    if (!channelName || !id) return;
 
-  try {
-    const token = await SecureStore.getItemAsync('auth_token');
-    if (!token) throw new Error('No auth token');
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token');
 
-    const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/live-streams/${id}/join`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-    });
-    console.log("response is ",res)
-    if (!res.ok) {
-      const errorData = await res.json();
-      console.error('Join error:', errorData);
-      return;
+      const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/live-streams/${id}/join`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error('Join error:', errorData);
+        return;
+      }
+
+      router.push({
+        pathname: '/userLiveViewMain',
+        params: { channelName, id },
+      });
+    } catch (err) {
+      console.error('Join live stream failed:', err);
     }
-
-    // ✅ Proceed to live screen after join success
-    router.push({
-      pathname: '/userLiveViewMain',
-      params: { channelName, id },
-    });
-  } catch (err) {
-    console.error('Join live stream failed:', err);
-  }
-};
+  };
 
   return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
+    <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
       <View style={styles.card}>
-        <Image source={{ uri: profileUrl }} style={styles.image} />
+        <Image source={{ uri: postImageUrl }} style={styles.image} />
         <View style={styles.overlay}>
-          <Image source={{ uri: profileUrl }} style={styles.avatar} />
+          <Image source={{ uri: profilePictureUrl }} style={styles.avatar} />
           <View style={{ marginLeft: 8 }}>
             <Text style={styles.name}>{userName}</Text>
             <Text style={styles.meta}>{viewers} Viewers</Text>
@@ -84,46 +84,47 @@ const handlePress = async () => {
 
 const styles = StyleSheet.create({
   card: {
-    width: cardWidth,
-    margin: 8,
-    borderRadius: 16,
+    width: width-20,
+    height: height *0.9, // take 60% of screen height
+    marginBottom: 16,
+    borderRadius: 0,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'red',
+    backgroundColor: '#000',
   },
   image: {
     width: '100%',
-    height: cardWidth * 1.3,
-    resizeMode: 'cover',
+    height: '100%',
+    resizeMode: 'contain',
   },
   overlay: {
     position: 'absolute',
-    bottom: 10,
-    left: 10,
-    right: 10,
+    bottom: 16,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00000070',
-    borderRadius: 10,
-    padding: 6,
+    backgroundColor: '#00000088',
+    borderRadius: 12,
+    padding: 8,
   },
   avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   name: {
     color: '#fff',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   meta: {
     color: '#ccc',
-    fontSize: 12,
+    fontSize: 13,
   },
   time: {
     color: '#ccc',
     marginLeft: 'auto',
-    fontSize: 10,
+    fontSize: 12,
   },
 });
 

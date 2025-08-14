@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   topupButton: {
-    backgroundColor: '#ff0000',
+    backgroundColor: '#940304',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

@@ -28,7 +28,7 @@ const Story: React.FC<Props> = ({ story, userId }) => {
 
   return (
     <TouchableOpacity style={styles.container} onPress={handlePress}>
-      <LinearGradient colors={["#FF0000", "#0000FF"]} style={styles.gradient}>
+      <LinearGradient colors={["#940304", "#0000FF"]} style={styles.gradient}>
         <Image source={{ uri: story.user.profile_picture_url }} style={styles.avatar} />
       </LinearGradient>
       <ThemeText style={styles.name}>

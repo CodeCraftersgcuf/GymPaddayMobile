@@ -65,7 +65,7 @@ export default function StreamingCard({
       <View style={styles.container}>
         <Text style={{ textAlign: 'center' }}>No access to camera</Text>
         <TouchableOpacity onPress={requestPermission} style={styles.buyButton}>
-          <Text style={{ color: '#FF0000', fontWeight: 'bold' }}>Grant Camera Access</Text>
+          <Text style={{ color: '#940304', fontWeight: 'bold' }}>Grant Camera Access</Text>
         </TouchableOpacity>
       </View>
     );
@@ -90,17 +90,17 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
 
       {/* Streaming Info Card */}
       <LinearGradient
-        colors={['#FF0000', '#8B00FF']}
+        colors={['#940304', '#8B00FF']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.infoCard}
       >
-        <Text style={styles.durationText}>Live streaming duration left this month</Text>
-        <Text style={styles.hoursText}>
+        <Text style={styles.durationText}>Enjoy Live Streaming </Text>
+        {/* <Text style={styles.hoursText}>
           {liveMinutes !== null ? `${(liveMinutes / 60).toFixed(1)} Hrs` : 'Loading...'}
-        </Text>
+        </Text> */}
 
-        <View style={styles.progressBar}>
+        {/* <View style={styles.progressBar}>
           <View
             style={[
               styles.progressFill,
@@ -112,18 +112,18 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
               },
             ]}
           />
-        </View>
+        </View> */}
 
         <Text style={styles.purchaseText}>
-          Get more streaming minutes by purchasing with your GP coins.
+          You must have 500 users to go live
         </Text>
 
-        <View style={styles.priceContainer}>
+        {/* <View style={styles.priceContainer}>
           <Text style={styles.priceText}>30GP / 30 Minutes</Text>
           <TouchableOpacity style={styles.buyButton} onPress={onBuyMinutes}>
             <Text style={styles.buyButtonText}>Buy Now</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
       </LinearGradient>
 
       {/* Error Message */}
@@ -163,7 +163,7 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
   style={[
     styles.goLiveButton,
     {
-      backgroundColor: canGoLive ? '#FF0000' : '#CCCCCC',
+      backgroundColor: canGoLive ? '#940304' : '#CCCCCC',
       opacity: canGoLive ? 1 : 0.6,
     },
   ]}
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   buyButtonText: {
-    color: '#FF0000',
+    color: '#940304',
     fontWeight: '600',
   },
   errorContainer: {

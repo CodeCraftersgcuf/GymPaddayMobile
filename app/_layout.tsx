@@ -46,7 +46,7 @@ export default function RootLayout() {
       if (!hasSeen && pathname !== "/OnboardingScreen") {
         router.replace("/OnboardingScreen");
       }
-      console.log("stored user", JSON.parse(storedUser))
+      //console.log("stored user", JSON.parse(storedUser))
 
       if (storedToken) setToken(storedToken);
       if (storedUser) {

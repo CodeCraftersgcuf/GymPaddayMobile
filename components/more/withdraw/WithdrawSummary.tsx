@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 48,
     fontWeight: '700',
-    color: '#FF0000',
+    color: '#940304',
     textAlign: 'center',
     marginBottom: 40,
     marginTop: 20,
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   proceedButton: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',

@@ -94,7 +94,7 @@ export default function MarketplaceScreen() {
     cardBackground: isDark ? '#181818' : '#FFFFFF',
     text: isDark ? '#FFFFFF' : '#000000',
     textSecondary: isDark ? '#CCCCCC' : '#666666',
-    headerBackground: '#FF0000',
+    headerBackground: '#940304',
     searchBackground: "#BD0000",
     borderColor: isDark ? '#333333' : '#E5E5E5',
   };
@@ -241,7 +241,7 @@ React.useEffect(() => {
         {loading && (
           <ActivityIndicator
             size="small"
-            color="#FF0000"
+            color="#940304"
             style={{ position: 'absolute' }}
           />
         )}
@@ -292,7 +292,7 @@ React.useEffect(() => {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#FF0000" />
+        <ActivityIndicator size="large" color="#940304" />
       </SafeAreaView>
     );
   }
@@ -364,8 +364,8 @@ React.useEffect(() => {
           <RefreshControl
             refreshing={isFetching || refreshing}
             onRefresh={onRefresh}
-            colors={['#FF0000']}
-            tintColor="#FF0000"
+            colors={['#940304']}
+            tintColor="#940304"
           />
         }
       >
@@ -380,7 +380,7 @@ React.useEffect(() => {
                 style={[
                   styles.categoryCard,
                   { backgroundColor: theme.cardBackground },
-                  selectedCategory === item.id && { borderColor: '#FF0000', borderWidth: 2 },
+                  selectedCategory === item.id && { borderColor: '#940304', borderWidth: 2 },
                 ]}
                 onPress={() => setSelectedCategory(item.id)}
               >
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '300',
     color: '#FFFFFF',
     // fontStyle: 'italic',
@@ -630,7 +630,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
   listingPrice: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#FF0000',
+    color: '#940304',
     marginBottom: 8,
   },
   sellerInfo: {
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

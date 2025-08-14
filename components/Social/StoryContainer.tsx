@@ -51,7 +51,7 @@ const StoryContainer: React.FC<Props> = ({ stories, refreshing }) => {
         {/* My Story */}
         <TouchableOpacity onPress={() => router.push('/AddToStoryScreen')} style={styles.storyItem}>
           <LinearGradient
-            colors={['#FF0000', '#0000FF']}
+            colors={['#940304', '#0000FF']}
             style={styles.gradientBorder}
           >
             <Image source={{ uri: profileImage }} style={styles.myStoryImage} />

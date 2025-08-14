@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#940304',
     marginRight: 12,
   },
   timestamp: {

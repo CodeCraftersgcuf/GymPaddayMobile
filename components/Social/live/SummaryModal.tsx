@@ -32,11 +32,11 @@ export default function SummaryModal({
           </View>
           
           <Text style={[styles.title, { color: dark ? '#FFFFFF' : '#000000' }]}>
-            You are about to go live, view your summary
+            You are about to go live, Are you sure?
           </Text>
           
           <View style={styles.summaryContainer}>
-            <View style={styles.summaryRow}>
+            {/* <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: dark ? '#FFFFFF' : '#000000' }]}>
                 Duration
               </Text>
@@ -54,7 +54,7 @@ export default function SummaryModal({
               <Text style={[styles.summaryValue, { color: dark ? '#AAAAAA' : '#666666' }]}>
                 30GP/min
               </Text>
-            </View>
+            </View> */}
           </View>
           
           <View style={styles.buttonContainer}>
@@ -152,7 +152,7 @@ overlay: {
   },
   proceedButton: {
     flex: 1,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderRadius: 15,
     paddingVertical: 8,
     alignItems: 'center',

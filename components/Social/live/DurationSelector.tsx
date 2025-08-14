@@ -116,9 +116,9 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderWidth: 2,
-    borderColor: '#FF0000',
+    borderColor: '#940304',
   },
   radioUnselected: {
     width: 20,
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   saveButton: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderRadius: 25,
     paddingVertical: 15,
     alignItems: 'center',

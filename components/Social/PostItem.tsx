@@ -82,7 +82,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [showSeeMore, setShowSeeMore] = useState(false);
   const videoRefs = useRef<Record<number, Video>>({});
 
-
+  // console.log("post data we are getting", post);
   useEffect(() => {
     SecureStore.getItemAsync('auth_token').then(setToken);
   }, []);
@@ -100,19 +100,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     enabled: false, // only run when triggered by user
   });
 
-  useEffect(() => {
-    // Update local state from server after like/dislike
-    if (likeData) {
-      if (likeData.message === 'Disliked') {
-        setIsLiked(false);
-        setLikesCount((prev) => prev - 1);
-      } else {
-        setIsLiked(true);
-        setLikesCount((prev) => prev + 1);
-      }
-    }
-    // Optionally, handle other cases (e.g., error handling)
-  }, [likeData]);
+  // useEffect(() => {
+  //   // Update local state from server after like/dislike
+  //   if (likeData) {
+  //     if (likeData.message === 'Disliked') {
+  //       setIsLiked(false);
+  //       setLikesCount((prev) => prev - 1);
+  //     } else {
+  //       setIsLiked(true);
+  //       setLikesCount((prev) => prev + 1);
+  //     }
+  //   }
+  //   // Optionally, handle other cases (e.g., error handling)
+  // }, [likeData]);
   // Extract images from post
   const imagesUrl = post.imagesUrl;
 
@@ -135,9 +135,25 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
 
   const handleLike = async () => {
-    if (likeLoading || !token) return;
-    await toggleLike(); // this will call the API and update likeData
+    if (!token) return;
+
+    // Optimistic update
+    const newLiked = !isLiked;
+    setIsLiked(newLiked);
+    setLikesCount((prev) => prev + (newLiked ? 1 : -1));
+
+    // Call API in background (ignore response)
+    try {
+      await toggleLike();
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      // Optionally revert:
+      setIsLiked(!newLiked);
+      setLikesCount((prev) => prev + (!newLiked ? 1 : -1));
+    }
   };
+
+
 
   const handlePress = () => {
     // Map recent comments to the correct structure
@@ -278,6 +294,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const shouldTruncate = words?.length > WORD_LIMIT;
   const trimmedText = words?.slice(0, WORD_LIMIT).join(' ');
   const isDefaultImage = !post.user.profile_picture;
+  //adding showing who liked
+  const [likeModalVisible, setLikeModalVisible] = useState(false);
+  const [likeUsers, setLikeUsers] = useState<any[]>([]);
 
   return (
     <View style={styles.postContainer}>
@@ -329,14 +348,14 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
               const isVideo = item === post.videoUrl;
 
               return isVideo ? (
-                <View style={styles.carouselImage}>
+                <View style={styles.carouselVideoWrapper}>
                   <Video
                     ref={(ref) => {
                       if (ref) videoRefs.current[index] = ref;
                     }}
                     source={{ uri: item }}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
+                    style={styles.videoPlayer} // ✅ Change this
+                    resizeMode="contain"
                     isLooping
                     isMuted={isMuted}
                     shouldPlay={isPlaying}
@@ -422,14 +441,17 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       {/* Post Actions */}
       <View style={styles.actions}>
         <ThemedView darkColor="transparent" style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionItem} disabled={likeLoading}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionItem} disabled={likeLoading} onLongPress={() => {
+            setLikeUsers(post?.likes.map(like => like.user));
+            setLikeModalVisible(true);
+          }}>
             <Image
               source={images.ConnectIcons}
               tintColor={isLiked ? 'red' : dark ? 'white' : 'black'}
               style={{ width: 25, height: 25 }}
             />
             <ThemeText style={styles.actionText}>{likesCount}</ThemeText>
-            {likeLoading && <ActivityIndicator size="small" color="#ff4444" style={{ marginLeft: 8 }} />}
+            {/* {likeLoading && <ActivityIndicator size="small" color="#ff4444" style={{ marginLeft: 8 }} />} */}
           </TouchableOpacity>
 
           {showComment && <TouchableOpacity style={styles.actionItem} onPress={handlePress}>
@@ -450,7 +472,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
         </ThemedView>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        <Text style={[styles.content,{color:dark?'white':'black'}]}>
+        <Text style={[styles.content, { color: dark ? 'white' : 'black' }]}>
           {isExpanded || !shouldTruncate ? post.content : `${trimmedText}... `}
           {shouldTruncate && (
             <Text
@@ -462,6 +484,38 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
           )}
         </Text>
       </View>
+
+
+      <Modal
+        visible={likeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLikeModalVisible(false)}
+      >
+        <Pressable style={styles.bottomSheetOverlay} onPress={() => setLikeModalVisible(false)}>
+          <Pressable style={styles.bottomSheetContainer} onPress={() => { }}>
+            <View style={styles.dragIndicator} />
+            <Text style={styles.likeModalTitle}>Liked by</Text>
+            <FlatList
+              data={likeUsers}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.likeUserItem}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setLikeModalVisible(false); // Close modal before navigating
+                    router.push({ pathname: '/UserProfile', params: { user_id: item.id.toString() } });
+                  }}
+                >
+                  <Image source={{ uri: item.profile_picture_url }} style={styles.likeUserImage} />
+                  <Text style={styles.likeUserName}>{item.fullname || item.username}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
 
 
@@ -511,6 +565,77 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 };
 
 const styles = StyleSheet.create({
+  videoPlayer: {
+    width: '100%',
+    borderRadius: 18,
+    height: '100%',
+    // width:'auto',
+    backgroundColor: 'black',
+    alignSelf: 'center',
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+
+  bottomSheetContainer: {
+    backgroundColor: 'white',
+    paddingTop: 12,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: height * 0.6,
+  },
+
+  dragIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'gray',
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+
+  likeModal: {
+    backgroundColor: 'white',
+    marginHorizontal: 30,
+    borderRadius: 10,
+    padding: 20,
+    maxHeight: height * 0.5,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  likeModalTitle: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginBottom: 10,
+  },
+
+  likeUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  likeUserImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+
+  likeUserName: {
+    fontSize: 16,
+  },
+
   postContainer: {
     paddingVertical: 10,
   },
@@ -543,7 +668,7 @@ const styles = StyleSheet.create({
   playIcon: {
     width: 30,
     height: 30,
-    tintColor: '#FF0000',
+    tintColor: '#940304',
   },
   profileImage: {
     width: 40,
@@ -675,7 +800,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   activeDot: {
-    backgroundColor: "#ff0000",
+    backgroundColor: "#940304",
   },
   closeButton: {
     position: "absolute",
@@ -707,6 +832,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     resizeMode: 'cover',
+  },
+  carouselVideoWrapper: {
+    width: width - 20,
+    maxHeight: 540, // or remove to make it auto-size if your video has intrinsic size
+    borderRadius: 18,
+    backgroundColor: 'black',
+    alignSelf: 'center',
+    overflow: 'hidden',
   },
 
 

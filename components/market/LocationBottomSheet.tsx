@@ -74,7 +74,7 @@ const LocationBottomSheet = forwardRef<BottomSheet, LocationBottomSheetProps>(
                 
                 <View style={[
                   styles.radioButton,
-                  { borderColor: selectedLocation === location.id ? '#FF0000' : theme.borderColor }
+                  { borderColor: selectedLocation === location.id ? '#940304' : theme.borderColor }
                 ]}>
                   {selectedLocation === location.id && (
                     <View style={styles.radioButtonInner} />
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
   },
 });
 

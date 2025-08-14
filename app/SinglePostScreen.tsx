@@ -129,7 +129,7 @@ export default function SinglePostScreen() {
     return (
       <View style={styles.center}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        <ActivityIndicator size="large" color="#ff0000" />
+        <ActivityIndicator size="large" color="#940304" />
         <Text style={{ color: '#000', marginTop: 10 }}>Loading post...</Text>
       </View>
     );

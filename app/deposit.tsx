@@ -362,18 +362,18 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         borderWidth: 2,
-        borderColor: '#FF0000',
+        borderColor: '#940304',
         borderRadius: 4,
         marginRight: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
     checkboxChecked: {
-        backgroundColor: '#FF0000',
+        backgroundColor: '#940304',
     },
     checkboxText: {
         fontSize: 16,
-        color: '#FF0000',
+        color: '#940304',
         fontWeight: '500',
     },
     exchangeRateContainer: {
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     proceedButton: {
-        backgroundColor: '#FF0000',
+        backgroundColor: '#940304',
         marginHorizontal: 20,
         paddingVertical: 18,
         borderRadius: 12,

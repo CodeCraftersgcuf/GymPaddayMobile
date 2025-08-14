@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     businessText: {
-        color: '#FF0000',
+        color: '#940304',
     },
     upgradeSubtitle: {
         fontSize: 16,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 10,
-        backgroundColor: '#FF0000',
+        backgroundColor: '#940304',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
         paddingBottom: 30,
     },
     upgradeButton: {
-        backgroundColor: '#FF0000',
+        backgroundColor: '#940304',
         borderRadius: 15,
         paddingVertical: 18,
         justifyContent: 'center',

@@ -54,7 +54,7 @@ export default function CallScreen({
     if (!receiverJoined) {
         return (
             <LinearGradient
-                colors={['#FF0000', '#C800A1', '#4A00FF']}
+                colors={['#940304', '#C800A1', '#4A00FF']}
                 style={styles.gradientBackground}
             >
                 <Image

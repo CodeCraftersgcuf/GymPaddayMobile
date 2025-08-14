@@ -155,10 +155,10 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
   },
   inputError: {
-    borderColor: '#FF0000',
+    borderColor: '#940304',
   },
   errorText: {
-    color: '#FF0000',
+    color: '#940304',
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -173,17 +173,17 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#FF0000',
+    borderColor: '#940304',
     marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
   },
   checkboxLabel: {
     fontSize: 16,
-    color: '#FF0000',
+    color: '#940304',
     fontWeight: '500',
   },
   exchangeRateContainer: {
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
   },
   proceedButton: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#940304',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',

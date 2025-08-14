@@ -106,7 +106,7 @@ export default function TabLayout() {
                 }}
               >
                 <LinearGradient
-                  colors={['#FF0000', '#0000FF']}
+                  colors={['#940304', '#0000FF']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.liveIconContainer}

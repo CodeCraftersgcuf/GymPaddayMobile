@@ -343,7 +343,7 @@ export default function ProfileScreen() {
   if (isLoading) {
     return (
       <GestureHandlerRootView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-        <ActivityIndicator size="large" color="#ff0000" />
+        <ActivityIndicator size="large" color="#940304" />
         <Text style={{ color: '#fff', fontSize: 18, marginTop: 16 }}>Loading profile...</Text>
       </GestureHandlerRootView>
     );
@@ -369,8 +369,8 @@ export default function ProfileScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#ff0000']}
-              tintColor={'#ff0000'}
+              colors={['#940304']}
+              tintColor={'#940304'}
               title="Pull to refresh"
               titleColor={theme.text}
             />
@@ -428,7 +428,7 @@ export default function ProfileScreen() {
               {
                 data?.is_business &&
                 <TouchableOpacity onPress={() => handleListingPress()} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>
-                  <Text style={[styles.messageButtonText, { color: "#FF0000" }]}>Listing</Text>
+                  <Text style={[styles.messageButtonText, { color: "#940304" }]}>Listing</Text>
                 </TouchableOpacity>
               }
             </View>
@@ -438,7 +438,7 @@ export default function ProfileScreen() {
                 <Text style={styles.followButtonText}>Edit Profile</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleListingPress()} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>
-                <Text style={[styles.messageButtonText, { color: "#FF0000" }]}>Listing</Text>
+                <Text style={[styles.messageButtonText, { color: "#940304" }]}>Listing</Text>
               </TouchableOpacity>
             </View>}
           </View>

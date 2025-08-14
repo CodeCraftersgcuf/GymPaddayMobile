@@ -149,6 +149,7 @@ export default function StoryPreview() {
         formData.append('caption', '');
 
         if (selectedMusicMap[i]) {
+          console.log(selectedMusicMap[i],"selected msuoic");
           formData.append('music_title', selectedMusicMap[i].title);
           formData.append('music_url', selectedMusicMap[i].preview);
         }
@@ -195,7 +196,7 @@ export default function StoryPreview() {
           <View key={index} style={styles.progressBarBackground}>
             <Animated.View
               style={[styles.progressBarFill,
-                index === currentIndex && { flex: progressAnim, backgroundColor: '#FF0000' },
+                index === currentIndex && { flex: progressAnim, backgroundColor: '#6C2121' },
                 index < currentIndex && { flex: 1, backgroundColor: '#FFFFFF' },
                 index > currentIndex && { flex: 0, backgroundColor: '#FFFFFF' },
               ]}

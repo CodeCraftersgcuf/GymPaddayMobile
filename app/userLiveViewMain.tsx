@@ -307,7 +307,7 @@ const User_liveViewMain: React.FC = () => {
               style={styles.giftButton}
               onPress={() => setActivePanel('gifts')}
             >
-              <Icon name="gift" size={24} color="#ff0000" />
+              <Icon name="gift" size={24} color="#940304" />
             </TouchableOpacity>
           </View>
         </View>
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   giftBadge: {
-    backgroundColor: '#ff0000',
+    backgroundColor: '#940304',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,

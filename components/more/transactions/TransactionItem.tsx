@@ -21,7 +21,7 @@ export default function TransactionItem({ transaction }: TransactionItemProps) {
       styles.container,
       dark ? styles.containerDark : styles.containerLight,
       {
-        borderLeftColor: isDeposit ? '#22C55E' : '#EF4444',
+        borderLeftColor: isDeposit ? '#22C55E' : '#940304',
       }
     ]}>
       <View style={styles.content}>
@@ -40,7 +40,7 @@ export default function TransactionItem({ transaction }: TransactionItemProps) {
       </View>
       <Text style={[
         styles.amount,
-        { color: isDeposit ? '#22C55E' : '#EF4444' }
+        { color: isDeposit ? '#22C55E' : '#940304' }
       ]}>
         {formatAmount(transaction.amount, isDeposit)}
       </Text>
