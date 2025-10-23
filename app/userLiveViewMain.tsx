@@ -161,7 +161,8 @@ const User_liveViewMain: React.FC = () => {
   const handleSendSuccess = (amount: number) => {
     setBalance(prevBalance => prevBalance - (amount*10));
     setActivePanel('none');
-    const giftText = `Sent ${selectedGift?.name} x${amount}`;
+    console.log("selected gift ",selectedGift)
+    const giftText = `Sent ${selectedGift?.emoji} x${amount}`;
     // Add gift message to chat
     sendChatMessage({message:giftText,type:"gift",amount:amount*10})
    
@@ -239,7 +240,6 @@ const User_liveViewMain: React.FC = () => {
             allowsFullscreenVideo
             style={{ flex: 1 }}
           />
-
         ) : (
           <Text style={{ color: 'white', textAlign: 'center', marginTop: 20 }}>
             No channel specified

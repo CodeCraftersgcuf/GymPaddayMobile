@@ -75,39 +75,39 @@ export default function LiveStreamingView({
   const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(livestreamId);
   // console.log("chats", chats)
   useEffect(() => {
-  if (chats.length > 0) {
-    let giftTotal = 0;
+    if (chats.length > 0) {
+      let giftTotal = 0;
 
-    const formatted = chats.map((msg: any) => {
-      if (msg.type === 'gift') {
-        giftTotal += 1;
-      }
+      const formatted = chats.map((msg: any) => {
+        if (msg.type === 'gift') {
+          giftTotal += 1;
+        }
 
-      return {
-        id: msg.id.toString(),
-        user: msg.user?.fullname || 'User',
-        message: msg.message,
-        avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
-        hasGift: msg.type === 'gift',
-        giftCount: msg.amount,
+        return {
+          id: msg.id.toString(),
+          user: msg.user?.fullname || 'User',
+          message: msg.message,
+          avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
+          hasGift: msg.type === 'gift',
+          giftCount: msg.amount,
 
-        // ✅ Add reply_to data (if exists)
-        reply_to: msg.reply_to
-          ? {
+          // ✅ Add reply_to data (if exists)
+          reply_to: msg.reply_to
+            ? {
               id: msg.reply_to.id,
               message: msg.reply_to.message,
               user: {
                 fullname: msg.reply_to.user?.fullname || 'User',
               },
             }
-          : null,
-      };
-    });
+            : null,
+        };
+      });
 
-    setChatMessages(formatted);
-    setTotalGifts(giftTotal);
-  }
-}, [chats]);
+      setChatMessages(formatted);
+      setTotalGifts(giftTotal);
+    }
+  }, [chats]);
 
 
   const audienceQuery = useQuery({
@@ -206,8 +206,10 @@ export default function LiveStreamingView({
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replyModalVisible, setReplyModalVisible] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  // const canType = currentUserRole === 'host' || currentUserRole === 'admin';
 
-
+  const canType = true;
 
   return (
     <View style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}>
@@ -249,59 +251,121 @@ export default function LiveStreamingView({
 
         <View style={styles.chatOverlay}>
           <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
-          {chatMessages.map((chat) => (
-  <TouchableOpacity
-    key={chat.id}
-    onLongPress={() => {
-      setReplyTo(chat);
-      setReplyText('');
-      setReplyModalVisible(true);
-    }}
-  >
-    <View style={styles.chatMessage}>
-      <Image source={{ uri: chat.avatar }} style={styles.avatar} />
-      <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-        <Text style={styles.username}>{chat.user}</Text>
+            {chatMessages.map((chat) => (
+              <TouchableOpacity
+                key={chat.id}
+                onLongPress={() => {
+                  setReplyTo(chat);
+                  setReplyText('');
+                  setReplyModalVisible(true);
+                }}
+              >
+                <View style={styles.chatMessage}>
+                  <Image source={{ uri: chat.avatar }} style={styles.avatar} />
+                  <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                    <Text style={styles.username}>{chat.user}</Text>
 
-        {/* Reply Preview Box */}
-        {chat.reply_to && (
-          <View style={styles.replyPreview}>
-            <Text style={styles.replyUserText}>
-              Replying to {chat.reply_to.user?.fullname || 'User'}
-            </Text>
-            <Text style={styles.replyMessageText} numberOfLines={1}>
-              {chat.reply_to.message}
-            </Text>
-          </View>
-        )}
+                    {/* Reply Preview Box */}
+                    {chat.reply_to && (
+                      <View style={styles.replyPreview}>
+                        <Text style={styles.replyUserText}>
+                          Replying to {chat.reply_to.user?.fullname || 'User'}
+                        </Text>
+                        <Text style={styles.replyMessageText} numberOfLines={1}>
+                          {chat.reply_to.message}
+                        </Text>
+                      </View>
+                    )}
 
-        <View style={styles.messageRow}>
-          <Text style={styles.messageText}>{chat.message}</Text>
+                    <View style={styles.messageRow}>
+                      <Text style={styles.messageText}>{chat.message}</Text>
 
-          {chat.hasGift && (
-            <View style={styles.giftContainer}>
-              <Text style={styles.giftEmoji}>🎁</Text>
-              <View style={styles.giftBadge}>
-                <Text style={styles.giftCount}>x{chat.giftCount}</Text>
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
-    </View>
-  </TouchableOpacity>
-))}
+                      {chat.hasGift && (
+                        <View style={styles.giftContainer}>
+                          <Text style={styles.giftEmoji}>🎁</Text>
+                          <View style={styles.giftBadge}>
+                            <Text style={styles.giftCount}>x{chat.giftCount}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
 
           </ScrollView>
         </View>
 
-        {replyTo && (
-          <View style={styles.replyBox}>
-            <Text style={styles.replyUser}>Replying to: {replyTo.user}</Text>
-            <Text style={styles.replyContent} numberOfLines={1}>{replyTo.message}</Text>
-            <TouchableOpacity onPress={() => setReplyTo(null)}>
-              <Text style={{ color: 'red' }}>Cancel</Text>
-            </TouchableOpacity>
+        {canType && (
+          <View style={styles.inputBar}>
+            {!!replyTo && (
+              <TouchableOpacity style={styles.inputReplyChip} onPress={() => setReplyTo(null)}>
+                <Text style={styles.inputReplyChipText}>
+                  Replying to {replyTo.user}: {replyTo.message?.slice(0, 32)}{replyTo.message?.length > 32 ? '…' : ''}
+                </Text>
+                <Text style={styles.inputReplyChipClose}>✕</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.input}
+                placeholder={replyTo ? 'Write a reply…' : 'Write a message…'}
+                placeholderTextColor="#9AA0A6"
+                value={messageText}
+                onChangeText={setMessageText}
+                multiline
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, isPending && { opacity: 0.6 }]}
+                disabled={isPending || !messageText.trim()}
+                onPress={() => {
+                  const text = messageText.trim();
+                  if (!text) return;
+
+                  // optimistic UI (optional)
+                  const optimisticId = `temp-${Date.now()}`;
+                  setChatMessages(prev => [
+                    ...prev,
+                    {
+                      id: optimisticId,
+                      user: 'You',
+                      message: text,
+                      avatar: 'https://ui-avatars.com/api/?name=You',
+                      hasGift: false,
+                      giftCount: 0,
+                      // show the reply preview quickly
+                      reply_to: replyTo
+                        ? {
+                          id: replyTo.id,
+                          message: replyTo.message,
+                          user: { fullname: replyTo.user },
+                        }
+                        : null,
+                    } as any,
+                  ]);
+
+                  sendChatMessage(
+                    { message: text, reply_to: replyTo?.id },
+                    {
+                      onSuccess: () => {
+                        // clear the draft + reply target
+                        setMessageText('');
+                        setReplyTo(null);
+                      },
+                      onError: (e: any) => {
+                        // rollback optimistic item
+                        setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
+                        Alert.alert('Failed to send', e?.message ?? 'Please try again.');
+                      },
+                    }
+                  );
+                }}
+              >
+                <MaterialIcons name="send" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -376,7 +440,7 @@ export default function LiveStreamingView({
                 />
                 <View>
                   <Text style={{ fontWeight: '600' }}>{audience.user?.fullname || 'Unnamed User'}</Text>
-                  <Text style={{ color: '#555' }}>{audience.user?.email || 'No email'}</Text>
+                  {/* <Text style={{ color: '#555' }}>{audience.user?.email || 'No email'}</Text> */}
                 </View>
               </View>
             ))
@@ -560,6 +624,48 @@ export default function LiveStreamingView({
 }
 
 const styles = StyleSheet.create({
+  inputBar: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: '#0E0E0E',
+  },
+  inputReplyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2A2A2A',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  inputReplyChipText: { color: '#D7D7D7', flex: 1, fontSize: 12 },
+  inputReplyChipClose: { color: '#BBB', marginLeft: 8, fontSize: 12 },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    minHeight: 42,
+    maxHeight: 120,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#1A1A1A',
+    color: '#fff',
+    borderRadius: 10,
+  },
+  sendBtn: {
+    height: 42,
+    minWidth: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+  },
+
   chatOverlay: {
     position: 'absolute',
     bottom: 90,

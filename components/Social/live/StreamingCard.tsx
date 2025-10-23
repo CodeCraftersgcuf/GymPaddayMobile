@@ -168,7 +168,7 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
     },
   ]}
   onPress={onGoLive}
-  disabled={!canGoLive}
+  // disabled={!canGoLive}
 >
   <Text style={styles.goLiveButtonText}>Go Live</Text>
 </TouchableOpacity>

@@ -74,17 +74,17 @@ export default function ConversationList({
           onPress={() => onConversationPress(item.id)}
         >
           <View style={styles.avatarWrapper}>
-         <Image
-  source={
-    item.other_user?.profile_picture_url?.trim()
-      ? { uri: item.other_user.profile_picture_url }
-      : require('@/assets/icons/more/User.png')
-  }
-  style={[
-    styles.avatar,
-    !item.other_user?.profile_picture_url?.trim() && { tintColor: 'black' }
-  ]}
-/>
+            <Image
+              source={
+                item.other_user?.profile_picture_url?.trim()
+                  ? { uri: item.other_user.profile_picture_url }
+                  : require('@/assets/icons/more/User.png')
+              }
+              style={[
+                styles.avatar,
+                !item.other_user?.profile_picture_url?.trim() && { tintColor: 'black' }
+              ]}
+            />
 
 
 
@@ -92,11 +92,22 @@ export default function ConversationList({
           </View>
           <View style={styles.content}>
             <View style={styles.header}>
-              <ThemeText style={styles.name}>{item.user.username}</ThemeText>
-              <ThemeText style={styles.time}>
-                {formatMessageTime(item.lastMessage.timestamp)}
-              </ThemeText>
-            </View>
+  <ThemeText style={styles.name}>{item.user.username}</ThemeText>
+
+  <View style={styles.rightHeader}>
+    {item.lastMessage?.unreadCount > 0 && (
+      <View style={styles.unreadBadge}>
+        <ThemeText style={styles.unreadText}>
+          {item.lastMessage.unreadCount}
+        </ThemeText>
+      </View>
+    )}
+    <ThemeText style={styles.time}>
+      {formatMessageTime(item.lastMessage.timestamp)}
+    </ThemeText>
+  </View>
+</View>
+
             <ThemeText style={styles.message} numberOfLines={1}>
               {item.lastMessage.text}
             </ThemeText>
@@ -130,6 +141,26 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
   },
+  rightHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6, // optional spacing
+},
+unreadBadge: {
+  backgroundColor: '#FF3B30',
+  borderRadius: 12,
+  minWidth: 20,
+  height: 20,
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 6,
+},
+unreadText: {
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: 'bold',
+},
+
   online: {
     position: 'absolute',
     bottom: 2,

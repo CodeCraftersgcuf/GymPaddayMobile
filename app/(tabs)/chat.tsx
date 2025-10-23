@@ -49,24 +49,29 @@ export default function Chat() {
   // console.log("The data from API:", data?.conversations);
 
   // Transform API data to ConversationList format
-  const apiConversations = data?.conversations?.map((conv: any) => ({
+  const apiConversations = data?.conversations?.map((conv: any) => {
+  console.log("conv", conv.last_message);
+  return {
     id: String(conv.conversation_id),
     user: {
       id: String(conv.other_user.id),
       username: conv.other_user.username,
       profile_img: conv.other_user.profile_picture_url,
-      online: false, // API does not provide online status
+      online: false,
     },
     lastMessage: {
       text: conv.last_message?.message || '',
       timestamp: conv.last_message?.created_at
         ? new Date(conv.last_message.created_at)
         : new Date(conv.updated_at || conv.created_at),
+      unreadCount: conv.last_message.unread_count,
     },
-    other_user: conv.other_user, // for navigation
+    other_user: conv.other_user,
     conversation_id: conv.conversation_id,
-    type: conv.type, // 'social' or 'marketplace'
-  })) || [];
+    type: conv.type,
+  };
+}) || [];
+
 
   // Build users for AvatarList from API conversations
   const apiUsers =
