@@ -262,11 +262,13 @@ export default function ItemDetailsScreen() {
                         N {parseInt(String(price).replace(/[^0-9]/g, ''), 10).toLocaleString()}
                     </Text>
 
-                    <TouchableOpacity style={styles.sellerSection} onPress={handleNavigateToUserProfile}>
-                        <Image
-                            source={{ uri: sellerImage }}
-                            style={styles.sellerImage}
-                        />
+                    <TouchableOpacity style={styles.sellerSection} onPress={handleNavigateToUserProfile} activeOpacity={0.7}>
+                        <TouchableOpacity onPress={handleNavigateToUserProfile} activeOpacity={0.7}>
+                            <Image
+                                source={{ uri: sellerImage }}
+                                style={styles.sellerImage}
+                            />
+                        </TouchableOpacity>
                         <View style={styles.sellerDetails}>
                             <Text style={[styles.sellerName, { color: theme.text }]}>{sellerName}</Text>
                             <View style={styles.sellerMeta}>
@@ -412,8 +414,9 @@ const styles = StyleSheet.create({
     sellerImage: {
         width: 50,
         height: 50,
-        borderRadius: 25,
+        borderRadius: 25, // Perfect circle (half of 50)
         marginRight: 12,
+        backgroundColor: '#E5E5E5', // Fallback background
     },
     sellerDetails: {
         flex: 1,

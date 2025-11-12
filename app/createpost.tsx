@@ -201,7 +201,7 @@ export default function CreatePostScreen() {
     try {
       const { assets } = await MediaLibrary.getAssetsAsync({
         first: 50,
-        mediaType: [MediaType.photo, MediaType.video],
+        mediaType: [MediaType.photo, MediaType.video], // Get both photos and videos from all folders
         sortBy: MediaLibrary.SortBy.creationTime,
       });
 
@@ -215,7 +215,7 @@ export default function CreatePostScreen() {
       }));
 
       setGalleryMedia(media);
-      console.log(`Loaded ${media.length} media items from gallery`);
+      console.log(`Loaded ${media.length} media items from gallery (photos & videos from all folders)`);
     } catch (error) {
       console.error('Error loading gallery media:', error);
       Alert.alert('Error', 'Failed to load gallery media');

@@ -24,19 +24,25 @@ export default function OnboardingScreen() {
     router.replace('/login');
   };
 
-  // Your slide data
+  // Enhanced onboarding slides
   const slides = [
     {
       image: require('../assets/images/iphone-mock.png'),
       title: 'Connect via Socials',
       description:
-        'With gym paddy socials, share your thoughts, comment on post, like a post and meet people of like interests via socials',
+        'Share your fitness journey, connect with like-minded individuals, and build your community through GymPaddy Socials.',
     },
     {
-      image: require('../assets/images/onboarding2.png'), // ✅ use correct path & name
+      image: require('../assets/images/onboarding2.png'),
       title: 'Buy and Sell With Ease',
       description:
-        'With gym paddy socials, share your thoughts, comment on post, like a post and meet people of like interests via socials',
+        'Discover the best gym equipment, supplements, and fitness gear. Buy, sell, and trade with confidence in our marketplace.',
+    },
+    {
+      image: require('../assets/images/iphone-mock.png'),
+      title: 'Go Live & Connect',
+      description:
+        'Stream your workouts, host fitness challenges, and engage with your audience in real-time through live streaming.',
     },
   ];
 

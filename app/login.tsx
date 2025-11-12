@@ -65,12 +65,26 @@ useEffect(() => {
       console.log("🎉 Login Success:", data);
 
       if (data?.access_token) {
-        // ✅ Save token securely
-        await SecureStore.setItemAsync("auth_token", data.access_token);
-        await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
-        await SecureStore.setItemAsync("user_id", data.user.id.toString());
-        await SecureStore.setItemAsync("username", data.user.username || "");
-        console.log("User data saved:", data.user);
+        // ✅ Save token securely with error handling
+        try {
+          await SecureStore.setItemAsync("auth_token", data.access_token);
+          await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
+          await SecureStore.setItemAsync("user_id", data.user.id.toString());
+          await SecureStore.setItemAsync("username", data.user.username || "");
+          
+          // ✅ Mark that onboarding was completed
+          await AsyncStorage.setItem("hasSeenOnboarding", "true");
+          
+          console.log("✅ User data and token saved successfully");
+        } catch (storageError) {
+          console.error("❌ Failed to save auth data:", storageError);
+          Toast.show({
+            type: "error",
+            text1: "Storage Error",
+            text2: "Failed to save login data. Please try again.",
+          });
+          return;
+        }
 
         Toast.show({
           type: "success",
@@ -78,7 +92,8 @@ useEffect(() => {
           text2: `Welcome back, ${data.user?.fullname || 'user'}!`,
         });
 
-        route.push("/(tabs)");
+        // Use replace instead of push to prevent back navigation
+        route.replace("/(tabs)");
       } else {
         Toast.show({
           type: "error",

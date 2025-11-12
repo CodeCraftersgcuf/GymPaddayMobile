@@ -9,14 +9,20 @@ import {
   Animated,
   ActivityIndicator,
   FlatList,
+  TextInput,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, Audio } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
+import { STORY_MUSIC_LIBRARY, MUSIC_CATEGORIES, getMusicByGenre, StoryMusic } from '@/constants/storyMusic';
+import { Ionicons } from '@expo/vector-icons';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export const screenOptions = {
   headerShown: false,
@@ -27,9 +33,11 @@ export default function StoryPreview() {
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [musicList, setMusicList] = useState([]);
-  const [selectedMusicMap, setSelectedMusicMap] = useState({});
-  const [sound, setSound] = useState(null);
+  const [selectedMusicMap, setSelectedMusicMap] = useState<Record<number, StoryMusic>>({});
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [musicSearchQuery, setMusicSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const progressAnim = useRef(new Animated.Value(0)).current;
   const videoRef = useRef<Video>(null);
 
@@ -45,19 +53,19 @@ export default function StoryPreview() {
   const currentMedia = mediaList[currentIndex];
   const isVideo = currentMedia?.mediaType === 'video';
 
-  useEffect(() => {
-    fetch('https://api.deezer.com/chart/0/tracks')
-      .then((res) => res.json())
-      .then((data) => {
-        const tracks = data.data.slice(0, 2).map((track) => ({
-          title: track.title,
-          artist: track.artist.name,
-          preview: track.preview,
-          cover: track.album.cover_small,
-        }));
-        setMusicList(tracks);
-      });
-  }, []);
+  // Filter music based on search and category
+  const filteredMusic = useMemo(() => {
+    let music = getMusicByGenre(selectedCategory);
+    if (musicSearchQuery.trim()) {
+      const query = musicSearchQuery.toLowerCase();
+      music = music.filter(
+        (m) =>
+          m.title.toLowerCase().includes(query) ||
+          m.artist.toLowerCase().includes(query)
+      );
+    }
+    return music;
+  }, [selectedCategory, musicSearchQuery]);
 
   const handleNext = () => {
     if (currentIndex < mediaList.length - 1) {
@@ -100,7 +108,7 @@ export default function StoryPreview() {
     }
   }, [currentIndex]);
 
-  const handleMusicSelect = async (item) => {
+  const handleMusicSelect = async (item: StoryMusic) => {
     try {
       if (sound) {
         await sound.stopAsync();
@@ -117,9 +125,35 @@ export default function StoryPreview() {
         ...prev,
         [currentIndex]: item,
       }));
+      setShowMusicPicker(false);
+      Toast.show({ 
+        type: 'success', 
+        text1: '🎵 Music Added', 
+        text2: `${item.title} by ${item.artist}`,
+        visibilityTime: 1500,
+      });
     } catch (err) {
       console.error('Sound playback error:', err);
+      Toast.show({ type: 'error', text1: 'Failed to play music' });
     }
+  };
+
+  const removeMusicFromStory = async () => {
+    if (sound) {
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+    }
+    setSelectedMusicMap((prev) => {
+      const newMap = { ...prev };
+      delete newMap[currentIndex];
+      return newMap;
+    });
+    Toast.show({ 
+      type: 'info', 
+      text1: 'Music Removed',
+      visibilityTime: 1000,
+    });
   };
 
   useEffect(() => {
@@ -191,138 +225,459 @@ export default function StoryPreview() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Progress Bars */}
       <View style={styles.progressContainer}>
-        {mediaList.map((_, index) => (
+        {mediaList.map((_: any, index: number) => (
           <View key={index} style={styles.progressBarBackground}>
             <Animated.View
-              style={[styles.progressBarFill,
-                index === currentIndex && { flex: progressAnim, backgroundColor: '#6C2121' },
+              style={[
+                styles.progressBarFill,
+                index === currentIndex && { flex: progressAnim, backgroundColor: '#940304' },
                 index < currentIndex && { flex: 1, backgroundColor: '#FFFFFF' },
-                index > currentIndex && { flex: 0, backgroundColor: '#FFFFFF' },
+                index > currentIndex && { flex: 0, backgroundColor: 'transparent' },
               ]}
             />
           </View>
         ))}
       </View>
 
+      {/* Header Actions */}
+      <View style={styles.headerActions}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+          <Ionicons name="close" size={30} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            onPress={() => setShowMusicPicker(true)}
+          >
+            <Ionicons name="musical-notes" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Media Display */}
       <View style={styles.mediaContainer}>
         {isVideo ? (
           <Video
             ref={videoRef}
             source={{ uri: currentMedia.uri }}
             style={styles.video}
-            resizeMode="cover"
+            resizeMode={"cover" as any}
             isMuted={false}
             shouldPlay={true}
-            useNativeControls
+            useNativeControls={false}
           />
         ) : (
-          <Image source={{ uri: currentMedia.uri }} style={styles.image} />
+          <Image source={{ uri: currentMedia.uri }} style={styles.image} resizeMode="cover" />
         )}
-        <TouchableOpacity style={styles.leftTapZone} onPress={handleBack} />
-        <TouchableOpacity style={styles.rightTapZone} onPress={handleNext} />
+        
+        {/* Tap Zones for Navigation */}
+        <TouchableOpacity 
+          style={styles.leftTapZone} 
+          onPress={handleBack}
+          activeOpacity={1}
+        />
+        <TouchableOpacity 
+          style={styles.rightTapZone} 
+          onPress={handleNext}
+          activeOpacity={1}
+        />
       </View>
 
-      {musicList.length > 0 && (
-        <View style={styles.musicPicker}>
-          <Text style={styles.musicTitle}>🎵 Add Music:</Text>
-          <FlatList
-            horizontal
-            data={musicList}
-            keyExtractor={(item, index) => index.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.musicItem,
-                  selectedMusicMap[currentIndex]?.preview === item.preview && styles.selectedMusic,
-                ]}
-                onPress={() => handleMusicSelect(item)}
-              >
-                <Image source={{ uri: item.cover }} style={styles.musicCover} />
-                <Text style={styles.musicText}>{item.title}</Text>
-              </TouchableOpacity>
-            )}
-          />
+      {/* Music Indicator */}
+      {selectedMusicMap[currentIndex] && (
+        <View style={styles.musicIndicator}>
+          <Ionicons name="musical-note" size={16} color="#fff" />
+          <Text style={styles.musicIndicatorText} numberOfLines={1}>
+            {selectedMusicMap[currentIndex].title} - {selectedMusicMap[currentIndex].artist}
+          </Text>
+          <TouchableOpacity onPress={removeMusicFromStory} style={styles.removeMusicBtn}>
+            <Ionicons name="close-circle" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
       )}
 
+      {/* Upload Button */}
       {isUploading ? (
         <View style={styles.loaderWrapper}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={{ color: '#fff', marginTop: 8 }}>Uploading...</Text>
+          <Text style={styles.uploadingText}>Uploading your story...</Text>
         </View>
       ) : (
         <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>
-          <Text style={styles.uploadButtonText}>Upload All</Text>
+          <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.uploadButtonText}>Share to Story</Text>
         </TouchableOpacity>
       )}
+
+      {/* Music Picker Modal */}
+      <Modal
+        visible={showMusicPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowMusicPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.musicPickerModal}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Music</Text>
+              <TouchableOpacity onPress={() => setShowMusicPicker(false)}>
+                <Ionicons name="close" size={28} color="#000" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for music..."
+                placeholderTextColor="#999"
+                value={musicSearchQuery}
+                onChangeText={setMusicSearchQuery}
+              />
+              {musicSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setMusicSearchQuery('')}>
+                  <Ionicons name="close-circle" size={20} color="#666" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Category Tabs */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryScroll}
+              contentContainerStyle={styles.categoryContainer}
+            >
+              {MUSIC_CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryTab,
+                    selectedCategory === cat.id && styles.categoryTabActive,
+                  ]}
+                  onPress={() => setSelectedCategory(cat.id)}
+                >
+                  <Text style={styles.categoryEmoji}>{cat.icon}</Text>
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      selectedCategory === cat.id && styles.categoryTextActive,
+                    ]}
+                  >
+                    {cat.name.replace(/[^\w\s]/gi, '').trim()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Music List */}
+            <FlatList
+              data={filteredMusic}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.musicList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.musicItemLarge,
+                    selectedMusicMap[currentIndex]?.id === item.id && styles.musicItemSelected,
+                  ]}
+                  onPress={() => handleMusicSelect(item)}
+                >
+                  <View style={styles.musicItemLeft}>
+                    <Ionicons name="musical-notes" size={24} color="#940304" />
+                    <View style={styles.musicInfo}>
+                      <Text style={styles.musicTitleLarge} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.musicArtist} numberOfLines={1}>
+                        {item.artist}
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedMusicMap[currentIndex]?.id === item.id && (
+                    <Ionicons name="checkmark-circle" size={24} color="#940304" />
+                  )}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Ionicons name="sad-outline" size={48} color="#ccc" />
+                  <Text style={styles.emptyText}>No music found</Text>
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black' },
+  container: { 
+    flex: 1, 
+    backgroundColor: 'black' 
+  },
   progressContainer: {
-    flexDirection: 'row', position: 'absolute', top: 10, left: 10, right: 10, height: 4, zIndex: 100, gap: 5,
+    flexDirection: 'row',
+    position: 'absolute',
+    top: 50,
+    left: 10,
+    right: 10,
+    height: 3,
+    zIndex: 100,
+    gap: 4,
   },
   progressBarBackground: {
-    flex: 1, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, overflow: 'hidden',
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
   },
   progressBarFill: {
-    backgroundColor: '#fff', height: 4,
+    height: 3,
+  },
+  headerActions: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    zIndex: 101,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mediaContainer: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   image: {
-    width: SCREEN_WIDTH, height: '100%', resizeMode: 'cover',
+    width: SCREEN_WIDTH,
+    height: '100%',
+    resizeMode: 'cover',
   },
   video: {
-    width: SCREEN_WIDTH, height: '100%',
+    width: SCREEN_WIDTH,
+    height: '100%',
   },
- leftTapZone: {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  bottom: '25%', // avoids blocking music picker area
-  width: '30%',
-  zIndex: 10,
-},
-
-rightTapZone: {
-  position: 'absolute',
-  top: 0,
-  right: 0,
-  bottom: '25%',
-  width: '30%',
-  zIndex: 10,
-},
-
-  musicPicker: {
-    position: 'absolute', bottom: 100, paddingVertical: 8, paddingLeft: 10,
+  leftTapZone: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: '35%',
+    zIndex: 10,
   },
-  musicTitle: {
-    color: '#fff', fontSize: 14, marginBottom: 6, fontWeight: '600',
+  rightTapZone: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '35%',
+    zIndex: 10,
   },
-  musicItem: {
-    marginRight: 10, alignItems: 'center',
+  musicIndicator: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
   },
-  selectedMusic: {
-    borderColor: '#FF0000', borderWidth: 2, borderRadius: 6,
+  musicIndicatorText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  musicCover: {
-    width: 50, height: 50, borderRadius: 6, marginBottom: 4,
-  },
-  musicText: {
-    color: '#fff', fontSize: 12,
+  removeMusicBtn: {
+    padding: 4,
   },
   uploadButton: {
-    position: 'absolute', bottom: 30, alignSelf: 'center', backgroundColor: '#FF0000', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8,
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    backgroundColor: '#940304',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   uploadButtonText: {
-    color: '#fff', fontWeight: '600', fontSize: 16,
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
   },
   loaderWrapper: {
-    position: 'absolute', bottom: 30, alignSelf: 'center', alignItems: 'center', justifyContent: 'center',
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadingText: {
+    color: '#fff',
+    marginTop: 8,
+    fontSize: 14,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  musicPickerModal: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: SCREEN_HEIGHT * 0.8,
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+  },
+  categoryScroll: {
+    marginTop: 16,
+  },
+  categoryContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  categoryTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    gap: 6,
+  },
+  categoryTabActive: {
+    backgroundColor: '#940304',
+  },
+  categoryEmoji: {
+    fontSize: 16,
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  categoryTextActive: {
+    color: '#fff',
+  },
+  musicList: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  musicItemLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#f9f9f9',
+  },
+  musicItemSelected: {
+    backgroundColor: '#ffebee',
+    borderWidth: 2,
+    borderColor: '#940304',
+  },
+  musicItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  musicInfo: {
+    flex: 1,
+  },
+  musicTitleLarge: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 2,
+  },
+  musicArtist: {
+    fontSize: 13,
+    color: '#666',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#999',
   },
 });

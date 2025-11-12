@@ -47,7 +47,7 @@ export default function AddToStoryScreen() {
   const loadMoreAssets = async () => {
     if (!hasNextPage) return;
     const media = await MediaLibrary.getAssetsAsync({
-      mediaType: 'all',
+      mediaType: ['photo', 'video'], // Explicitly include both photos and videos
       first: 30,
       sortBy: [['creationTime', false]],
       after: endCursor || undefined,

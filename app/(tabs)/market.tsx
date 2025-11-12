@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
   sellerAvatar: {
     width: 16,
     height: 16,
-    borderRadius: 10,
+    borderRadius: 8, // Fixed: Should be half of width/height for perfect circle
     marginRight: 6,
   },
   sellerName: {

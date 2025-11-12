@@ -438,9 +438,9 @@ export default function Register() {
                             }}
                             style={[
                               styles.registerButton,
-                              (!profileImage || Object.keys(errors).length > 0) && styles.disabledButton
+                              (!profileImage || Object.keys(errors).length > 0 || mutation.isPending) && styles.disabledButton
                             ]}
-                            disabled={!profileImage || Object.keys(errors).length > 0}
+                            disabled={!profileImage || Object.keys(errors).length > 0 || mutation.isPending}
                           >
                             <ThemeText style={styles.registerButtonText}>
                               {mutation.isPending ? "Registering..." : "Register"}

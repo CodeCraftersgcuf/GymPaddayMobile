@@ -14,6 +14,7 @@ import ThemedView from "@/components/ThemedView";
 import ThemeText from "@/components/ThemedText";
 import { useMutation } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const VerifyOtpScreen = () => {
   const { dark } = useTheme();
@@ -38,7 +39,10 @@ const VerifyOtpScreen = () => {
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // ✅ Mark onboarding as completed to prevent redirect loop
+      await AsyncStorage.setItem("hasSeenOnboarding", "true");
+      
       Toast.show({
         type: 'success',
         text1: 'OTP Verified!',

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,14 +9,16 @@ import {
   Platform,
   ActivityIndicator,
   Pressable,
+  Text,
 } from 'react-native';
 import { Audio, Video } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StoryItem } from '@/utils/types/story';
 import CachedImage from 'expo-cached-image';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
-const STORY_DURATION = 5000;
+const STORY_DURATION = 4000; // Reduced from 5000ms to 4000ms for faster transitions
 
 const fixUrl = (url: string) =>
   url?.replace('https://gympaddy.hmstech.xyz/storage//', 'https://gympaddy.hmstech.xyz/storage/');
@@ -96,14 +98,30 @@ const UserStoryPreview = () => {
     }
   }, [isMediaLoaded, isPaused]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (animationRef.current) animationRef.current.stop();
+    
+    // Faster state update
+    setIsMediaLoaded(false);
+    
     if (currentIndex < stories.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
       router.back();
     }
-  };
+  }, [currentIndex, stories.length, router]);
+
+  const handlePrev = useCallback(() => {
+    if (animationRef.current) animationRef.current.stop();
+    
+    setIsMediaLoaded(false);
+    
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    } else {
+      router.back();
+    }
+  }, [currentIndex, router]);
 
   const handlePressIn = () => {
     setIsPaused(true);
@@ -142,28 +160,36 @@ const playMusicAfterMediaLoads = async () => {
     }
   }
 };
+// Enhanced preloading - preload next 2 stories for ultra-smooth transitions
 useEffect(() => {
-  const preloadNextStory = async () => {
+  const preloadStories = async () => {
+    // Preload next story
     const nextStory = stories[currentIndex + 1];
-    if (!nextStory) return;
+    if (nextStory) {
+      const nextUrl = fixUrl(nextStory.full_media_url);
+      if (nextStory.media_type === 'photo') {
+        Image.prefetch(nextUrl).catch(() => {}); // Silent fail
+      } else if (nextStory.media_type === 'video') {
+        try {
+          await Video.prefetchAsync(nextUrl);
+        } catch (e) {
+          // Silent fail for better UX
+        }
+      }
+    }
 
-    const nextUrl = fixUrl(nextStory.full_media_url);
-
-    if (nextStory.media_type === 'photo') {
-      // Preload image
-      Image.prefetch(nextUrl);
-    } else if (nextStory.media_type === 'video') {
-      // For video: download into cache (lightweight, optional)
-      try {
-        await Video.prefetchAsync(nextUrl); // ✅ Best option
-      } catch (e) {
-        console.warn('Failed to preload video:', e);
+    // Also preload the story after next for even smoother experience
+    const nextNextStory = stories[currentIndex + 2];
+    if (nextNextStory) {
+      const nextNextUrl = fixUrl(nextNextStory.full_media_url);
+      if (nextNextStory.media_type === 'photo') {
+        Image.prefetch(nextNextUrl).catch(() => {});
       }
     }
   };
 
-  preloadNextStory();
-}, [currentIndex]);
+  preloadStories();
+}, [currentIndex, stories]);
 
 
   const renderMedia = () => {
@@ -269,16 +295,43 @@ onLoad={async () => {
   );
 
   return (
-    <Pressable
-      onPress={handleNext}
-      onLongPress={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <View style={styles.container}>
-        {renderMedia()}
-        {renderProgressBar()}
+    <View style={styles.container}>
+      {renderMedia()}
+      {renderProgressBar()}
+      
+      {/* Left tap zone - Previous */}
+      <Pressable
+        style={styles.leftTapZone}
+        onPress={handlePrev}
+        onLongPress={handlePressIn}
+        onPressOut={handlePressOut}
+      />
+      
+      {/* Right tap zone - Next */}
+      <Pressable
+        style={styles.rightTapZone}
+        onPress={handleNext}
+        onLongPress={handlePressIn}
+        onPressOut={handlePressOut}
+      />
+
+      {/* Music indicator */}
+      {currentStory?.music_url && (
+        <View style={styles.musicIndicator}>
+          <Ionicons name="musical-note" size={16} color="#fff" />
+          <Text style={styles.musicText} numberOfLines={1}>
+            {currentStory.music_title || 'Playing music'}
+          </Text>
+        </View>
+      )}
+
+      {/* Story counter */}
+      <View style={styles.storyCounter}>
+        <Text style={styles.counterText}>
+          {currentIndex + 1} / {stories.length}
+        </Text>
       </View>
-    </Pressable>
+    </View>
   );
 };
 
@@ -313,10 +366,11 @@ const styles = StyleSheet.create({
     right: 10,
     flexDirection: 'row',
     gap: 4,
+    zIndex: 100,
   },
   progressTrack: {
     flex: 1,
-    height: 3,
+    height: 2.5,
     backgroundColor: '#ffffff33',
     marginHorizontal: 2,
     overflow: 'hidden',
@@ -325,6 +379,57 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     backgroundColor: '#fff',
+  },
+  leftTapZone: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: '40%',
+    zIndex: 50,
+  },
+  rightTapZone: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '40%',
+    zIndex: 50,
+  },
+  musicIndicator: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+    zIndex: 10,
+  },
+  musicText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  storyCounter: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    zIndex: 10,
+  },
+  counterText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

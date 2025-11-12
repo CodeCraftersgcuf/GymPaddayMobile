@@ -81,7 +81,7 @@ router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } 
 <Image source={logoNew} style={styles.logo} resizeMode="contain" />
       <ThemedView style={styles.alignCenter}>
         {admin?.profile && (
-          <Pressable onPress={() => hanldeViewProfile(admin.userId ?? 12)}>
+          <Pressable onPress={() => hanldeViewProfile()}>
             <Image source={{ uri: profileImage }} style={styles.UserImage} />
           </Pressable>
         )}

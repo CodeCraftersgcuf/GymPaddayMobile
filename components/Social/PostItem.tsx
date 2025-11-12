@@ -48,6 +48,8 @@ interface PostItemProps {
     videoUrl?: string;
     view_count: number;
     share_count: number;
+    location?: string;
+    likes?: any[];
     user: {
       id: number;
       username: string;
@@ -63,7 +65,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const { dark } = useTheme();
   const router = useRouter();
   const [isMuted, setIsMuted] = useState(true);
-  const toggleMute = () => setIsMuted(prev => !prev);
+  const toggleMute = React.useCallback(() => setIsMuted(prev => !prev), []);
 
   const [token, setToken] = useState<string | null>(null);
 
@@ -74,10 +76,12 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | undefined>(undefined);
 
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(post.likes_count);
+  // Fix: Initialize likes from post.likes array length if available, otherwise from likes_count
+  const [likesCount, setLikesCount] = useState(post.likes?.length || post.likes_count || 0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
   const videoRefs = useRef<Record<number, Video>>({});
@@ -86,6 +90,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   useEffect(() => {
     SecureStore.getItemAsync('auth_token').then(setToken);
   }, []);
+
+  // Check if current user has liked this post
+  useEffect(() => {
+    const checkIfLiked = async () => {
+      const userData = await SecureStore.getItemAsync('user_data');
+      if (userData && post.likes) {
+        const currentUser = JSON.parse(userData);
+        const userLiked = post.likes.some(like => like.user?.id === currentUser.id);
+        setIsLiked(userLiked);
+      }
+    };
+    checkIfLiked();
+  }, [post.likes]);
 
   const {
     data: likeData,
@@ -134,28 +151,28 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   }, [post]);
 
 
-  const handleLike = async () => {
-    if (!token) return;
+  const handleLike = React.useCallback(async () => {
+    if (!token || likeLoading) return; // Prevent double-tap lag
 
-    // Optimistic update
+    // Optimistic update - instant feedback
     const newLiked = !isLiked;
     setIsLiked(newLiked);
     setLikesCount((prev) => prev + (newLiked ? 1 : -1));
 
-    // Call API in background (ignore response)
+    // Call API in background (non-blocking)
     try {
       await toggleLike();
     } catch (error) {
       console.error('Failed to toggle like:', error);
-      // Optionally revert:
+      // Revert on error
       setIsLiked(!newLiked);
       setLikesCount((prev) => prev + (!newLiked ? 1 : -1));
     }
-  };
+  }, [token, isLiked, likeLoading, toggleLike]);
 
 
 
-  const handlePress = () => {
+  const handlePress = React.useCallback(() => {
     // Map recent comments to the correct structure
     const commentsForThisPost = post.recent_comments.map(comment => ({
       id: comment.id.toString(),
@@ -175,7 +192,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     }));
 
     onCommentPress(commentsForThisPost, post.id);
-  };
+  }, [post.recent_comments, post.id, onCommentPress]);
 
   const openImageSlider = (index: number) => {
     const isVideo = ImagesData[index] === post.videoUrl;
@@ -210,7 +227,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   };
 
   // Share post content and first image
-  const handleShare = async () => {
+  const handleShare = React.useCallback(async () => {
     try {
       let message = post.content || '';
       if (post.imagesUrl && post.imagesUrl.length > 0) {
@@ -225,7 +242,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       Alert.alert('Share Error', 'Failed to share post.');
       console.error('Share error:', error);
     }
-  };
+  }, [post.content, post.imagesUrl]);
 
   // Download image to device gallery
   // const handleDownload = async () => {
@@ -319,8 +336,13 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
             <View>
               <ThemeText style={styles.username}>{post.user.username}</ThemeText>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                {/* <Text style={styles.time}>Lagos, Nigeria</Text> */}
-                {/* <Text style={styles.time}>•</Text> */}
+                {/* Only show location if post has a location tag */}
+                {post.location && (
+                  <>
+                    <Text style={styles.time}>{post.location}</Text>
+                    <Text style={styles.time}>•</Text>
+                  </>
+                )}
                 <Text style={styles.time}>{formatTimestamp(post.timestamp)}</Text>
               </View>
             </View>
@@ -354,13 +376,23 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       if (ref) videoRefs.current[index] = ref;
                     }}
                     source={{ uri: item }}
-                    style={styles.videoPlayer} // ✅ Change this
+                    style={[
+                      styles.videoPlayer,
+                      videoAspectRatio && { aspectRatio: videoAspectRatio }
+                    ]}
                     resizeMode="contain"
                     isLooping
                     isMuted={isMuted}
                     shouldPlay={isPlaying}
                     onLoadStart={() => setIsBuffering(true)}
-                    onLoad={() => setIsBuffering(false)}
+                    onLoad={(data) => {
+                      setIsBuffering(false);
+                      // Calculate and set aspect ratio from video natural size
+                      if (data.naturalSize) {
+                        const ratio = data.naturalSize.width / data.naturalSize.height;
+                        setVideoAspectRatio(ratio);
+                      }
+                    }}
                     onPlaybackStatusUpdate={(status) => {
                       if ('isPlaying' in status) {
                         setIsPlaying(status.isPlaying);
@@ -567,9 +599,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 const styles = StyleSheet.create({
   videoPlayer: {
     width: '100%',
-    borderRadius: 18,
-    height: '100%',
-    // width:'auto',
+    aspectRatio: undefined, // Let video keep its original aspect ratio
+    minHeight: 300, // Match container
+    maxHeight: 600, // Match container
     backgroundColor: 'black',
     alignSelf: 'center',
   },
@@ -835,11 +867,14 @@ const styles = StyleSheet.create({
   },
   carouselVideoWrapper: {
     width: width - 20,
-    maxHeight: 540, // or remove to make it auto-size if your video has intrinsic size
+    minHeight: 300, // Minimum height for very short videos
+    maxHeight: 600, // Maximum height for very tall videos
     borderRadius: 18,
     backgroundColor: 'black',
     alignSelf: 'center',
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
 
@@ -880,4 +915,9 @@ const styles = StyleSheet.create({
 
 });
 
-export default PostItem;
+// Performance optimization: Memoize component with custom comparison
+export default React.memo(PostItem, (prevProps, nextProps) => {
+  return prevProps.post.id === nextProps.post.id && 
+         prevProps.post.likes_count === nextProps.post.likes_count &&
+         prevProps.post.comments_count === nextProps.post.comments_count;
+});
