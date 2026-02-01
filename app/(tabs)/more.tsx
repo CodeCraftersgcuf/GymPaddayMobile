@@ -8,8 +8,13 @@ import {
   Image,
   Alert,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  Modal,
+  TextInput,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import WalletCard from '@/components/more/main/WalletCard';
 import SettingItem from '@/components/more/main/SettingItem';
 import { settingsData, otherSettingsData } from '@/components/more/main/settingsData';
@@ -19,6 +24,11 @@ import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { useMutation } from '@tanstack/react-query';
+import { createTransaction } from '@/utils/mutations/transactions';
+import Toast from 'react-native-toast-message';
+import { useIAP } from '@/utils/hooks/useIAP';
+import * as Clipboard from 'expo-clipboard';
 
 
 
@@ -32,12 +42,22 @@ export default function More() {
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [openTheme, setopenTheme] = useState(false)
   const [refreshing, setRefreshing] = useState(false);
+  const [showTopupModal, setShowTopupModal] = useState(false);
   const route = useRouter();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 
   const [loadingBalance, setLoadingBalance] = useState(true);
+
+  // Topup modal states
+  const [topupAmount, setTopupAmount] = useState('');
+  const [depositorName, setDepositorName] = useState('');
+  const [useMyDetails, setUseMyDetails] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [userName, setUserName] = useState('John Doe');
+  const [currentView, setCurrentView] = useState<'deposit' | 'payment'>('deposit');
+  const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
 
   React.useEffect(() => {
     (async () => {
@@ -50,6 +70,8 @@ export default function More() {
           } else {
             setProfileImage(defatulImage); // fallback to prop
           }
+          const name = userData.fullname || userData.username || 'John Doe';
+          setUserName(name);
         } else {
           setProfileImage(defatulImage); // fallback to prop
         }
@@ -138,8 +160,131 @@ export default function More() {
   };
 
   const handleTopup = () => {
-    route.push('/deposit');
-    // Alert.alert('Topup', 'Topup functionality will be implemented here');
+    setShowTopupModal(true);
+  };
+
+  const createTransactionMutation = useMutation({
+    mutationFn: async () => {
+      const authToken = await SecureStore.getItemAsync('auth_token');
+      if (!authToken) throw new Error('Not authenticated');
+      return createTransaction({
+        data: {
+          wallet_id: 2,
+          amount: parseFloat(topupAmount),
+          type: 'topup',
+        },
+        token: authToken,
+      });
+    },
+    onSuccess: () => {
+      Toast.show({
+        type: 'success',
+        text1: 'Deposit successful!',
+      });
+      setShowSuccessModal(true);
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: 'error',
+        text1: error?.message || 'Failed to create transaction',
+      });
+    },
+  });
+
+  const handleTopupProceed = async () => {
+    if (!topupAmount) {
+      Alert.alert('Error', 'Please enter an amount');
+      return;
+    }
+
+    const amountValue = parseFloat(topupAmount);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    // For iOS, use Apple In-App Purchase
+    if (Platform.OS === 'ios') {
+      if (amountValue < MINIMUM_AMOUNT_IOS) {
+        Alert.alert('Error', `Minimum deposit amount is ${MINIMUM_AMOUNT_IOS} Naira`);
+        return;
+      }
+
+      if (!isAvailable) {
+        Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
+        return;
+      }
+
+      const success = await purchaseProduct(amountValue);
+      if (success) {
+        setShowSuccessModal(true);
+        // Reset form
+        setTopupAmount('');
+        setDepositorName('');
+        setUseMyDetails(false);
+      }
+    } else {
+      // For Android, use the existing Flutterwave flow
+      if (!depositorName) {
+        Alert.alert('Error', 'Please fill in all fields');
+        return;
+      }
+      setCurrentView('payment');
+    }
+  };
+
+  const handleUseMyDetails = () => {
+    setUseMyDetails(!useMyDetails);
+    if (!useMyDetails) {
+      setDepositorName(userName);
+    } else {
+      setDepositorName('');
+    }
+  };
+
+  const handleCopyAccountNumber = async () => {
+    if (!paymentDetails.accountNumber) {
+      Alert.alert('Unavailable', 'Payment details are not available yet.');
+      return;
+    }
+    await Clipboard.setStringAsync(paymentDetails.accountNumber);
+    Alert.alert('Copied', 'Account number copied to clipboard');
+  };
+
+  const handlePaymentMade = () => {
+    createTransactionMutation.mutate();
+  };
+
+  const handleCloseTopupModal = () => {
+    setShowTopupModal(false);
+    setTopupAmount('');
+    setDepositorName('');
+    setUseMyDetails(false);
+    setCurrentView('deposit');
+    setShowSuccessModal(false);
+  };
+
+  const handleBackFromPayment = () => {
+    if (currentView === 'payment') {
+      setCurrentView('deposit');
+    } else {
+      handleCloseTopupModal();
+    }
+  };
+
+  const handleCloseSuccessModal = () => {
+    setShowSuccessModal(false);
+    handleCloseTopupModal();
+    // Refresh balance
+    onRefresh();
+  };
+
+  const paymentDetails = {
+    bankName: process.env.EXPO_PUBLIC_PAYMENT_BANK_NAME || 'GymPaddy Bank',
+    accountName: process.env.EXPO_PUBLIC_PAYMENT_ACCOUNT_NAME || 'GymPaddy',
+    accountNumber: process.env.EXPO_PUBLIC_PAYMENT_ACCOUNT_NUMBER || '',
+    amount: topupAmount ? `N${topupAmount}` : 'N4,000',
+    reason: 'Connect VIP subscription',
   };
 
   const handleWithdraw = () => {
@@ -237,7 +382,7 @@ export default function More() {
         <ThemedView darkColor='#181818' style={styles.header}>
           <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Wallet</Text>
           <TouchableOpacity onPress={() => route.push('/EditProfile')}>
-            <Image source={{ uri: profileImage }} style={styles.headerProfileImage} />
+            <Image source={{ uri: profileImage || '' }} style={styles.headerProfileImage} />
           </TouchableOpacity>
         </ThemedView>
 
@@ -320,6 +465,169 @@ export default function More() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Topup Modal */}
+      <Modal
+        visible={showTopupModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleCloseTopupModal}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: dark ? 'black' : 'white' }]}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={handleBackFromPayment} style={styles.modalCloseButton}>
+              <Ionicons 
+                name={currentView === 'payment' ? "chevron-back" : "close"} 
+                size={24} 
+                color={dark ? 'white' : '#333'} 
+              />
+            </TouchableOpacity>
+            <ThemeText style={styles.modalTitle}>
+              {currentView === 'deposit' ? 'Deposit' : 'Make Payment'}
+            </ThemeText>
+            <View style={styles.placeholder} />
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            {currentView === 'deposit' ? (
+              <ThemedView style={styles.topupForm}>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? '#181818' : 'white' }]}
+                    placeholder={Platform.OS === 'ios' ? `Amount (min ${MINIMUM_AMOUNT_IOS} Naira)` : "Amount"}
+                    placeholderTextColor="#999"
+                    value={topupAmount}
+                    onChangeText={setTopupAmount}
+                    keyboardType="numeric"
+                    editable={!isIAPLoading}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <Text style={[styles.minAmountHint, { color: dark ? '#999' : '#666' }]}>
+                      Minimum deposit: {MINIMUM_AMOUNT_IOS} Naira
+                    </Text>
+                  )}
+                </View>
+
+                {Platform.OS !== 'ios' && (
+                  <>
+                    <View style={styles.inputContainer}>
+                      <TextInput
+                        style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? '#181818' : 'white' }]}
+                        placeholder="Depositor's Name"
+                        placeholderTextColor="#999"
+                        value={depositorName}
+                        onChangeText={setDepositorName}
+                      />
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.checkboxContainer}
+                      onPress={handleUseMyDetails}
+                    >
+                      <View style={[styles.checkbox, useMyDetails && styles.checkboxChecked]}>
+                        {useMyDetails && (
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <Text style={styles.checkboxText}>Use my details</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <View style={styles.exchangeRateContainer}>
+                  <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
+                  <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+                </View>
+              </ThemedView>
+            ) : (
+              <>
+                <ThemedView darkColor='#181818' lightColor='#FFFFFF' style={styles.detailsContainer}>
+                  <View style={styles.detailRow}>
+                    <ThemeText style={styles.detailLabel}>Bank Name</ThemeText>
+                    <ThemeText darkColor='#666' style={styles.detailValue}>{paymentDetails.bankName}</ThemeText>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <ThemeText style={styles.detailLabel}>Account Name</ThemeText>
+                    <ThemeText darkColor='#666' style={styles.detailValue}>{paymentDetails.accountName}</ThemeText>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <ThemeText style={styles.detailLabel}>Account No</ThemeText>
+                    <View style={styles.accountNumberContainer}>
+                      <TouchableOpacity
+                        style={styles.copyButton}
+                        onPress={handleCopyAccountNumber}
+                        disabled={!paymentDetails.accountNumber}
+                      >
+                        <Ionicons name="copy-outline" size={18} color={dark ? 'white' : "#666"} />
+                      </TouchableOpacity>
+                      <ThemeText darkColor='#666' style={styles.detailValue}>
+                        {paymentDetails.accountNumber || 'Unavailable'}
+                      </ThemeText>
+                    </View>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <ThemeText style={styles.detailLabel}>Amount</ThemeText>
+                    <ThemeText darkColor='#666' style={styles.detailValue}>{paymentDetails.amount}</ThemeText>
+                  </View>
+                  <View style={[styles.detailRow, styles.lastDetailRow]}>
+                    <ThemeText style={styles.detailLabel}>Reason</ThemeText>
+                    <ThemeText darkColor='#666' style={styles.detailValue}>{paymentDetails.reason}</ThemeText>
+                  </View>
+                </ThemedView>
+                <View style={[styles.exchangeRateContainer, { marginHorizontal: 20 }]}>
+                  <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
+                  <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.proceedButton,
+                isIAPLoading && styles.proceedButtonDisabled,
+                currentView !== 'deposit' && !paymentDetails.accountNumber && { opacity: 0.5 }
+              ]}
+              onPress={currentView === 'deposit' ? handleTopupProceed : handlePaymentMade}
+              disabled={isIAPLoading || (currentView !== 'deposit' && !paymentDetails.accountNumber)}
+            >
+              {isIAPLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.proceedButtonText}>
+                  {currentView === 'deposit' 
+                    ? (Platform.OS === 'ios' ? 'Purchase GP Coins' : 'Proceed')
+                    : (paymentDetails.accountNumber ? 'I have made payment' : 'Payment details unavailable')}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseSuccessModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark" size={40} color="#FFFFFF" />
+            </View>
+            <Text style={styles.successTitle}>
+              Congratulations, your payment has been processed
+            </Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleCloseSuccessModal}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -369,5 +677,190 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 100,
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  placeholder: {
+    width: 32,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
+  topupForm: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    fontSize: 16,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#940304',
+    borderRadius: 4,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#940304',
+  },
+  checkboxText: {
+    fontSize: 16,
+    color: '#940304',
+    fontWeight: '500',
+  },
+  exchangeRateContainer: {
+    backgroundColor: '#FFE5E5',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 40,
+  },
+  exchangeRateLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  exchangeRateValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+  },
+  proceedButton: {
+    backgroundColor: '#940304',
+    marginHorizontal: 20,
+    paddingVertical: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 'auto',
+    marginBottom: 40,
+  },
+  proceedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  proceedButtonDisabled: {
+    opacity: 0.6,
+  },
+  minAmountHint: {
+    fontSize: 12,
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  detailsContainer: {
+    marginHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  lastDetailRow: {
+    borderBottomWidth: 0,
+  },
+  detailLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 16,
+  },
+  accountNumberContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  copyButton: {
+    padding: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+  },
+  successIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  successTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  closeButton: {
+    backgroundColor: '#F0F0F0',
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
   },
 });

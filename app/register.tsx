@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  Linking,
 } from "react-native";
 import { useTheme } from "../contexts/themeContext";
 import { Image } from "expo-image";
@@ -35,11 +36,15 @@ const validationSchema = Yup.object().shape({
   username: Yup.string().required("Username is required"),
   fullName: Yup.string().required("Full name is required"),
   email: Yup.string().email("Invalid email").required("Email is required"),
-  phone: Yup.string().required("Phone number is required"),
+  phone: Yup.string()
+    .required("Phone number is required")
+    .matches(/^\+?[0-9]{8,15}$/, "Enter a valid phone number"),
   age: Yup.number()
+    .typeError("Age must be a number")
     .required("Age is required")
-    .min(13, "Must be at least 13 years old"),
-  gender: Yup.string().required("Gender is required"),
+    .min(13, "Must be at least 13 years old")
+    .max(120, "Age must be less than 120"),
+  gender: Yup.string().optional(),
   password: Yup.string()
     .min(8, "Password must be at least 8 characters")
     .required("Password is required"),
@@ -50,6 +55,7 @@ let themedark = false;
 
 export default function Register() {
   const [formSetFieldValue, setFormSetFieldValue] = useState<(field: string, value: any) => void>(() => () => { });
+  const [formSetFieldTouched, setFormSetFieldTouched] = useState<(field: string, touched?: boolean) => void>(() => () => { });
   const [gender, setGender] = useState('');
 
   const [SelectGender, setSelectGender] = useState('')
@@ -59,6 +65,8 @@ export default function Register() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileImageError, setProfileImageError] = useState<string>('');
+  const termsUrl = "https://gympaddy.com/terms";
+  const privacyUrl = "https://gympaddy.com/privacy";
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -96,9 +104,16 @@ export default function Register() {
     formData.append('username', values.username);
     formData.append('fullname', values.fullName);
     formData.append('email', values.email);
-    formData.append('phone', values.phone);
-    formData.append('age', values.age.toString());
-    formData.append('gender', values.gender.toLowerCase());
+    // Only append optional fields if they have values
+    if (values.phone && values.phone.trim()) {
+      formData.append('phone', values.phone);
+    }
+    if (values.age && values.age.toString().trim()) {
+      formData.append('age', values.age.toString());
+    }
+    if (values.gender && values.gender.trim()) {
+      formData.append('gender', values.gender.toLowerCase());
+    }
     formData.append('password', values.password);
     formData.append('password_confirmation', values.password);
 
@@ -285,7 +300,13 @@ export default function Register() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled
+      >
         <SafeAreaView style={styles.container}>
           <ThemedView>
             <LinearGradient
@@ -354,10 +375,12 @@ export default function Register() {
                     errors,
                     touched,
                     setFieldValue,
+                  setFieldTouched,
                   }) => {
                     useEffect(() => {
                       setFormSetFieldValue(() => setFieldValue);
-                    }, [setFieldValue]);
+                      setFormSetFieldTouched(() => setFieldTouched);
+                    }, [setFieldValue, setFieldTouched]);
 
                     // Update profile image validation
                     useEffect(() => {
@@ -397,7 +420,7 @@ export default function Register() {
                           <FloatingLabelInput
                             label="Phone Number"
                             value={values.phone}
-                            onChangeText={handleChange("phone")}
+                            onChangeText={(text) => handleChange("phone")(text.replace(/[^\d+]/g, ""))}
                             autoComplete="off"
                             onBlur={handleBlur("phone")}
                             keyboardType="phone-pad"
@@ -406,14 +429,14 @@ export default function Register() {
                           <FloatingLabelInput
                             label="Age"
                             value={values.age}
-                            onChangeText={handleChange("age")}
+                            onChangeText={(text) => handleChange("age")(text.replace(/[^\d]/g, ""))}
                             autoComplete="off"
                             onBlur={handleBlur("age")}
                             keyboardType="numeric"
                             error={touched.age && errors.age ? errors.age : ""}
                           />
                           <FloatingLabelGenderPicker
-                            label="Gender"
+                            label="Gender (Optional)"
                             value={values.gender}
                             error={touched.gender && errors.gender ? errors.gender : ""}
                             onPress={() => bottomSheetRef.current?.snapToIndex(0)}
@@ -433,14 +456,15 @@ export default function Register() {
                             onPress={() => {
                               if (!profileImage) {
                                 setProfileImageError('Profile image is required');
+                                setFieldTouched("profileImage", true);
                               }
                               handleSubmit();
                             }}
                             style={[
                               styles.registerButton,
-                              (!profileImage || Object.keys(errors).length > 0 || mutation.isPending) && styles.disabledButton
+                              (Object.keys(errors).length > 0 || mutation.isPending) && styles.disabledButton
                             ]}
-                            disabled={!profileImage || Object.keys(errors).length > 0 || mutation.isPending}
+                            disabled={mutation.isPending}
                           >
                             <ThemeText style={styles.registerButtonText}>
                               {mutation.isPending ? "Registering..." : "Register"}
@@ -461,8 +485,14 @@ export default function Register() {
             <ThemedView style={styles.footer}>
               <ThemeText style={styles.termsText}>
                 By continuing you agree to Gym Paddy's{" "}
-                <ThemeText style={styles.linkText}>terms of use</ThemeText> and{" "}
-                <ThemeText style={styles.linkText}>privacy policy</ThemeText>.
+                <ThemeText style={styles.linkText} onPress={() => Linking.openURL(termsUrl)}>
+                  terms of use
+                </ThemeText>{" "}
+                and{" "}
+                <ThemeText style={styles.linkText} onPress={() => Linking.openURL(privacyUrl)}>
+                  privacy policy
+                </ThemeText>
+                .
               </ThemeText>
             </ThemedView>
           </ThemedView>
@@ -495,6 +525,7 @@ export default function Register() {
           <Pressable
             onPress={() => {
               formSetFieldValue("gender", "Male");
+              formSetFieldTouched("gender", false);
               bottomSheetRef.current?.close();
               setGender("Male");
             }}
@@ -512,6 +543,7 @@ export default function Register() {
           <Pressable
             onPress={() => {
               formSetFieldValue("gender", "Female");
+              formSetFieldTouched("gender", false);
               bottomSheetRef.current?.close();
               setGender("Female");
             }}

@@ -3,14 +3,23 @@
     "jsEngine": "hermes",
     "name": "GymPaddy",
     "slug": "gym",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pejul.gympaddy",
+      "bitcode": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "GymPaddy uses your camera to capture profile photos, take pictures for posts, record videos for stories, and enable video calls. For example, you can take a profile photo when creating your account or share workout videos with friends.",
+        "NSMicrophoneUsageDescription": "GymPaddy uses your microphone to record audio for video posts, enable voice calls, and add sound to your video stories. For example, you can record a voice message during a video call or add narration to your workout videos.",
+        "NSPhotoLibraryUsageDescription": "GymPaddy needs access to your photo library to select profile pictures, choose images for posts, and pick videos for stories. For example, you can select an existing photo from your library to use as your profile picture.",
+        "NSPhotoLibraryAddUsageDescription": "GymPaddy needs permission to save photos to your photo library. For example, you can save workout photos you've shared to your device's photo library."
+      }
     },
     "android": {
       "googleServicesFile": "./google-services.json",
@@ -24,24 +33,38 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.WAKE_LOCK",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "plugins": [
       "@stream-io/video-react-native-sdk",
-
       [
         "@config-plugins/react-native-webrtc",
         {
-          "cameraPermission": "$(PRODUCT_NAME) requires camera access to capture video.",
-          "microphonePermission": "$(PRODUCT_NAME) requires microphone access to capture audio."
+          "cameraPermission": "GymPaddy uses your camera to enable video calls and live streaming. For example, you can make video calls with trainers or stream your workout sessions live.",
+          "microphonePermission": "GymPaddy uses your microphone to enable voice and video calls, and to add audio to your live streams. For example, you can have voice conversations during calls or speak during your live workout streams."
         }
       ],
-
       [
         "expo-build-properties",
         {
           "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "gradleProperties": {
+              "android.enable16KbPageSize": "true"
+            },
             "extraMavenRepos": [
               "https://storage.googleapis.com/download.flutter.io",
               "https://android-sdk.stream-io-cdn.com/maven",
@@ -50,7 +73,6 @@
           }
         }
       ],
-
       "expo-router",
       [
         "expo-splash-screen",
@@ -64,7 +86,16 @@
       "expo-font",
       "expo-audio",
       "expo-video",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GymPaddy needs access to your photos to select profile pictures and share content. For example, you can choose an existing photo from your library to set as your profile picture or share workout photos in posts.",
+          "cameraPermission": "GymPaddy needs access to your camera to take photos and share content. For example, you can take a profile photo when creating your account or capture workout moments to share with friends."
+        }
+      ],
+      "./plugins/remove-background-audio.js"
     ],
     "web": {
       "bundler": "metro",

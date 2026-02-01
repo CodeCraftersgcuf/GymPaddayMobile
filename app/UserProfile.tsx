@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Share,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import * as SecureStore from 'expo-secure-store';
+import * as Clipboard from 'expo-clipboard';
 import { followUnfollowUser, getFollowerList, getFollowingList } from '@/utils/queries/socialMedia';
 import { useTheme } from '@/contexts/themeContext';
 import { ChatMessagePayload, sendChatMessage } from '@/utils/mutations/chat';
@@ -193,6 +195,35 @@ export default function ProfileScreen() {
   const handleSheetChanges = useCallback((index: number) => {
     // No-op or logging
   }, []);
+  const profileUrl = data?.user?.username
+    ? `https://gympaddy.com/@${data.user.username}`
+    : `https://gympaddy.com/user/${user_id}`;
+
+  const handleCopyProfileUrl = async () => {
+    if (!profileUrl) return;
+    await Clipboard.setStringAsync(profileUrl);
+    Toast.show({
+      type: 'success',
+      text1: 'Profile URL copied',
+      text2: profileUrl, // Show the copied URL
+    });
+    bottomSheetRef.current?.close();
+  };
+
+  const handleShareProfile = async () => {
+    if (!profileUrl) return;
+    try {
+      await Share.share({ message: profileUrl });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Share failed',
+        text2: err?.message || 'Unable to share profile',
+      });
+    } finally {
+      bottomSheetRef.current?.close();
+    }
+  };
 
   const openBottomSheet = () => {
     bottomSheetRef.current?.expand();
@@ -478,12 +509,12 @@ export default function ProfileScreen() {
           <BottomSheetView style={[styles.bottomSheetContent, { backgroundColor: theme.secondary }]}>
             <Text style={[styles.bottomSheetTitle, { color: theme.text }]}>More Options</Text>
 
-            <TouchableOpacity style={styles.bottomSheetOption}>
+            <TouchableOpacity style={styles.bottomSheetOption} onPress={handleCopyProfileUrl}>
               <MaterialIcons name="content-copy" size={24} color={theme.text} />
               <Text style={[styles.bottomSheetOptionText, { color: theme.text }]}>Copy profile URL</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.bottomSheetOption}>
+            <TouchableOpacity style={styles.bottomSheetOption} onPress={handleShareProfile}>
               <Icon name="share-outline" size={24} color={theme.text} />
               <Text style={[styles.bottomSheetOptionText, { color: theme.text }]}>Share Profile</Text>
             </TouchableOpacity>

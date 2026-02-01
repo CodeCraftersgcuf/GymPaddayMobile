@@ -13,8 +13,9 @@ import ThemeText from '@/components/ThemedText';
 
 
 //Code Related to the integration
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { createBusiness } from '@/utils/mutations/businesses';
+import { getUserBusinesses } from '@/utils/queries/businesses';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 
@@ -57,6 +58,33 @@ export default function BusinessRegistrationScreen() {
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
+    const [hasExistingBusiness, setHasExistingBusiness] = useState(false);
+
+    useQuery({
+        queryKey: ['user-businesses'],
+        queryFn: async () => {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) throw new Error('Not authenticated');
+            return getUserBusinesses(token);
+        },
+        onSuccess: (data: any) => {
+            const businesses = data?.data || data?.businesses || data || [];
+            if (Array.isArray(businesses) && businesses.length > 0) {
+                const status =
+                    businesses[0]?.status ||
+                    businesses[0]?.approval_status ||
+                    (businesses[0]?.is_approved ? 'approved' : 'reviewing');
+                if (status === 'approved') {
+                    setSubmissionState('approved');
+                } else if (status === 'rejected') {
+                    setSubmissionState('rejected');
+                } else {
+                    setSubmissionState('reviewing');
+                }
+                setHasExistingBusiness(true);
+            }
+        },
+    });
 
     // --- Mutation for business creation ---
     const createBusinessMutation = useMutation({
@@ -71,9 +99,8 @@ export default function BusinessRegistrationScreen() {
                 type: 'success',
                 text1: 'Business registered successfully!',
             });
-            setTimeout(() => {
-                router.back();
-            }, 500);
+            setSubmissionState('reviewing');
+            setHasExistingBusiness(true);
         },
         onError: (error: any) => {
             Toast.show({
@@ -104,6 +131,14 @@ export default function BusinessRegistrationScreen() {
     // --- Updated handleSubmit ---
     const handleSubmit = async (values: any) => {
         try {
+            if (hasExistingBusiness) {
+                Toast.show({
+                    type: 'info',
+                    text1: 'Business already registered',
+                    text2: 'Please wait for approval or update your existing business.',
+                });
+                return;
+            }
             const formData = new FormData();
             formData.append('business_name', values.businessName);
             formData.append('category', values.category);
@@ -157,7 +192,7 @@ export default function BusinessRegistrationScreen() {
     const getAlertMessage = () => {
         switch (submissionState) {
             case 'reviewing':
-                return 'Your submission is currently under review, you will receive a confirmation mail soon';
+                return 'Your submission is under review. You will receive a confirmation mail soon.';
             case 'rejected':
                 return 'Your submission was rejected due to unclear document upload, kindly upload a clear copy of your certificate';
             case 'approved':
@@ -387,13 +422,17 @@ export default function BusinessRegistrationScreen() {
                                 style={[
                                     styles.saveButton,
                                     submissionState === 'approved' && styles.saveButtonSuccess,
-                                    createBusinessMutation.isLoading && { opacity: 0.6 }
+                                    (createBusinessMutation.isLoading || hasExistingBusiness) && { opacity: 0.6 }
                                 ]}
                                 onPress={() => handleSubmit()}
-                                disabled={createBusinessMutation.isLoading}
+                                disabled={createBusinessMutation.isLoading || hasExistingBusiness}
                             >
                                 <Text style={styles.saveButtonText}>
-                                    {createBusinessMutation.isLoading ? 'Saving...' : 'Save'}
+                                    {createBusinessMutation.isLoading
+                                        ? 'Saving...'
+                                        : hasExistingBusiness
+                                            ? 'Submitted'
+                                            : 'Save'}
                                 </Text>
                             </TouchableOpacity>
                         </View>

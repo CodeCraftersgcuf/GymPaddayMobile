@@ -57,7 +57,7 @@ export default function Chat() {
       id: String(conv.other_user.id),
       username: conv.other_user.username,
       profile_img: conv.other_user.profile_picture_url,
-      online: false,
+      online: !!conv.other_user?.is_online,
     },
     lastMessage: {
       text: conv.last_message?.message || '',
@@ -84,7 +84,7 @@ export default function Chat() {
               id: conv.user.id,
               username: conv.user.username,
               profile_img: conv.user.profile_img,
-              online: false,
+              online: !!conv.user?.online,
             },
           ])
         ).values()

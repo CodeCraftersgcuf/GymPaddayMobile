@@ -19,15 +19,20 @@ interface CommentItemProps {
   darkMode: boolean;
   isReply?: boolean;
   onReplyPress?: (commentId: string, username: string) => void; // ✅ Add this
+  onDeletePress?: (commentId: string, userId: string) => void;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = false, onReplyPress }) => {
+const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = false, onReplyPress, onDeletePress }) => {
   const textColor = darkMode ? '#FFFFFF' : '#000000';
   const subtextColor = darkMode ? '#AAAAAA' : '#777777';
   const replyPadding = isReply ? 40 : 0;
 
   return (
-    <View style={[styles.commentContainer, { marginLeft: replyPadding }]}>
+    <TouchableOpacity
+      style={[styles.commentContainer, { marginLeft: replyPadding }]}
+      activeOpacity={0.9}
+      onLongPress={() => onDeletePress?.(comment.id, comment.userId)}
+    >
       <View style={styles.commentHeader}>
         <Image source={{ uri: comment.profileImage }} style={styles.avatar} />
         <View style={styles.commentContent}>
@@ -73,7 +78,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
           ))}
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 };
 

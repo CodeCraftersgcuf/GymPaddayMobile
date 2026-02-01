@@ -77,6 +77,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [videoAspectRatio, setVideoAspectRatio] = useState<number | undefined>(undefined);
+  const [showVideoControls, setShowVideoControls] = useState(true);
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
@@ -89,6 +91,14 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   // console.log("post data we are getting", post);
   useEffect(() => {
     SecureStore.getItemAsync('auth_token').then(setToken);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Check if current user has liked this post
@@ -396,6 +406,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     onPlaybackStatusUpdate={(status) => {
                       if ('isPlaying' in status) {
                         setIsPlaying(status.isPlaying);
+                        if (status.isPlaying) {
+                          if (controlsTimeoutRef.current) {
+                            clearTimeout(controlsTimeoutRef.current);
+                          }
+                          controlsTimeoutRef.current = setTimeout(() => {
+                            setShowVideoControls(false);
+                          }, 2000);
+                        } else {
+                          if (controlsTimeoutRef.current) {
+                            clearTimeout(controlsTimeoutRef.current);
+                          }
+                          setShowVideoControls(true);
+                        }
                       }
                     }}
                   />
@@ -410,7 +433,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                   )}
 
                   {/* Play Button */}
-                  {!isBuffering && (
+                  {!isBuffering && showVideoControls && (
                     <TouchableOpacity
                       style={styles.playButton}
                       onPress={async () => {
@@ -553,7 +576,12 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
 
       {/* Full-Screen Image Slider Modal */}
-      <Modal visible={modalVisible} transparent={true} animationType="fade">
+      <Modal 
+        visible={modalVisible} 
+        transparent={true} 
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
         <View style={styles.modalBackground}>
           <FlatList
             data={ImagesData}

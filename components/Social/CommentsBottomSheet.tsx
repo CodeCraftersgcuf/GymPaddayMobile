@@ -12,11 +12,16 @@ import {
   Platform,
   KeyboardAvoidingView,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  BackHandler,
+  Alert
 } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import CommentItem from './CommentItem';
 import { images } from '@/constants';
+import * as SecureStore from 'expo-secure-store';
+import { useMutation } from '@tanstack/react-query';
+import { deleteComment } from '@/utils/mutations/comments';
 
 interface Comment {
   id: string;
@@ -49,11 +54,46 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
 }) => {
   const { dark } = useTheme();
   const [newComment, setNewComment] = React.useState('');
+  const [localComments, setLocalComments] = React.useState<Comment[]>(comments);
+  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<FlatList>(null);
   const [replyToCommentId, setReplyToCommentId] = React.useState<string | null>(null);
   const [replyToUsername, setReplyToUsername] = React.useState<string | null>(null);
+
+  useEffect(() => {
+    setLocalComments(comments);
+  }, [comments]);
+
+  useEffect(() => {
+    const loadUserId = async () => {
+      try {
+        const userData = await SecureStore.getItemAsync('user_data');
+        const parsed = userData ? JSON.parse(userData) : null;
+        if (parsed?.id) {
+          setCurrentUserId(parsed.id.toString());
+        }
+      } catch (err) {
+        console.error('Failed to load user id', err);
+      }
+    };
+    loadUserId();
+  }, []);
+
+  const deleteMutation = useMutation({
+    mutationFn: async (commentId: number) => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token');
+      return deleteComment({ id: commentId, token });
+    },
+    onSuccess: (_, commentId) => {
+      setLocalComments(prev => prev.filter(item => item.id !== commentId.toString()));
+    },
+    onError: (error: any) => {
+      Alert.alert('Delete Failed', error?.message || 'Unable to delete comment');
+    }
+  });
 
   // Animate in when visible changes
   useEffect(() => {
@@ -86,6 +126,15 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
     }
   }, [visible, slideAnim, fadeAnim]);
 
+  useEffect(() => {
+    if (!visible) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [visible, onClose]);
+
   if (!visible) return null;
 
   const handleSendComment = () => {
@@ -107,6 +156,24 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const handleReplyPress = (commentId: string, username: string) => {
     setReplyToCommentId(commentId);
     setReplyToUsername(username);
+  };
+  const handleDeletePress = (commentId: string, userId: string) => {
+    if (currentUserId && currentUserId !== userId) {
+      Alert.alert('Not allowed', 'You can only delete your own comments.');
+      return;
+    }
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteMutation.mutate(Number(commentId)),
+        },
+      ]
+    );
   };
 
   return (
@@ -164,13 +231,14 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
             <FlatList
               ref={scrollViewRef}
               style={styles.commentsList}
-              data={comments}
+              data={localComments}
               keyExtractor={(item, index) => `${item.id}-${index}`}
               renderItem={({ item }) => (
                 <CommentItem
                   comment={item}
                   darkMode={dark}
                   onReplyPress={handleReplyPress}
+                  onDeletePress={handleDeletePress}
                 />
               )}
               ListEmptyComponent={

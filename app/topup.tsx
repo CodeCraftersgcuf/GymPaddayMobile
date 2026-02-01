@@ -30,7 +30,7 @@ import { useIAP } from '@/utils/hooks/useIAP';
 
 type ViewMode = 'deposit' | 'payment';
 
-export default function DepositPaymentTab() {
+export default function TopupScreen() {
     const [currentView, setCurrentView] = useState<ViewMode>('deposit');
     const [amount, setAmount] = useState('');
     const [depositorName, setDepositorName] = useState('');

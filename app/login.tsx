@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
+  Linking,
 } from "react-native";
 import { useTheme } from "@/contexts/themeContext";
 import { COLORS, images } from "@/constants";
@@ -33,6 +35,8 @@ const Login = () => {const [checkingAuth, setCheckingAuth] = React.useState(true
 
   const route = useRouter();
   const { dark } = useTheme();
+  const termsUrl = "https://gympaddy.com/terms";
+  const privacyUrl = "https://gympaddy.com/privacy";
 useEffect(() => {
   const checkAuth = async () => {
     const hasSeenOnboarding = await AsyncStorage.getItem("hasSeenOnboarding");
@@ -128,7 +132,8 @@ if (checkingAuth) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ThemedView style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <ThemedView style={{ flex: 1 }}>
         <LinearGradient
           colors={["#940304", "#840000"]}
           start={{ x: 0, y: 0 }}
@@ -190,8 +195,6 @@ if (checkingAuth) {
               Login to your account
             </ThemeText>
 
-                    {/* Login Button */}
-                
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : "height"}
             >
@@ -270,19 +273,11 @@ if (checkingAuth) {
                     >
                       <ThemeText style={styles.registerText}>Register</ThemeText>
                     </Link>
-                    {/* <Link
-                      href={"/AgoraCallScreen"}
-                      style={{ paddingVertical: 15, borderRadius: 10 }}
-                    > */}
                     <Link
                       href={"/(tabs)"}
                       style={{ paddingVertical: 15, borderRadius: 10 }}
                     >
-                      {/* <ThemeText style={styles.registerText}>Login</ThemeText> */}
                     </Link>
-                    {/* <Pressable onPress={() => route.push("/(tabs)")}>
-                      <ThemeText>Login now</ThemeText>
-                    </Pressable> */}
                   </ThemedView>
                 )}
               </Formik>
@@ -295,11 +290,18 @@ if (checkingAuth) {
             style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}
           >
             By continuing you agree to gym paddy’s{" "}
-            <ThemeText style={{ color: "red" }}>terms of use</ThemeText> and{" "}
-            <ThemeText style={{ color: "red" }}>privacy policy</ThemeText>.
+            <ThemeText style={{ color: "red" }} onPress={() => Linking.openURL(termsUrl)}>
+              terms of use
+            </ThemeText>{" "}
+            and{" "}
+            <ThemeText style={{ color: "red" }} onPress={() => Linking.openURL(privacyUrl)}>
+              privacy policy
+            </ThemeText>
+            .
           </ThemeText>
         </ThemedView>
-      </ThemedView>
+        </ThemedView>
+      </ScrollView>
     </SafeAreaView>
   );
 };

@@ -3,7 +3,6 @@ import React, { useCallback, useRef, useState, useEffect } from 'react'
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '../ThemedView';
-import UserPost from './PostDetail/UserPostDetail';
 import UserPostDetail from './PostDetail/UserPostDetail';
 import ViewpostDetail from './PostDetail/ViewpostDetail';
 

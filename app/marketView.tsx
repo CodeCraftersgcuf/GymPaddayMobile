@@ -15,6 +15,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
+import { formatNaira } from '@/utils/formatters';
 
 
 //Code Related to the integration
@@ -119,7 +120,7 @@ export default function ItemDetailsScreen() {
     console.log("Seller Image:", sellerImage);
     // Prepare other fields
     const title = listing?.title || '...';
-    const price = listing?.price ? `N${listing.price}` : '';
+    const price = listing?.price ? formatNaira(listing.price) : '';
     const location = listing?.location || '';
     const description = listing?.description || '';
     const sellerName = listing?.user?.name || 'User';

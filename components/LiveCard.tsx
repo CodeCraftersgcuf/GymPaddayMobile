@@ -30,12 +30,13 @@ const LiveCard: React.FC<Props> = ({
   title,
   userName,
   viewers = 20,
-  timeAgo = 'Live now',
+  timeAgo = 'Offline',
   channelName,
 }) => {
   const router = useRouter();
 
   const handlePress = async () => {
+    if (timeAgo !== 'Live now') return;
     if (!channelName || !id) return;
 
     try {

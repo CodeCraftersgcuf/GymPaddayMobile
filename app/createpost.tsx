@@ -126,6 +126,8 @@ export default function CreatePostScreen() {
     },
   });
 
+  const isSubmitting = createPostMutation.isPending || updatePostMutation.isPending;
+
   const handleMutationError = (error: any, defaultMessage: string) => {
     if (error?.response) {
       console.log('📡 Backend Response:', {
@@ -223,6 +225,7 @@ export default function CreatePostScreen() {
   };
 
   const handleMediaSelect = (media: GalleryMedia) => {
+    if (isSubmitting) return;
     setSelectedMedia(prev => {
       const isSelected = prev.find(item => item.id === media.id);
       if (isSelected) {
@@ -235,6 +238,7 @@ export default function CreatePostScreen() {
   };
 
   const handleMediaRemove = (mediaId: string) => {
+    if (isSubmitting) return;
     setSelectedMedia(prev => prev.filter(item => item.id !== mediaId));
     console.log('Media removed:', mediaId);
   };
@@ -287,7 +291,9 @@ export default function CreatePostScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes,
-      allowsEditing: true,
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: 0,
       aspect: [18, 32],
       quality: 0.6,
       videoQuality: ImagePicker.VideoQuality?.High || 1,
@@ -417,12 +423,13 @@ export default function CreatePostScreen() {
 
   const handleSubmit = async () => {
     try {
+      if (isSubmitting) return;
       // Validation
       if (!postText.trim() && selectedMedia.length === 0) {
         Toast.show({
           type: 'error',
-          text1: 'Empty Post',
-          text2: 'Please add some content or media to your post',
+          text1: 'Add content',
+          text2: 'Write a caption or select at least one photo/video.',
         });
         return;
       }
@@ -543,14 +550,15 @@ export default function CreatePostScreen() {
       <Header
         onSubmit={handleSubmit}
         // || updatePostMutation.isPending
-        isLoading={createPostMutation.isPending}
+        isLoading={isSubmitting}
         isEditMode={isEditMode}
       />
-      <UserSection postText={postText} onTextChange={setPostText} />
+      <UserSection postText={postText} onTextChange={setPostText} disabled={isSubmitting} />
       <SelectedMedia
         selectedMedia={selectedMedia}
         onRemoveMedia={handleMediaRemove}
         onViewMedia={handleMediaView}
+        disabled={isSubmitting}
       />
       <GalleryGrid
         media={galleryMedia}
@@ -559,6 +567,7 @@ export default function CreatePostScreen() {
         onGalleryButtonPress={handleGalleryButtonPress}
         onCameraButtonPress={handleCameraButtonPress}
         onViewMedia={handleMediaView}
+        disabled={isSubmitting}
       />
       <MediaViewModal
         media={viewingMedia}

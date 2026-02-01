@@ -29,6 +29,7 @@ const LiveStreamFeed = ({ streams }: { streams: any[] }) => {
   userName={item?.user?.fullname || item?.user?.username}
   viewers={item?.audiences?.length || 0}
   channelName={item?.agora_channel}
+  timeAgo={item?.is_live ? 'Live now' : 'Offline'}
 />
 
           </View>

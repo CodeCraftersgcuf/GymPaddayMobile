@@ -17,10 +17,12 @@ import {
 import Modal from 'react-native-modal'; // ✅ Correct
 
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { categories } from '@/constants/marketData';
 import { AntDesign, Entypo, Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
+import { formatNaira } from '@/utils/formatters';
 
 //Code Related to the integration
 import { QueryClient, useQuery } from '@tanstack/react-query';
@@ -39,6 +41,7 @@ interface ListingItem {
   image: string;
   isTopAd?: boolean;
   category: string;
+  location?: string;
 }
 
 export default function MarketplaceScreen() {
@@ -125,6 +128,14 @@ export default function MarketplaceScreen() {
   // Add refresh state (optional, but not strictly needed with isFetching)
   const [refreshing, setRefreshing] = useState(false);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (token) {
+        refetch();
+      }
+    }, [token, refetch])
+  );
+
   const onRefresh = async () => {
     setRefreshing(true);
     await refetch();
@@ -172,14 +183,15 @@ export default function MarketplaceScreen() {
       return {
         id: String(item.id),
         title: item.title,
-        price: item.price,
+        price: formatNaira(item.price),
         category: categoryName,
         image: imageUrl,
         isTopAd: !!item.isTopAd,
         sellerAvatar: sellerAvatar,
         seller: sellerName,
         timeAgo: timeAgo,
-        is_featured: item.is_featured
+        is_featured: item.is_featured,
+        location: item.location || item.user?.location || ''
       };
     })
     : [];
@@ -193,7 +205,7 @@ export default function MarketplaceScreen() {
       selectedCategory === 'all' || item.category === categoryIdToApiName[selectedCategory];
 
     const matchesLocation =
-      selectedLocation === 'all' || (item.user?.location?.toLowerCase() === selectedLocation);
+      selectedLocation === 'all' || (item.location?.toLowerCase?.() === selectedLocation);
 
     return matchesSearch && matchesCategory && matchesLocation;
   });

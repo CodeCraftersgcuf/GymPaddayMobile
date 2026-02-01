@@ -21,6 +21,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from "expo-router";
 import { fetchChatMessages } from '@/utils/queries/chat';
+import { fetchUserProfile } from '@/utils/queries/profile';
 import { sendChatMessage } from '@/utils/mutations/chat';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -347,6 +348,16 @@ export default function MessageChat() {
       || data.messages[0].receiver)
     : null;
 
+  const { data: otherUserProfile } = useQuery({
+    queryKey: ['userProfile', otherUser?.id],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token || !otherUser?.id) throw new Error('Missing profile info');
+      return fetchUserProfile(token, otherUser.id);
+    },
+    enabled: !!otherUser?.id,
+  });
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
@@ -407,7 +418,9 @@ export default function MessageChat() {
                 />
                 <View style={styles.userDetails}>
                   <Text style={styles.userName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
-                  <Text style={styles.onlineStatus}>Online</Text>
+                  <Text style={styles.onlineStatus}>
+                    {otherUser?.is_online ? 'Online' : 'Offline'}
+                  </Text>
                 </View>
               </View>
 
@@ -445,11 +458,15 @@ export default function MessageChat() {
                   <View style={styles.profileStats}>
                     <View style={styles.stat}>
                       <Image source={images.chatsFollower} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
-                      <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>0 Followers</Text>
+                      <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
+                        {otherUserProfile?.followers_count ?? 0} Followers
+                      </Text>
                     </View>
                     <View style={styles.stat}>
                       <Image source={images.notifcationIcon} style={{ width: 16, height: 16 }} tintColor={dark ? 'white' : 'black'} />
-                      <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>0 Posts</Text>
+                      <Text style={[styles.statValue, { color: dark ? 'white' : 'black' }]}>
+                        {otherUserProfile?.post_count ?? 0} Posts
+                      </Text>
                     </View>
                   </View>
 

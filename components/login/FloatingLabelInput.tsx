@@ -63,7 +63,7 @@ const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
     }),
     color: animatedIsFocused.interpolate({
       inputRange: [0, 1],
-      outputRange: [dark ? "white" : "black", dark ? "red" : "black"],
+      outputRange: [dark ? "white" : "black", dark ? "#cfcfcf" : "#444"],
     }),
     backgroundColor: animatedIsFocused.interpolate({
       inputRange: [0, 1],
@@ -94,12 +94,11 @@ const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
       borderRadius: 8,
       fontSize: 16,
       borderWidth: 1,
-      borderColor: isFocused ? "red" : "#ccc",
+    borderColor: isFocused ? (dark ? "#666" : "#888") : "#ccc",
       color: dark ? "white" : "#121212",
     },
     hoverInput: {
       backgroundColor: "transparent",
-      borderColor: "red",
     },
     errorInput: {
       borderColor: "#FF4444",

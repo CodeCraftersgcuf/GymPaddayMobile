@@ -328,9 +328,11 @@ const ProfileScreen: React.FC = () => {
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: theme.text }]}>{username ? `${username}'s Profile` : "Profile"}</Text>
 
-                    <TouchableOpacity onPress={() => handleMenu(1, 1)}>
-                        <Ionicons name="ellipsis-vertical" size={24} color={theme.text} />
-                    </TouchableOpacity>
+                    {items.length > 0 && (
+                        <TouchableOpacity onPress={() => handleMenu(items[0].id, items[0].image)}>
+                            <Ionicons name="ellipsis-vertical" size={24} color={theme.text} />
+                        </TouchableOpacity>
+                    )}
                 </View>
                 <BoostAdModal
                     visible={modalVisible}

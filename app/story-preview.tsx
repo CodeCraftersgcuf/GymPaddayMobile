@@ -12,6 +12,8 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,6 +40,14 @@ export default function StoryPreview() {
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [musicSearchQuery, setMusicSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    }).catch((err) => console.error('Audio mode error:', err));
+  }, []);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const videoRef = useRef<Video>(null);
 
@@ -319,7 +329,10 @@ export default function StoryPreview() {
         onRequestClose={() => setShowMusicPicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.musicPickerModal}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.musicPickerModal}
+          >
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Music</Text>
@@ -411,7 +424,7 @@ export default function StoryPreview() {
                 </View>
               }
             />
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -613,7 +626,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: '#f5f5f5',
     gap: 6,
@@ -628,6 +641,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
+    lineHeight: 18,
   },
   categoryTextActive: {
     color: '#fff',

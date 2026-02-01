@@ -275,7 +275,7 @@ const ReviewAdScreen: React.FC = () => {
                 <View style={[styles.walletContainer, { backgroundColor: theme.walletCard }]}>
                     <View style={styles.walletHeader}>
                         <Text style={[styles.walletLabel, { color: theme.textSecondary }]}>Wallet Balance</Text>
-                        <TouchableOpacity style={styles.topUpButton}>
+                        <TouchableOpacity style={styles.topUpButton} onPress={() => route.push('/topup')}>
                             <Text style={styles.topUpText}>TopUp</Text>
                         </TouchableOpacity>
                     </View>

@@ -11,11 +11,12 @@ import {
 interface UserSectionProps {
   postText: string;
   onTextChange: (text: string) => void;
+  disabled?: boolean;
 }
 
 import * as SecureStore from 'expo-secure-store';
 
-export default function UserSection({ postText, onTextChange }: UserSectionProps) {
+export default function UserSection({ postText, onTextChange, disabled = false }: UserSectionProps) {
   const { dark } = useTheme();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
@@ -55,6 +56,7 @@ export default function UserSection({ postText, onTextChange }: UserSectionProps
           multiline
           value={postText}
           onChangeText={onTextChange}
+          editable={!disabled}
         />
       </View>
     </View>

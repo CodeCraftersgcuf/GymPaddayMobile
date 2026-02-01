@@ -97,6 +97,7 @@ export default function RootLayout() {
               <Stack.Screen name="register" options={{ headerShown: false }} />
               <Stack.Screen name="messageChat" options={{ headerShown: false }} />
               <Stack.Screen name="deposit" options={{ headerShown: false }} />
+              <Stack.Screen name="topup" options={{ headerShown: false }} />
               <Stack.Screen name="withdraw" options={{ headerShown: false }} />
               <Stack.Screen name="transactionHistory" options={{ headerShown: false }} />
               <Stack.Screen name="giftHistory" options={{ headerShown: false }} />

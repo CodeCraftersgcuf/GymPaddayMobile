@@ -32,6 +32,7 @@ import { groupStoriesByUser } from '@/utils/groupStories';
 import { GroupedUserStories, StoryItem } from '@/utils/types/story';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // LoadingIndicator component
 function LoadingIndicator({ text = "Loading..." }) {
@@ -243,48 +244,49 @@ export default function SocialFeedScreen() {
   };
 
   useEffect(() => {
-  if (data?.pages) {
-    const allPosts = data.pages.flatMap(page => page.data); // assuming response has .data field
+    if (data?.pages) {
+      const allPosts = data.pages.flatMap(page => page.data); // assuming response has .data field
 
-    const formatted = allPosts.map((post: any) => ({
-      id: post.id,
-      user: {
-        id: post.user?.id,
-        username: post.user?.username,
-        profile_picture: post.user?.profile_picture_url,
-      },
-      content: post.content || post.title || '',
-      imagesUrl: post.media
-        ?.filter((m: any) => m.media_type === 'image')
-        .map((m: any) => m.url) || [],
-      videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
-      timestamp: post.created_at,
-      likes_count: post.likes?.length || 0,
-      comments_count: post.comments?.length || 0,
-      view_count: 0,
-      share_count: 0,
-      likes: post.likes?.map((like: any) => ({
-        id: like.id,
+      const formatted = allPosts.map((post: any) => ({
+        id: Number(post.id),
         user: {
-          id: like.user?.id,
-          username: like.user?.username || 'Unknown',
-          fullname: like.user?.fullname || '',
-          profile_picture_url: like.user?.profile_picture_url || '',
-        }
-      })) || [],
-      recent_comments: post.comments?.slice(0, 2).map((comment: any) => ({
-        id: comment.id,
-        user: {
-          username: comment.user?.username || 'Unknown',
-          profile_picture: comment.user?.profile_picture_url || '',
+          id: post.user?.id,
+          username: post.user?.username,
+          profile_picture: post.user?.profile_picture_url,
         },
-        text: comment.content || '',
-      })) || [],
-    }));
+        content: post.content || post.title || '',
+        imagesUrl: post.media
+          ?.filter((m: any) => m.media_type === 'image')
+          .map((m: any) => m.url) || [],
+        videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
+        timestamp: post.created_at,
+        likes_count: post.likes?.length || 0,
+        comments_count: post.comments?.length || 0,
+        view_count: 0,
+        share_count: 0,
+        likes: post.likes?.map((like: any) => ({
+          id: like.id,
+          user: {
+            id: like.user?.id,
+            username: like.user?.username || 'Unknown',
+            fullname: like.user?.fullname || '',
+            profile_picture_url: like.user?.profile_picture_url || '',
+          }
+        })) || [],
+        recent_comments: post.comments?.slice(0, 2).map((comment: any) => ({
+          id: comment.id,
+          user: {
+            username: comment.user?.username || 'Unknown',
+            profile_picture: comment.user?.profile_picture_url || '',
+          },
+          text: comment.content || '',
+        })) || [],
+      }));
 
-    setPosts(formatted);
-  }
-}, [data]);
+      const filtered = formatted.filter((post: any) => !hiddenPostIds.includes(post.id));
+      setPosts(filtered);
+    }
+  }, [data, hiddenPostIds]);
 
 
 
@@ -298,6 +300,22 @@ export default function SocialFeedScreen() {
 
   const [BottomIndex, setBottomIndex] = useState(-1);
   const [PostType, setPostType] = useState('ViewerPost');
+  const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    const loadHiddenPosts = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('hidden_post_ids');
+        const parsed = stored ? JSON.parse(stored) : [];
+        if (Array.isArray(parsed)) {
+          setHiddenPostIds(parsed);
+        }
+      } catch (err) {
+        console.error('Failed to load hidden posts', err);
+      }
+    };
+    loadHiddenPosts();
+  }, []);
 
   const handleMenu = (userId: any, postId: any) => {
     setPostType(userId == 100 ? 'userpost' : 'ViewerPost');
@@ -347,7 +365,14 @@ export default function SocialFeedScreen() {
     setBottomIndex(-1); // Close the bottom sheet
 
     if (idCan.postId) {
-      setPosts(prev => prev.filter(p => p.id !== idCan.postId));
+      setPosts(prev => prev.filter(p => Number(p.id) !== Number(idCan.postId)));
+      setHiddenPostIds(prev => {
+        const updated = [...prev, Number(idCan.postId)];
+        AsyncStorage.setItem('hidden_post_ids', JSON.stringify(updated)).catch((err) => {
+          console.error('Failed to persist hidden posts', err);
+        });
+        return updated;
+      });
       setBottomIndex(-1); // Close the bottom sheet
     }
   };
@@ -364,25 +389,25 @@ export default function SocialFeedScreen() {
     }));
   };
   useEffect(() => {
-  const prefetchProfiles = async () => {
-    const token = await SecureStore.getItemAsync('auth_token');
-    if (!token) return;
+    const prefetchProfiles = async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) return;
 
-    const uniqueUserIds = Array.from(new Set(posts.map(post => post.user?.id)));
+      const uniqueUserIds = Array.from(new Set(posts.map(post => post.user?.id)));
 
-    for (const id of uniqueUserIds) {
-    console.log('Prefetching profile for user ID:', id);
-      queryClient.prefetchQuery({
-        queryKey: ['userProfile', id],
-        queryFn: () => fetchUserProfile(token, id),
-      });
+      for (const id of uniqueUserIds) {
+        console.log('Prefetching profile for user ID:', id);
+        queryClient.prefetchQuery({
+          queryKey: ['userProfile', id],
+          queryFn: () => fetchUserProfile(token, id),
+        });
+      }
+    };
+
+    if (posts.length > 0) {
+      prefetchProfiles();
     }
-  };
-
-  if (posts.length > 0) {
-    prefetchProfiles();
-  }
-}, [posts]);
+  }, [posts]);
 
 
   return (
@@ -428,7 +453,7 @@ export default function SocialFeedScreen() {
             handleMenu={handleMenu}
           />
           {isFetchingNextPage && (
-            <View style={{ paddingVertical: 20, alignItems: 'center',marginBottom:100,zIndex:100 }}>
+            <View style={{ paddingVertical: 20, alignItems: 'center', marginBottom: 100, zIndex: 100 }}>
               <ActivityIndicator size="small" color="#940304" />
               <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
             </View>

@@ -44,8 +44,8 @@ export default function NotificationManager({ token, user }: { token: string; us
             }
 
             // Remove old listeners
-            if (notificationListener.current) Notifications.removeNotificationSubscription(notificationListener.current);
-            if (responseListener.current) Notifications.removeNotificationSubscription(responseListener.current);
+            // if (notificationListener.current) Notifications.removeNotificationSubscription(notificationListener.current);
+            // if (responseListener.current) Notifications.removeNotificationSubscription(responseListener.current);
 
             // Foreground notification
             notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
@@ -91,8 +91,8 @@ export default function NotificationManager({ token, user }: { token: string; us
         setupNotifications();
 
         return () => {
-            if (notificationListener.current) Notifications.removeNotificationSubscription(notificationListener.current);
-            if (responseListener.current) Notifications.removeNotificationSubscription(responseListener.current);
+            // if (notificationListener.current) Notifications.removeNotificationSubscription(notificationListener.current);
+            // if (responseListener.current) Notifications.removeNotificationSubscription(responseListener.current);
         };
     }, [token, userId]);
 

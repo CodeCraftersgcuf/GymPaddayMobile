@@ -15,9 +15,10 @@ interface SelectedMediaProps {
   selectedMedia: GalleryMedia[];
   onRemoveMedia: (mediaId: string) => void;
   onViewMedia: (media: GalleryMedia) => void;
+  disabled?: boolean;
 }
 
-export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedia }: SelectedMediaProps) {
+export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedia, disabled = false }: SelectedMediaProps) {
   if (selectedMedia.length === 0) {
     return null;
   }
@@ -43,6 +44,7 @@ export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedi
             key={item.id}
             style={styles.mediaContainer}
             onPress={() => onViewMedia(item)}
+            disabled={disabled}
           >
             <Image source={{ uri: item.uri }} style={styles.media} />
             
@@ -62,6 +64,7 @@ export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedi
             <TouchableOpacity
               style={styles.removeButton}
               onPress={() => onRemoveMedia(item.id)}
+              disabled={disabled}
             >
               <AntDesign name='close' size={16} color="#fff" />
             </TouchableOpacity>

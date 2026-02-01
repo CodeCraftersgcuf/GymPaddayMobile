@@ -138,14 +138,11 @@ export default function EditProfileScreen() {
       newErrors.fullName = 'Full name is required';
     }
 
-    if (!formData.gender) {
-      newErrors.gender = 'Please select your gender';
-    }
-
-    if (!formData.age.trim()) {
-      newErrors.age = 'Age is required';
-    } else if (isNaN(Number(formData.age)) || Number(formData.age) < 1 || Number(formData.age) > 120) {
-      newErrors.age = 'Please enter a valid age';
+    // Gender and age are now optional - only validate if provided
+    if (formData.age && formData.age.trim()) {
+      if (isNaN(Number(formData.age)) || Number(formData.age) < 1 || Number(formData.age) > 120) {
+        newErrors.age = 'Please enter a valid age';
+      }
     }
 
     setErrors(newErrors);
@@ -185,8 +182,13 @@ export default function EditProfileScreen() {
       const form = new FormData();
       form.append('username', formData.username);
       form.append('fullname', formData.fullName);
-      form.append('gender', formData.gender);
-      form.append('age', formData.age);
+      // Only append optional fields if they have values
+      if (formData.gender && formData.gender.trim()) {
+        form.append('gender', formData.gender);
+      }
+      if (formData.age && formData.age.trim()) {
+        form.append('age', formData.age);
+      }
 
       if (profileImage) {
         // Only append if it's a new image (uri not starting with http)
@@ -314,14 +316,14 @@ export default function EditProfileScreen() {
             />
 
             <FloatingLabelGenderPicker
-              label="Gender"
+              label="Gender (Optional)"
               value={formData.gender}
               onPress={() => bottomSheetRef.current?.snapToIndex(0)}
               error={errors.gender}
             />
 
             <FloatingLabelInput
-              label="Age"
+              label="Age (Optional)"
               value={formData.age}
               onChangeText={(text) => handleInputChange('age', text)}
               error={errors.age}

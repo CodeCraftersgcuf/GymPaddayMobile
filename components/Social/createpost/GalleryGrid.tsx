@@ -18,6 +18,7 @@ interface GalleryGridProps {
   onGalleryButtonPress: () => void;
   onCameraButtonPress: () => void; // Add this prop
   onViewMedia: (media: GalleryMedia) => void;
+  disabled?: boolean;
 }
 
 export default function GalleryGrid({ 
@@ -26,7 +27,8 @@ export default function GalleryGrid({
   onMediaSelect, 
   onGalleryButtonPress,
   onCameraButtonPress, // Add this parameter
-  onViewMedia 
+  onViewMedia,
+  disabled = false
 }: GalleryGridProps) {
   const screenWidth = Dimensions.get('window').width;
   const imageSize = (screenWidth - 64) / 5; // 5 images per row with padding
@@ -54,6 +56,7 @@ export default function GalleryGrid({
         <TouchableOpacity 
           style={[styles.galleryButton, { width: imageSize, height: imageSize }]}
           onPress={onGalleryButtonPress}
+          disabled={disabled}
         >
           <Ionicons name='image-outline' size={24} color="#666" />
           <Text style={styles.galleryButtonText}>Add Media</Text>
@@ -63,6 +66,7 @@ export default function GalleryGrid({
         <TouchableOpacity 
           style={[styles.galleryButton, { width: imageSize, height: imageSize }]}
           onPress={onCameraButtonPress}
+          disabled={disabled}
         >
           <Ionicons name='camera-outline' size={24} color="#666" />
           <Text style={styles.galleryButtonText}>Camera</Text>
@@ -79,6 +83,7 @@ export default function GalleryGrid({
             ]}
             onPress={() => onMediaSelect(item)}
             onLongPress={() => onViewMedia(item)}
+            disabled={disabled}
           >
             <Image 
               source={{ uri: item.uri }} 

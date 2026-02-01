@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   SafeAreaView,
   FlatList,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '@/contexts/themeContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -77,6 +79,17 @@ export default function MediaViewer() {
 
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        router.back();
+        return true;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
+
 
   const {dark} = useTheme(); // You can change this to toggle theme
 

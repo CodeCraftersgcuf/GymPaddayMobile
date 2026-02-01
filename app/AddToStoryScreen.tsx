@@ -21,6 +21,7 @@ import {
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -43,6 +44,12 @@ export default function AddToStoryScreen() {
       setLoading(false);
     })();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setSelected([]);
+    }, [])
+  );
 
   const loadMoreAssets = async () => {
     if (!hasNextPage) return;

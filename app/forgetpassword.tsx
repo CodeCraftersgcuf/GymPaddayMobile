@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Linking,
 } from "react-native";
 import { useTheme } from "@/contexts/themeContext";
 import { COLORS, images } from "@/constants";
@@ -30,6 +31,8 @@ import Toast from "react-native-toast-message";
 const forgetpassword = () => {
   const route = useRouter();
   const { dark } = useTheme();
+  const termsUrl = "https://gympaddy.com/terms";
+  const privacyUrl = "https://gympaddy.com/privacy";
 
   const mutation = useMutation({
     mutationFn: forgotPassword,
@@ -164,8 +167,14 @@ const forgetpassword = () => {
         <ThemedView style={{ flex: 1, justifyContent: "flex-end" }}>
           <ThemeText style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}>
             By continuing you agree to gym paddy’s{" "}
-            <ThemeText style={{ color: 'red' }}>terms of use</ThemeText> and{" "}
-            <ThemeText style={{ color: 'red' }}>privacy policy</ThemeText>.
+            <ThemeText style={{ color: 'red' }} onPress={() => Linking.openURL(termsUrl)}>
+              terms of use
+            </ThemeText>{" "}
+            and{" "}
+            <ThemeText style={{ color: 'red' }} onPress={() => Linking.openURL(privacyUrl)}>
+              privacy policy
+            </ThemeText>
+            .
           </ThemeText>
         </ThemedView>
       </ThemedView>

@@ -5,11 +5,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Linking,
 } from "react-native";
 import { useTheme } from "@/contexts/themeContext";
 import { COLORS, images } from "@/constants";
 import { Image } from "expo-image";
-import { validationSignInSchema } from "@/constants/validation";
+import { resetPasswordSchema } from "@/constants/validation";
 import { Formik } from "formik";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -26,6 +27,8 @@ const resetpassword = () => {
   const route = useRouter();
   const { email, otp } = useLocalSearchParams();
   const { dark } = useTheme();
+  const termsUrl = "https://gympaddy.com/terms";
+  const privacyUrl = "https://gympaddy.com/privacy";
 
   const mutation = useMutation({
     mutationFn: resetPassword,
@@ -34,11 +37,21 @@ const resetpassword = () => {
       route.push('/login');
     },
     onError: (error: any) => {
+      console.error('Reset password error:', {
+        message: error?.message,
+        status: error?.status,
+        response: error?.response,
+        data: error?.response?.data,
+      });
       Toast.show({ type: 'error', text1: error.message || 'Failed to reset password' });
     }
   });
 
   const handleLogin = (values: { password: string; password_confirmation: string }) => {
+    if (!email || !otp) {
+      Toast.show({ type: 'error', text1: 'Missing reset information' });
+      return;
+    }
     mutation.mutate({
       data: {
         email,
@@ -98,7 +111,7 @@ const resetpassword = () => {
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
               <Formik
                 initialValues={{ password: "", password_confirmation: "" }}
-                validationSchema={validationSignInSchema}
+                validationSchema={resetPasswordSchema}
                 onSubmit={handleLogin}
               >
                 {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
@@ -146,8 +159,14 @@ const resetpassword = () => {
         <ThemedView style={{ flex: 1, justifyContent: "flex-end" }}>
           <ThemeText style={{ textAlign: "center", paddingHorizontal: 30, paddingBottom: 20 }}>
             By continuing you agree to gym paddy’s{" "}
-            <ThemeText style={{ color: 'red' }}>terms of use</ThemeText> and{" "}
-            <ThemeText style={{ color: 'red' }}>privacy policy</ThemeText>.
+            <ThemeText style={{ color: 'red' }} onPress={() => Linking.openURL(termsUrl)}>
+              terms of use
+            </ThemeText>{" "}
+            and{" "}
+            <ThemeText style={{ color: 'red' }} onPress={() => Linking.openURL(privacyUrl)}>
+              privacy policy
+            </ThemeText>
+            .
           </ThemeText>
         </ThemedView>
       </ThemedView>

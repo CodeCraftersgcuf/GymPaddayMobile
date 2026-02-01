@@ -30,7 +30,7 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
     backgroundColor: dark ? 'black' : 'white' ,
     color: labelAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: dark ? ["white", "#940304"] : ["black", "#940304"],
+      outputRange: dark ? ["white", "#cfcfcf"] : ["black", "#444"],
     }),
     top: labelAnim.interpolate({
       inputRange: [0, 1],
@@ -46,7 +46,7 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
     container: {
       height: 56,
       borderWidth: 1,
-      borderColor: "black",
+      borderColor: dark ? "#666" : "#ccc",
       borderRadius: 6,
       paddingHorizontal: 10,
       justifyContent: "center",
@@ -54,7 +54,7 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
       backgroundColor: dark ? value != '' ? 'transparent':'#252525' : 'white',
     },
     focusContainer :{
-      borderColor: 'red',
+      borderColor: dark ? "#666" : "#888",
     },
     valueText: {
       color: dark ? 'white' : 'black',
@@ -80,7 +80,7 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
 
   return (
     <Pressable onPress={onPress} onPressIn={() => setIsFocused(true)} onPressOut={() => setIsFocused(false)}>
-      <View style={[styles.container, error && styles.errorBorder , isFocused && styles.focusContainer , value && styles.focusContainer ]}>
+      <View style={[styles.container, error && styles.errorBorder , isFocused && styles.focusContainer ]}>
         <Animated.Text style={[labelStyle ,!isFocused && styles.labelbg ]}>{label}</Animated.Text>
         <Text style={styles.valueText}>{value || ""}</Text>
         {/* <Ionicons name="chevron-down" size={18} color="#999" style={styles.icon} /> */}

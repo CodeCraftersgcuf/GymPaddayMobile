@@ -22,6 +22,7 @@ const VerifyOtpScreen = () => {
   const { email } = useLocalSearchParams<{ email: string }>();
   const router = useRouter();
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
+  const [otpError, setOtpError] = useState(false);
   const inputRefs = useRef<TextInput[]>([]);
 
   const verifyOtpMutation = useMutation({
@@ -52,6 +53,7 @@ const VerifyOtpScreen = () => {
       router.replace("/login");
     },
     onError: (error: any) => {
+      setOtpError(true);
       Toast.show({
         type: 'error',
         text1: 'Verification failed',
@@ -65,19 +67,22 @@ const VerifyOtpScreen = () => {
       const updated = [...otp];
       updated[index] = value;
       setOtp(updated);
+      if (otpError) {
+        setOtpError(false);
+      }
 
       if (value && index < 5) {
         inputRefs.current[index + 1]?.focus();
-      } else if (!value && index > 0) {
-        inputRefs.current[index - 1]?.focus();
       }
     }
   };
 
   const handleSubmit = () => {
     if (otp.join('').length === 6) {
+      setOtpError(false);
       verifyOtpMutation.mutate();
     } else {
+      setOtpError(true);
       Toast.show({
         type: 'error',
         text1: 'Please enter the full OTP',
@@ -105,11 +110,20 @@ const VerifyOtpScreen = () => {
                 ref={(ref) => {
                   if (ref) inputRefs.current[index] = ref;
                 }}
-                style={[styles.otpBox, themedark && styles.otpBoxDark]}
+                style={[
+                  styles.otpBox,
+                  themedark && styles.otpBoxDark,
+                  otpError && styles.otpBoxError,
+                ]}
                 keyboardType="number-pad"
                 maxLength={1}
                 value={digit}
                 onChangeText={(val) => handleChange(index, val)}
+                onKeyPress={({ nativeEvent }) => {
+                  if (nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
+                    inputRefs.current[index - 1]?.focus();
+                  }
+                }}
               />
             ))}
           </View>
@@ -158,7 +172,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 60,
     borderRadius: 10,
-    borderColor: "#940304",
+    borderColor: "#ccc",
     borderWidth: 2,
     textAlign: "center",
     fontSize: 20,
@@ -168,6 +182,9 @@ const styles = StyleSheet.create({
   otpBoxDark: {
     backgroundColor: "#1a1a1a",
     color: "#fff",
+  },
+  otpBoxError: {
+    borderColor: "#FF4444",
   },
   verifyButton: {
     backgroundColor: "#940304",

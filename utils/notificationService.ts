@@ -7,7 +7,6 @@ const API_URL = 'https://gympaddy.hmstech.xyz/api/user/set-fcm-token';
 export const registerForPushNotificationsAsync = async (): Promise<string | null> => {
     try {
         if (!Device.isDevice) {
-            alert('Push notifications are only supported on physical devices.');
             console.warn('Device check failed: Not a physical device.');
             return null;
         }
@@ -18,17 +17,18 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
 
         let finalStatus = existingStatus;
 
-        // Step 3: Request permissions if not granted
-        if (existingStatus !== 'granted') {
+        // Step 3: Only request permissions if status is 'undetermined' (not previously denied)
+        // This ensures we don't repeatedly ask users who have already denied permission
+        if (existingStatus === 'undetermined') {
             const { status } = await Notifications.requestPermissionsAsync();
             finalStatus = status;
             console.log('Updated Notification Permission Status:', finalStatus);
         }
 
-        // Step 4: Handle denied permissions
+        // Step 4: Handle denied permissions - silently return null without showing alerts
+        // Push notifications are optional and the app should work without them
         if (finalStatus !== 'granted') {
-            alert('Failed to get push token for push notifications. Permissions not granted.');
-            console.error('Notification permissions not granted.');
+            console.log('Notification permissions not granted. App will continue to work without push notifications.');
             return null;
         }
 

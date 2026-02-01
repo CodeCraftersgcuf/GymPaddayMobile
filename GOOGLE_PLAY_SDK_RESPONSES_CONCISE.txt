@@ -1,0 +1,50 @@
+=== RESPONSE 1: What SDKs does your app use and why? ===
+
+GymPaddy uses the following SDKs for core functionality:
+
+CORE FRAMEWORK: Expo SDK (v53) and React Native (v0.79) for cross-platform mobile development.
+
+REAL-TIME COMMUNICATION: 
+- Agora SDK (v4.5.3) for live video streaming and video/voice calls
+- Stream.io Video SDK (v1.18.0) for video calling infrastructure
+- WebRTC for peer-to-peer communication
+
+MEDIA & CAMERA: Expo Camera, Image Picker, Media Library, and AV for capturing/selecting photos, videos, and media playback.
+
+NOTIFICATIONS: Expo Notifications for push notifications about messages, likes, comments, and social interactions.
+
+DATA STORAGE: AsyncStorage for local preferences and Expo Secure Store for secure token storage.
+
+NETWORK: Axios for API communication and React Query for data management with our backend.
+
+UI/NAVIGATION: React Navigation, Expo Router, Gesture Handler, and Reanimated for navigation and animations.
+
+PERMISSIONS: React Native Permissions for runtime permission management in compliance with Android guidelines.
+
+All SDKs are necessary for the app's social media features including live streaming, video calling, marketplace, and content sharing. We only use well-established SDKs from trusted sources (Expo, React Native community, Agora, Stream.io) and maintain them at latest stable versions.
+
+=== RESPONSE 2: How you ensure 3rd party code/SDKs comply with policies ===
+
+We ensure compliance through multiple measures:
+
+1. VETTING: Only use reputable SDKs from official sources (npm, verified repositories) with reviewed privacy policies.
+
+2. UPDATES: Maintain all dependencies at latest stable versions with regular security monitoring and policy compliance reviews.
+
+3. PRIVACY: Only request necessary permissions with clear descriptions. User data is only sent to our backend, not third-party services without consent.
+
+4. PERMISSIONS: Use React Native Permissions SDK for proper Android-compliant runtime permission handling with transparent usage descriptions.
+
+5. CODE REVIEW: Regular audits to verify SDKs are used appropriately and not collecting unauthorized data.
+
+6. DATA PROTECTION: Use Expo Secure Store for encrypted sensitive data storage. All data transmission uses HTTPS.
+
+7. NO UNAUTHORIZED SHARING: We do not use advertising or analytics SDKs that collect personal information without consent. All data transmission is to our own API endpoints.
+
+8. COMPLIANCE TRACKING: Maintain documentation of all SDKs, track versions, and monitor for policy updates.
+
+9. ONGOING MONITORING: Stay informed about Google Play policy changes and are prepared to update or replace any non-compliant SDKs.
+
+All third-party code is necessary for app functionality and complies with Google Play's User Data policy. We only collect user data when necessary and ensure all SDKs follow the same standards.
+
+

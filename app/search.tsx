@@ -8,12 +8,15 @@ import {
     Text,
     ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { useQuery } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import PostContainer from '@/components/Social/PostContainer';
 import { Image } from 'expo-image';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const SearchScreen = () => {
     const [query, setQuery] = useState('');
@@ -39,20 +42,36 @@ const SearchScreen = () => {
     const handleSearchSubmit = () => {
         if (query.length > 1) setTriggerSearch(true);
     };
+    const handleClear = () => {
+        setQuery('');
+        setTriggerSearch(false);
+    };
 
     return (
-        <View style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }}>
-            <TextInput
-                placeholder="Search users or posts..."
-                placeholderTextColor="#888"
-                style={[
-                    styles.input,
-                    { color: dark ? '#fff' : '#000', borderColor: dark ? '#444' : '#ccc' },
-                ]}
-                value={query}
-                onChangeText={(text) => setQuery(text)}
-                onSubmitEditing={handleSearchSubmit}
-            />
+        <SafeAreaView style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }}>
+            <View style={styles.searchRow}>
+                <TextInput
+                    placeholder="Search users or posts..."
+                    placeholderTextColor="#888"
+                    style={[
+                        styles.input,
+                        { color: dark ? '#fff' : '#000', borderColor: dark ? '#444' : '#ccc' },
+                    ]}
+                    value={query}
+                    onChangeText={(text) => {
+                        setQuery(text);
+                        if (text.length === 0) {
+                            setTriggerSearch(false);
+                        }
+                    }}
+                    onSubmitEditing={handleSearchSubmit}
+                />
+                {!!query && (
+                    <TouchableOpacity style={styles.clearButton} onPress={handleClear}>
+                        <Ionicons name="close-circle" size={20} color={dark ? '#ccc' : '#666'} />
+                    </TouchableOpacity>
+                )}
+            </View>
 
             <View style={styles.tabRow}>
                 <TouchableOpacity
@@ -71,13 +90,19 @@ const SearchScreen = () => {
 
             {isLoading && <ActivityIndicator color="red" size="large" style={{ marginTop: 20 }} />}
 
+            {triggerSearch && !isLoading && (!data || (!data?.users?.length && !data?.posts?.length)) && (
+                <Text style={{ textAlign: 'center', marginTop: 20, color: dark ? '#ccc' : '#666' }}>
+                    No results found.
+                </Text>
+            )}
+
             {data && (
                 <View style={{ flex: 1 }}>
                     {activeTab === 'users' ? (
                         <FlatList
                             data={data.users}
                             keyExtractor={(item) => item.id.toString()}
-                            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
+                            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={[styles.userItem]}
@@ -114,7 +139,7 @@ const SearchScreen = () => {
                             <FlatList
                                 data={data.posts}
                                 keyExtractor={(item) => item.id.toString()}
-                                contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 20 }}
+                                contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 120 }}
                                 renderItem={({ item }) => (
                                     <PostContainer
                                         showComment={false}
@@ -158,16 +183,26 @@ const SearchScreen = () => {
 
                 </View>
             )}
-        </View>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    searchRow: {
+        position: 'relative',
+        justifyContent: 'center',
+    },
     input: {
         borderWidth: 1,
         borderRadius: 8,
         padding: 10,
         margin: 10,
+        paddingRight: 36,
+    },
+    clearButton: {
+        position: 'absolute',
+        right: 18,
+        top: 18,
     },
     tabRow: {
         flexDirection: 'row',
