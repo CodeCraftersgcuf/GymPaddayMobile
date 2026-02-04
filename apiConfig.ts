@@ -1,6 +1,6 @@
 // const API_DOMAIN = "http://192.168.175.151:8000/api";
 
-const API_DOMAIN = "https://gympaddy.hmstech.xyz/api";
+const API_DOMAIN = "https://gympaddy.skillverse.com.pk/api";
 
 const API_ENDPOINTS = {
   AUTH: {

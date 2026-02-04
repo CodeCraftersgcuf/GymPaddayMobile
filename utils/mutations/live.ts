@@ -1,6 +1,6 @@
 // utils/mutations/live.ts
 export async function createLiveStream(data: { title: string; agora_channel: string }, token: string) {
-  const response = await fetch('https://gympaddy.hmstech.xyz/api/user/live-streams', {
+  const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/live-streams', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

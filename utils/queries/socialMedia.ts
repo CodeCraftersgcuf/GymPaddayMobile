@@ -122,7 +122,7 @@ export const getFollowingList = async (
 };
 export const followUnfollowUser = async (targetUserId: number, token: string) => {
   console.log("🔄 Following/Unfollowing user with ID:", targetUserId);
-  const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/follow-unfollow/${targetUserId}`, {
+  const res = await fetch(`https://gympaddy.skillverse.com.pk/api/user/follow-unfollow/${targetUserId}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,

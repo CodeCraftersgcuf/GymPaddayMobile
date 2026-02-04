@@ -27,7 +27,7 @@ const VerifyOtpScreen = () => {
 
   const verifyOtpMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/auth/verify-otp', {
+      const response = await fetch('https://gympaddy.skillverse.com.pk/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp: otp.join('') }),

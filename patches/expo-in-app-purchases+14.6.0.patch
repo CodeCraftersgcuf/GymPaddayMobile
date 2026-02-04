@@ -1,0 +1,179 @@
+diff --git a/node_modules/expo-in-app-purchases/android/build.gradle b/node_modules/expo-in-app-purchases/android/build.gradle
+index e53e7a7..e5b9863 100644
+--- a/node_modules/expo-in-app-purchases/android/build.gradle
++++ b/node_modules/expo-in-app-purchases/android/build.gradle
+@@ -35,34 +35,23 @@ buildscript {
+   }
+ }
+ 
+-afterEvaluate {
+-  publishing {
+-    publications {
+-      release(MavenPublication) {
+-        from components.release
+-      }
+-    }
+-    repositories {
+-      maven {
+-        url = mavenLocal().url
+-      }
+-    }
+-  }
+-}
+-
+ android {
++  compileSdkVersion safeExtGet("compileSdkVersion", 35)
++  
+   // Remove this if and it's contents, when support for SDK49 is dropped
+   if (!safeExtGet("expoProvidesDefaultConfig", false)) {
+-    compileSdkVersion safeExtGet("compileSdkVersion", 33)
+-    
+     defaultConfig {
+       minSdkVersion safeExtGet("minSdkVersion", 23)
+-      targetSdkVersion safeExtGet("targetSdkVersion", 33)
++      targetSdkVersion safeExtGet("targetSdkVersion", 35)
+     }
+ 
+     lintOptions {
+       abortOnError false
+     }
++  } else {
++    defaultConfig {
++      minSdkVersion safeExtGet("minSdkVersion", 23)
++    }
+   }
+ 
+   def agpVersion = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
+@@ -82,6 +71,7 @@ android {
+     versionCode 13
+     versionName '14.6.0'
+   }
++  
+   publishing {
+     singleVariant("release") {
+       withSourcesJar()
+@@ -89,6 +79,23 @@ android {
+   }
+ }
+ 
++afterEvaluate {
++  if (components.hasProperty("release")) {
++    publishing {
++      publications {
++        release(MavenPublication) {
++          from components.release
++        }
++      }
++      repositories {
++        maven {
++          url = mavenLocal().url
++        }
++      }
++    }
++  }
++}
++
+ 
+ allprojects {
+   repositories {
+diff --git a/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesModule.java b/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesModule.java
+index f763c17..cdfd905 100644
+--- a/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesModule.java
++++ b/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesModule.java
+@@ -6,16 +6,15 @@ import android.content.Context;
+ import android.app.Activity;
+ import android.util.Log;
+ 
+-import expo.modules.core.ExportedModule;
+ import expo.modules.core.ModuleRegistry;
+ import expo.modules.core.Promise;
+ import expo.modules.core.arguments.ReadableArguments;
+-import expo.modules.core.interfaces.ExpoMethod;
++import expo.modules.core.interfaces.SingletonModule;
+ import expo.modules.core.interfaces.ActivityProvider;
+ import expo.modules.core.interfaces.RegistryLifecycleListener;
+ import expo.modules.core.interfaces.services.EventEmitter;
+ 
+-public class InAppPurchasesModule extends ExportedModule implements RegistryLifecycleListener {
++public class InAppPurchasesModule implements SingletonModule, RegistryLifecycleListener {
+   private static final String TAG = InAppPurchasesModule.class.getSimpleName();
+   private static final String NAME = "ExpoInAppPurchases";
+   private final String USE_GOOGLE_PLAY_CACHE_KEY = "useGooglePlayCache";
+@@ -23,9 +22,10 @@ public class InAppPurchasesModule extends ExportedModule implements RegistryLife
+   private BillingManager mBillingManager;
+   private ModuleRegistry mModuleRegistry;
+   private EventEmitter mEventEmitter;
++  private Context mContext;
+ 
+   public InAppPurchasesModule(Context context) {
+-    super(context);
++    mContext = context;
+   }
+ 
+   @Override
+@@ -38,7 +38,6 @@ public class InAppPurchasesModule extends ExportedModule implements RegistryLife
+     mModuleRegistry = moduleRegistry;
+   }
+ 
+-  @ExpoMethod
+   public void connectAsync(final Promise promise) {
+     Activity activity = getCurrentActivity();
+     if (activity == null) {
+@@ -49,12 +48,10 @@ public class InAppPurchasesModule extends ExportedModule implements RegistryLife
+     mBillingManager.startConnection(promise);
+   }
+ 
+-  @ExpoMethod
+   public void getProductsAsync(List<String> itemList, final Promise promise) {
+     mBillingManager.queryPurchasableItems(itemList, promise);
+   }
+ 
+-  @ExpoMethod
+   public void getPurchaseHistoryAsync(final ReadableArguments options, final Promise promise) {
+     if (options.getBoolean(USE_GOOGLE_PLAY_CACHE_KEY, true)) {
+       mBillingManager.queryPurchases(promise);
+@@ -63,17 +60,14 @@ public class InAppPurchasesModule extends ExportedModule implements RegistryLife
+     }
+   }
+ 
+-  @ExpoMethod
+   public void purchaseItemAsync(String skuId, ReadableArguments details, final Promise promise) {
+     mBillingManager.purchaseItemAsync(skuId, details, promise);
+   }
+ 
+-  @ExpoMethod
+   public void getBillingResponseCodeAsync(final Promise promise) {
+     promise.resolve(mBillingManager.getBillingClientResponseCode());
+   }
+ 
+-  @ExpoMethod
+   public void finishTransactionAsync(String purchaseToken, Boolean consume, final Promise promise) {
+     if (consume != null && consume) {
+       mBillingManager.consumeAsync(purchaseToken, promise);
+@@ -82,7 +76,6 @@ public class InAppPurchasesModule extends ExportedModule implements RegistryLife
+     }
+   }
+ 
+-  @ExpoMethod
+   public void disconnectAsync(final Promise promise) {
+     if (mBillingManager != null) {
+       mBillingManager.destroy();
+diff --git a/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesPackage.java b/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesPackage.java
+index 663bf07..64a84f3 100644
+--- a/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesPackage.java
++++ b/node_modules/expo-in-app-purchases/android/src/main/java/expo/modules/inapppurchases/InAppPurchasesPackage.java
+@@ -6,11 +6,11 @@ import java.util.Collections;
+ import java.util.List;
+ 
+ import expo.modules.core.BasePackage;
+-import expo.modules.core.ExportedModule;
++import expo.modules.core.interfaces.SingletonModule;
+ 
+ public class InAppPurchasesPackage extends BasePackage {
+   @Override
+-  public List<ExportedModule> createExportedModules(Context context) {
+-    return Collections.singletonList((ExportedModule) new InAppPurchasesModule(context));
++  public List<SingletonModule> createSingletonModules(Context context) {
++    return Collections.singletonList(new InAppPurchasesModule(context));
+   }
+ }

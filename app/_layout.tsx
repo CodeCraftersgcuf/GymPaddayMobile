@@ -35,44 +35,55 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     // SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+  
+  // If no fonts are loaded, consider fonts as loaded
+  const fontsReady = fontsLoaded !== false;
   const [userDetails, setUserDetails] = useState<any>(null);
 
   useEffect(() => {
     const checkOnboardingAndAuth = async () => {
-      const hasSeen = await AsyncStorage.getItem("hasSeenOnboarding");
-      const storedToken = await SecureStore.getItemAsync("auth_token");
-      const storedUser = await SecureStore.getItemAsync("user_data");
+      try {
+        const hasSeen = await AsyncStorage.getItem("hasSeenOnboarding");
+        const storedToken = await SecureStore.getItemAsync("auth_token");
+        const storedUser = await SecureStore.getItemAsync("user_data");
 
-      if (!hasSeen && pathname !== "/OnboardingScreen") {
-        router.replace("/OnboardingScreen");
-      }
-      //console.log("stored user", JSON.parse(storedUser))
-
-      if (storedToken) setToken(storedToken);
-      if (storedUser) {
-        try {
-          setUserDetails(JSON.parse(storedUser));
-        } catch (e) {
-          console.error("Failed to parse user_data from SecureStore", e);
+        if (storedToken) setToken(storedToken);
+        if (storedUser) {
+          try {
+            setUserDetails(JSON.parse(storedUser));
+          } catch (e) {
+            console.error("Failed to parse user_data from SecureStore", e);
+          }
         }
-      }
 
-      setAppReady(true);
+        setAppReady(true);
+
+        // Navigate after app is ready and router is available
+        if (!hasSeen) {
+          // Small delay to ensure Stack is mounted
+          setTimeout(() => {
+            router.replace("/OnboardingScreen");
+          }, 200);
+        }
+      } catch (error) {
+        console.error("Error in checkOnboardingAndAuth:", error);
+        setAppReady(true); // Still set ready to prevent infinite loading
+      }
     };
 
     checkOnboardingAndAuth();
   }, []);
 
   useEffect(() => {
-    if (isAppReady && fontsLoaded) {
+    if (isAppReady && fontsReady) {
       SplashScreen.hideAsync();
     }
-  }, [isAppReady, fontsLoaded]);
+  }, [isAppReady, fontsReady]);
 
-  if (!isAppReady || !fontsLoaded) {
+  if (!isAppReady || !fontsReady) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="red" />
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" }}>
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
@@ -90,6 +101,7 @@ export default function RootLayout() {
               headerShown: false, // default behavior
             }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="OnboardingScreen" options={{ headerShown: false }} />
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="forgetpassword" options={{ headerShown: false }} />
               <Stack.Screen name="codeverification" options={{ headerShown: false }} />

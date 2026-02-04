@@ -4,7 +4,7 @@ export const startCall = async (
   type: string = 'voice',
   token: string
 ) => {
-  const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-call', {
+  const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/start-call', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,

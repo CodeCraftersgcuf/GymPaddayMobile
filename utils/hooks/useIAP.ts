@@ -138,7 +138,7 @@ export const useIAP = () => {
 
       // Call the same topup API endpoint that Flutterwave uses
       // Using the same endpoint format as userLiveViewMain: /api/user/top-up
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/top-up', {
+      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/top-up', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -10,7 +10,7 @@ import {
 } from 'react-native-agora';
 
 const APP_ID = '2fae578d9eef4fe19df335eb67227571'; // Replace with yours
-const BACKEND_API = 'https://gympaddy.hmstech.xyz/api/video-call/token'; // Laravel route
+const BACKEND_API = 'https://gympaddy.skillverse.com.pk/api/video-call/token'; // Laravel route
 
 export default function VoiceCallScreen() {
     const engineRef = useRef<IRtcEngine | null>(null);

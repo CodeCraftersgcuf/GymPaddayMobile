@@ -125,7 +125,7 @@ musicPickerModal: {
 Your API should accept these fields when uploading a story:
 
 ```typescript
-// POST https://gympaddy.hmstech.xyz/api/user/stories
+// POST https://gympaddy.skillverse.com.pk/api/user/stories
 
 FormData {
   media: File,           // Required: image or video file
@@ -158,7 +158,7 @@ FormData {
 ### **Viewing Stories - Expected API Response**
 
 ```typescript
-// GET https://gympaddy.hmstech.xyz/api/user/get/stories
+// GET https://gympaddy.skillverse.com.pk/api/user/get/stories
 
 {
   stories: [

@@ -41,7 +41,7 @@ export default function AdPreview() {
     const fetchPost = async () => {
       if (!token || !postId) return;
       try {
-        const response = await axios.get(`https://gympaddy.hmstech.xyz/api/user/posts/${postId}`, {
+        const response = await axios.get(`https://gympaddy.skillverse.com.pk/api/user/posts/${postId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setPost(response.data);

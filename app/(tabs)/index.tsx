@@ -99,7 +99,7 @@ export default function SocialFeedScreen() {
   useEffect(() => {
     const fetchStories = async () => {
       try {
-        const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/get/stories`, {
+        const response = await fetch(`https://gympaddy.skillverse.com.pk/api/user/get/stories`, {
           headers: {
             Authorization: `Bearer ${await getToken()}`,
           },
@@ -332,7 +332,7 @@ export default function SocialFeedScreen() {
 
     // Refresh stories
     try {
-      const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/get/stories`, {
+      const response = await fetch(`https://gympaddy.skillverse.com.pk/api/user/get/stories`, {
         headers: {
           Authorization: `Bearer ${await getToken()}`,
         },

@@ -20,7 +20,7 @@ export default function NotificationsScreen() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/notifications', {
+      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/notifications', {
         headers: {
           Authorization: `Bearer ${await getToken()}`, // Replace with your auth method
           Accept: 'application/json',

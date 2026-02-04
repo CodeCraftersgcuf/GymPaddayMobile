@@ -34,7 +34,7 @@ export default function TabLayout() {
         setUnreadCount(0);
         return;
       }
-      const res = await fetch('https://gympaddy.hmstech.xyz/api/user/unread-count', {
+      const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/unread-count', {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

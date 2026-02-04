@@ -77,7 +77,7 @@ export default function HomeScreen() {
             const token = await SecureStore.getItemAsync('auth_token');
             if (!token) throw new Error('Token not found');
 
-            const response = await fetch('https://gympaddy.hmstech.xyz/api/user/minutes/purchase', {
+            const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/minutes/purchase', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

@@ -142,7 +142,7 @@ export default function MessageChat() {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
 
-        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/user/incoming-daily-call', {
+        const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/user/incoming-daily-call', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -207,7 +207,7 @@ export default function MessageChat() {
     //   const receiverId = user_id;
     //   const token = await getToken();
 
-    //   const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-daily-call', {
+    //   const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/start-daily-call', {
     //     method: 'POST',
     //     headers: {
     //       'Authorization': `Bearer ${token}`,
@@ -247,7 +247,7 @@ export default function MessageChat() {
       const receiverId = user_id;
       const token = await getToken();
 
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/start-daily-call', {
+      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/start-daily-call', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -44,7 +44,7 @@ export default function DailyCallScreen() {
     try {
       const token = await getToken(); // Get user auth token
 
-      const response = await fetch('https://gympaddy.hmstech.xyz/api/user/end-daily-call', {
+      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/end-daily-call', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

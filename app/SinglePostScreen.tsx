@@ -73,7 +73,7 @@ export default function SinglePostScreen() {
     if (!token || !postId) return;
     try {
       const response = await axios.get(
-        `https://gympaddy.hmstech.xyz/api/user/posts/${postId}`,
+        `https://gympaddy.skillverse.com.pk/api/user/posts/${postId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }

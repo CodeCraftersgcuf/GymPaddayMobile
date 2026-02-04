@@ -146,7 +146,7 @@ export default function MessageChat() {
           });
         }
         console.log('Sending message with image:', payload.text, payload.imageUri);
-        const response = await fetch('https://gympaddy.hmstech.xyz/api/user/chat-messages', {
+        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/chat-messages', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -191,7 +191,7 @@ export default function MessageChat() {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
 
-        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/user/incoming-daily-call', {
+        const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/user/incoming-daily-call', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

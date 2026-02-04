@@ -18,6 +18,7 @@ import * as Yup from "yup";
 import ThemeText from "../components/ThemedText";
 import ThemedView from "../components/ThemedView";
 import FloatingLabelInput from "@/components/login/FloatingLabelInput";
+import FloatingLabelPhoneInput from "@/components/login/FloatingLabelPhoneInput";
 import FloatingLabelGenderPicker from "@/components/login/FloatingLabelGenderPicker";
 import { images } from "@/constants";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -27,7 +28,7 @@ import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { useMutation } from "@tanstack/react-query";
 import { registerUser } from "@/utils/mutations/auth";
 import Toast from "react-native-toast-message";
-import { showApiErrorToast } from "@/utils/showApiErrorToast";
+import { showApiErrorToast, extractFieldErrors } from "@/utils/showApiErrorToast";
 import * as ImagePicker from 'expo-image-picker';
 
 
@@ -38,7 +39,13 @@ const validationSchema = Yup.object().shape({
   email: Yup.string().email("Invalid email").required("Email is required"),
   phone: Yup.string()
     .required("Phone number is required")
-    .matches(/^\+?[0-9]{8,15}$/, "Enter a valid phone number"),
+    .test("phone-length", "Phone number must be 10 or 11 digits (excluding country code)", (value) => {
+      if (!value) return false;
+      // Remove country code (starts with + and 1-4 digits)
+      const phoneDigits = value.replace(/^\+\d{1,4}/, "");
+      // Check if remaining digits are 10 or 11
+      return /^\d{10,11}$/.test(phoneDigits);
+    }),
   age: Yup.number()
     .typeError("Age must be a number")
     .required("Age is required")
@@ -294,7 +301,20 @@ export default function Register() {
 
       router.replace({ pathname: "/verify-otp", params: { email } });
     },
-    onError: (error) => showApiErrorToast(error, "Registration failed"),
+    onError: (error, variables, context) => {
+      // Extract field-specific errors and show toast
+      const fieldErrors = extractFieldErrors(error);
+      
+      // Show toast with all errors
+      showApiErrorToast(error, "Registration failed");
+      
+      // Set field errors in Formik if we have access to setFieldError
+      // This will be handled in the Formik render function
+      if (Object.keys(fieldErrors).length > 0) {
+        // Store errors to be applied in Formik
+        (error as any).fieldErrors = fieldErrors;
+      }
+    },
   });
 
 
@@ -358,7 +378,8 @@ export default function Register() {
                     username: "",
                     fullName: "",
                     email: "",
-                    phone: "",
+                    phone: "+234",
+                    countryCode: "+234",
                     age: "",
                     gender: "",
                     password: "",
@@ -375,12 +396,36 @@ export default function Register() {
                     errors,
                     touched,
                     setFieldValue,
-                  setFieldTouched,
+                    setFieldTouched,
+                    setFieldError,
                   }) => {
                     useEffect(() => {
                       setFormSetFieldValue(() => setFieldValue);
                       setFormSetFieldTouched(() => setFieldTouched);
                     }, [setFieldValue, setFieldTouched]);
+
+                    // Apply backend validation errors to form fields
+                    useEffect(() => {
+                      if (mutation.error && (mutation.error as any).fieldErrors) {
+                        const fieldErrors = (mutation.error as any).fieldErrors;
+                        
+                        // Map backend field names to form field names
+                        const fieldMapping: Record<string, string> = {
+                          'fullname': 'fullName',
+                          'profile_picture': 'profileImage',
+                          'password_confirmation': 'password',
+                        };
+                        
+                        Object.keys(fieldErrors).forEach((backendField) => {
+                          const formField = fieldMapping[backendField] || backendField;
+                          // Only set error if field exists in form
+                          if (formField in values || formField === 'profileImage') {
+                            setFieldError(formField, fieldErrors[backendField]);
+                            setFieldTouched(formField, true);
+                          }
+                        });
+                      }
+                    }, [mutation.error, setFieldError, setFieldTouched, values]);
 
                     // Update profile image validation
                     useEffect(() => {
@@ -417,13 +462,18 @@ export default function Register() {
                             keyboardType="email-address"
                             error={touched.email && errors.email ? errors.email : ""}
                           />
-                          <FloatingLabelInput
+                          <FloatingLabelPhoneInput
                             label="Phone Number"
                             value={values.phone}
-                            onChangeText={(text) => handleChange("phone")(text.replace(/[^\d+]/g, ""))}
-                            autoComplete="off"
+                            onChangeText={handleChange("phone")}
                             onBlur={handleBlur("phone")}
-                            keyboardType="phone-pad"
+                            countryCode={values.countryCode}
+                            onCountryCodeChange={(code) => {
+                              setFieldValue("countryCode", code);
+                              // Update phone with new country code
+                              const phoneDigits = values.phone.replace(/^\+\d{1,4}/, "");
+                              setFieldValue("phone", code + phoneDigits);
+                            }}
                             error={touched.phone && errors.phone ? errors.phone : ""}
                           />
                           <FloatingLabelInput

@@ -198,7 +198,7 @@ export default function StoryPreview() {
           formData.append('music_url', selectedMusicMap[i].preview);
         }
 
-        const response = await fetch('https://gympaddy.hmstech.xyz/api/user/stories', {
+        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,

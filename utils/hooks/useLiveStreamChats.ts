@@ -10,7 +10,7 @@ export const useLiveStreamChats = (liveStreamId: string) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
       console.log("Live Stream Id in ",liveStreamId)
-      const response = await fetch(`https://gympaddy.hmstech.xyz/api/user/live-streams/${liveStreamId}/chats`, {
+      const response = await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${liveStreamId}/chats`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',

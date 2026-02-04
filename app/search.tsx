@@ -29,7 +29,7 @@ const SearchScreen = () => {
         queryKey: ['searchResults', query],
         queryFn: async () => {
             const token = await SecureStore.getItemAsync('auth_token');
-            const res = await fetch(`https://gympaddy.hmstech.xyz/api/user/search?q=${query}`, {
+            const res = await fetch(`https://gympaddy.skillverse.com.pk/api/user/search?q=${query}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },

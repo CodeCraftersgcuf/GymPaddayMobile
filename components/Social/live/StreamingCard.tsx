@@ -40,7 +40,7 @@ export default function StreamingCard({
         const token = await SecureStore.getItemAsync('auth_token');
         if (!token) return;
 
-        const res = await fetch('https://gympaddy.hmstech.xyz/api/user/minutes', {
+        const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/minutes', {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: 'application/json',
