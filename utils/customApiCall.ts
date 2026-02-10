@@ -31,28 +31,38 @@ export const apiCall = async (
     Authorization: token ? `Bearer ${token}` : '',
   };
 
-  // ✅ Set correct Content-Type header for FormData on Android (RN quirk)
-  if (isFormData && Platform.OS === 'android') {
-    headers['Content-Type'] = 'multipart/form-data';
-  } else if (!isFormData) {
+  // ✅ Don't set Content-Type for FormData - let React Native handle it automatically
+  // Setting it manually can cause issues with boundary parameters
+  if (!isFormData) {
     headers['Content-Type'] = 'application/json';
   }
+  // For FormData, React Native will automatically set Content-Type with boundary
+
+  // ✅ Increase timeout for file uploads (FormData requests)
+  const timeout = isFormData ? 60000 : 10000; // 60 seconds for uploads, 10 seconds for regular requests
 
   try {
     let response: AxiosResponse | undefined;
 
+    const axiosConfig = {
+      headers,
+      timeout,
+      maxContentLength: Infinity, // Allow large file uploads
+      maxBodyLength: Infinity, // Allow large file uploads
+    };
+
     switch (method.toUpperCase()) {
       case 'GET':
-        response = await axios.get(url, { headers, timeout: 10000 });
+        response = await axios.get(url, axiosConfig);
         break;
       case 'POST':
-        response = await axios.post(url, data, { headers, timeout: 10000 });
+        response = await axios.post(url, data, axiosConfig);
         break;
       case 'PUT':
-        response = await axios.put(url, data, { headers, timeout: 10000 });
+        response = await axios.put(url, data, axiosConfig);
         break;
       case 'DELETE':
-        response = await axios.delete(url, { headers, timeout: 10000 });
+        response = await axios.delete(url, axiosConfig);
         break;
       default:
         throw new Error('Unsupported HTTP method');
@@ -74,11 +84,34 @@ export const apiCall = async (
       });
 
       if (error.response) {
+        const status = error.response.status;
+        const responseData = error.response.data;
+        
+        // Handle rate limiting (429) with user-friendly message
+        if (status === 429) {
+          const retryAfter = error.response.headers['retry-after'] || '60';
+          const message = `Too many requests. Please wait ${retryAfter} seconds before trying again.`;
+          
+          console.warn('⚠️ Rate limit exceeded:', {
+            retryAfter,
+            limit: error.response.headers['x-ratelimit-limit'],
+            remaining: error.response.headers['x-ratelimit-remaining'],
+            reset: error.response.headers['x-ratelimit-reset'],
+          });
+          
+          throw new ApiError(
+            responseData,
+            error.response.statusText,
+            message,
+            status
+          );
+        }
+        
         throw new ApiError(
-          error.response.data,
+          responseData,
           error.response.statusText,
-          error.response.data?.message || 'Something went wrong',
-          error.response.status
+          responseData?.message || 'Something went wrong',
+          status
         );
       }
     }

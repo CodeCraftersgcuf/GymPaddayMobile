@@ -16,6 +16,12 @@ const LiveStreamFeed = ({ streams }: { streams: any[] }) => {
           item?.user?.latest_image_post?.media?.[0]?.url ??
           item?.user?.profile_picture_url;
 
+        // Check if stream is actually live: is_live must be true AND ended_at must be null/undefined
+        // Handle both boolean and string values for is_live
+        const isLiveValue = item?.is_live === true || item?.is_live === 1 || item?.is_live === '1' || item?.is_live === 'true';
+        const hasNotEnded = item?.ended_at === null || item?.ended_at === undefined || item?.ended_at === '';
+        const isActuallyLive = isLiveValue && hasNotEnded;
+
         return (
           <View style={styles.cardWrapper}>
            <LiveCard
@@ -29,7 +35,7 @@ const LiveStreamFeed = ({ streams }: { streams: any[] }) => {
   userName={item?.user?.fullname || item?.user?.username}
   viewers={item?.audiences?.length || 0}
   channelName={item?.agora_channel}
-  timeAgo={item?.is_live ? 'Live now' : 'Offline'}
+  timeAgo={isActuallyLive ? 'Live now' : 'Offline'}
 />
 
           </View>

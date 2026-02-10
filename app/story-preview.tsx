@@ -65,16 +65,32 @@ export default function StoryPreview() {
 
   // Filter music based on search and category
   const filteredMusic = useMemo(() => {
-    let music = getMusicByGenre(selectedCategory);
-    if (musicSearchQuery.trim()) {
-      const query = musicSearchQuery.toLowerCase();
-      music = music.filter(
-        (m) =>
-          m.title.toLowerCase().includes(query) ||
-          m.artist.toLowerCase().includes(query)
-      );
+    try {
+      let music = getMusicByGenre(selectedCategory);
+      if (!Array.isArray(music)) {
+        console.error('getMusicByGenre returned non-array:', music);
+        return [];
+      }
+      
+      if (musicSearchQuery.trim()) {
+        const query = musicSearchQuery.toLowerCase().trim();
+        music = music.filter(
+          (m) => {
+            if (!m || !m.title || !m.artist) return false;
+            return (
+              m.title.toLowerCase().includes(query) ||
+              m.artist.toLowerCase().includes(query)
+            );
+          }
+        );
+      }
+      
+      console.log('🎵 Filtered music:', music.length, 'items for category:', selectedCategory, 'search:', musicSearchQuery);
+      return music;
+    } catch (error) {
+      console.error('Error filtering music:', error);
+      return [];
     }
-    return music;
   }, [selectedCategory, musicSearchQuery]);
 
   const handleNext = () => {
@@ -119,18 +135,63 @@ export default function StoryPreview() {
   }, [currentIndex]);
 
   const handleMusicSelect = async (item: StoryMusic) => {
+    if (!item || !item.id || !item.title) {
+      console.error('Invalid music item:', item);
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid music',
+        text2: 'Please select a valid music track',
+      });
+      return;
+    }
+
     try {
+      // Stop any currently playing sound
       if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
+        try {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+        } catch (e) {
+          // Silently ignore cleanup errors
+          if (__DEV__) {
+            console.warn('Error stopping previous sound:', e);
+          }
+        }
+        setSound(null);
       }
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: item.preview },
-        { shouldPlay: true }
-      );
+      // Try to play preview, but don't block music selection if it fails
+      if (item.preview && item.preview.trim()) {
+        try {
+          const { sound: newSound } = await Audio.Sound.createAsync(
+            { uri: item.preview },
+            { shouldPlay: true, volume: 0.5 }
+          );
+          setSound(newSound);
+          console.log('✅ Music preview playing:', item.title);
+        } catch (previewError: any) {
+          // Only log non-network errors
+          const errorMessage = previewError?.message || String(previewError);
+          const isNetworkError = 
+            errorMessage.includes('UnknownHostException') ||
+            errorMessage.includes('Unable to resolve host') ||
+            errorMessage.includes('Network request failed') ||
+            errorMessage.includes('ECONNREFUSED') ||
+            errorMessage.includes('ENOTFOUND') ||
+            errorMessage.includes('HttpDataSourceException') ||
+            errorMessage.includes('404') ||
+            errorMessage.includes('403');
+          
+          if (!isNetworkError && __DEV__) {
+            console.warn('Preview playback failed (non-network error):', previewError);
+          }
+          // Continue even if preview fails - network errors are expected
+        }
+      } else {
+        console.warn('Music item has no preview URL:', item);
+      }
 
-      setSound(newSound);
+      // Always add music to story, regardless of preview success
       setSelectedMusicMap((prev) => ({
         ...prev,
         [currentIndex]: item,
@@ -139,12 +200,23 @@ export default function StoryPreview() {
       Toast.show({ 
         type: 'success', 
         text1: '🎵 Music Added', 
-        text2: `${item.title} by ${item.artist}`,
+        text2: `${item.title} by ${item.artist || 'Unknown Artist'}`,
         visibilityTime: 1500,
       });
-    } catch (err) {
-      console.error('Sound playback error:', err);
-      Toast.show({ type: 'error', text1: 'Failed to play music' });
+    } catch (err: any) {
+      console.error('Unexpected error in handleMusicSelect:', err);
+      // Still try to add the music even if there's an error
+      setSelectedMusicMap((prev) => ({
+        ...prev,
+        [currentIndex]: item,
+      }));
+      setShowMusicPicker(false);
+      Toast.show({ 
+        type: 'success', 
+        text1: '🎵 Music Added', 
+        text2: `${item.title} by ${item.artist || 'Unknown Artist'}`,
+        visibilityTime: 1500,
+      });
     }
   };
 
@@ -192,10 +264,13 @@ export default function StoryPreview() {
         formData.append('media_type', media.mediaType);
         formData.append('caption', '');
 
-        if (selectedMusicMap[i]) {
-          console.log(selectedMusicMap[i],"selected msuoic");
+        if (selectedMusicMap[i] && selectedMusicMap[i].title && selectedMusicMap[i].preview) {
+          console.log(selectedMusicMap[i], "selected music");
           formData.append('music_title', selectedMusicMap[i].title);
           formData.append('music_url', selectedMusicMap[i].preview);
+          if (selectedMusicMap[i].artist) {
+            formData.append('music_artist', selectedMusicMap[i].artist);
+          }
         }
 
         const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
@@ -330,7 +405,8 @@ export default function StoryPreview() {
       >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             style={styles.musicPickerModal}
           >
             {/* Modal Header */}
@@ -349,7 +425,17 @@ export default function StoryPreview() {
                 placeholder="Search for music..."
                 placeholderTextColor="#999"
                 value={musicSearchQuery}
-                onChangeText={setMusicSearchQuery}
+                onChangeText={(text) => {
+                  try {
+                    setMusicSearchQuery(text || '');
+                  } catch (error) {
+                    console.error('Error updating search query:', error);
+                    setMusicSearchQuery('');
+                  }
+                }}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoCapitalize="none"
               />
               {musicSearchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setMusicSearchQuery('')}>
@@ -387,12 +473,14 @@ export default function StoryPreview() {
               ))}
             </ScrollView>
 
-            {/* Music List */}
+            {/* Music List - FlatList outside ScrollView for proper scrolling */}
             <FlatList
               data={filteredMusic}
               keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
               contentContainerStyle={styles.musicList}
+              style={styles.musicListContainer}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -581,8 +669,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: SCREEN_HEIGHT * 0.8,
-    paddingBottom: 20,
+    maxHeight: SCREEN_HEIGHT * 0.85,
+    flex: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -626,10 +714,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 20,
     backgroundColor: '#f5f5f5',
     gap: 6,
+    minHeight: 44,
   },
   categoryTabActive: {
     backgroundColor: '#940304',
@@ -641,14 +730,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
-    lineHeight: 18,
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   categoryTextActive: {
     color: '#fff',
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  musicListContainer: {
+    flex: 1,
+    maxHeight: SCREEN_HEIGHT * 0.5, // Limit height to allow scrolling
+  },
+  musicListContainer: {
+    flex: 1,
+    maxHeight: SCREEN_HEIGHT * 0.5, // Limit height to allow scrolling
   },
   musicList: {
     paddingHorizontal: 16,
     paddingTop: 16,
+    paddingBottom: 20,
   },
   musicItemLarge: {
     flexDirection: 'row',

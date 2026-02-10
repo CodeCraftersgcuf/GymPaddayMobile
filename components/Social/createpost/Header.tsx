@@ -12,7 +12,8 @@ interface HeaderProps {
 
 export default function Header({ onSubmit, isLoading = false, isEditMode = false }: HeaderProps) {
   const router = useRouter();
-  const { dark } = useTheme();
+  const theme = useTheme();
+  const dark = theme?.dark ?? false; // Safety check
 
   return (
     <View style={[styles.header, { backgroundColor: dark ? '#1a1a1a' : '#fff' }]}>

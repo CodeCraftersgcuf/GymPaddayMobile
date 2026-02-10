@@ -25,10 +25,11 @@ import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import { useMutation } from '@tanstack/react-query';
-import { createTransaction } from '@/utils/mutations/transactions';
+import { topUpWallet } from '@/utils/mutations/wallets';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
 import * as Clipboard from 'expo-clipboard';
+import { WebView } from 'react-native-webview';
 
 
 
@@ -56,7 +57,10 @@ export default function More() {
   const [useMyDetails, setUseMyDetails] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [userName, setUserName] = useState('John Doe');
-  const [currentView, setCurrentView] = useState<'deposit' | 'payment'>('deposit');
+  const [userEmail, setUserEmail] = useState('test@example.com');
+  const [currentView, setCurrentView] = useState<'deposit' | 'payment' | 'flutterwave'>('deposit');
+  const [webViewUri, setWebViewUri] = useState<string | null>(null);
+  const webViewRef = React.useRef<WebView>(null);
   const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
 
   React.useEffect(() => {
@@ -71,7 +75,9 @@ export default function More() {
             setProfileImage(defatulImage); // fallback to prop
           }
           const name = userData.fullname || userData.username || 'John Doe';
+          const email = userData.email || 'test@example.com';
           setUserName(name);
+          setUserEmail(email);
         } else {
           setProfileImage(defatulImage); // fallback to prop
         }
@@ -167,11 +173,10 @@ export default function More() {
     mutationFn: async () => {
       const authToken = await SecureStore.getItemAsync('auth_token');
       if (!authToken) throw new Error('Not authenticated');
-      return createTransaction({
+      // Use wallet topup endpoint which handles the conversion correctly
+      return topUpWallet({
         data: {
-          wallet_id: 2,
           amount: parseFloat(topupAmount),
-          type: 'topup',
         },
         token: authToken,
       });
@@ -224,12 +229,82 @@ export default function More() {
         setUseMyDetails(false);
       }
     } else {
-      // For Android, use the existing Flutterwave flow
-      if (!depositorName) {
-        Alert.alert('Error', 'Please fill in all fields');
-        return;
+      // For Android, use Flutterwave payment gateway
+      // Use email from user data, or fallback to a default for testing
+      const paymentEmail = userEmail && userEmail !== 'test@example.com' 
+        ? userEmail 
+        : 'user@gympaddy.com'; // Fallback email for payment
+      
+      console.log('💳 Opening Flutterwave payment gateway...', {
+        amount: amountValue,
+        email: paymentEmail,
+        platform: Platform.OS
+      });
+      
+      // Generate unique order ID
+      const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create HTML content with Flutterwave payment
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flutterwave Payment</title>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+</head>
+<body>
+<script>
+  function makePayment() {
+    const amount = ${amountValue};
+    const order_id = "${orderId}";
+    const email = "${paymentEmail}";
+
+    FlutterwaveCheckout({
+      public_key: "FLWPUBK_TEST-dd1514f7562b1d623c4e63fb58b6aedb-X",
+      tx_ref: "txref_" + Date.now(),
+      amount: parseFloat(amount),
+      currency: "NGN",
+      payment_options: "card,ussd",
+      customer: {
+        email: email,
+        name: email
+      },
+      callback: function (response) {
+        console.log("🔍 Flutterwave callback:", response);
+
+        const isSuccess =
+          response.status === "successful" ||
+          response.status === "completed" ||
+          response.charge_response_code === "00";
+
+        const message = {
+          event: isSuccess ? "success" : "failed",
+          data: response
+        };
+
+        window.ReactNativeWebView.postMessage(JSON.stringify(message));
+      },
+      onclose: function () {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ event: "closed" }));
+      },
+      customizations: {
+        title: "GymPaddy Payment",
+        description: \`Order ID: \${order_id}\`,
+        logo: "https://yourdomain.com/logo.png"
       }
-      setCurrentView('payment');
+    });
+  }
+
+  window.onload = makePayment;
+</script>
+</body>
+</html>
+      `;
+      
+      setWebViewUri(htmlContent);
+      setCurrentView('flutterwave');
+      console.log('✅ Flutterwave view set, currentView:', 'flutterwave');
     }
   };
 
@@ -261,14 +336,58 @@ export default function More() {
     setDepositorName('');
     setUseMyDetails(false);
     setCurrentView('deposit');
+    setWebViewUri(null);
     setShowSuccessModal(false);
   };
 
   const handleBackFromPayment = () => {
-    if (currentView === 'payment') {
+    if (currentView === 'payment' || currentView === 'flutterwave') {
       setCurrentView('deposit');
+      setWebViewUri(null);
     } else {
       handleCloseTopupModal();
+    }
+  };
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data);
+      console.log('📱 WebView message:', message);
+
+      if (message.event === 'success') {
+        // Payment successful
+        console.log('✅ Payment successful:', message.data);
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Successful!',
+          text2: 'Your transaction is being processed.',
+        });
+        
+        // Create transaction record
+        createTransactionMutation.mutate();
+        
+        // Close WebView and show success modal
+        setCurrentView('deposit');
+        setWebViewUri(null);
+        setShowSuccessModal(true);
+      } else if (message.event === 'failed') {
+        // Payment failed
+        console.log('❌ Payment failed:', message.data);
+        Toast.show({
+          type: 'error',
+          text1: 'Payment Failed',
+          text2: 'Please try again or use a different payment method.',
+        });
+        setCurrentView('deposit');
+        setWebViewUri(null);
+      } else if (message.event === 'closed') {
+        // User closed the payment modal
+        console.log('🚪 Payment modal closed');
+        setCurrentView('deposit');
+        setWebViewUri(null);
+      }
+    } catch (error) {
+      console.error('Error parsing WebView message:', error);
     }
   };
 
@@ -477,17 +596,39 @@ export default function More() {
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={handleBackFromPayment} style={styles.modalCloseButton}>
               <Ionicons 
-                name={currentView === 'payment' ? "chevron-back" : "close"} 
+                name={currentView === 'payment' || currentView === 'flutterwave' ? "chevron-back" : "close"} 
                 size={24} 
                 color={dark ? 'white' : '#333'} 
               />
             </TouchableOpacity>
             <ThemeText style={styles.modalTitle}>
-              {currentView === 'deposit' ? 'Deposit' : 'Make Payment'}
+              {currentView === 'deposit' ? 'Deposit' : currentView === 'flutterwave' ? 'Payment' : 'Make Payment'}
             </ThemeText>
             <View style={styles.placeholder} />
           </View>
 
+          {currentView === 'flutterwave' && webViewUri ? (
+            <View style={{ flex: 1 }}>
+              {/* WebView for Flutterwave */}
+              <View style={[styles.webViewWrapper, { backgroundColor: dark ? '#000' : '#fff', flex: 1 }]}>
+                <WebView
+                  ref={webViewRef}
+                  source={{ html: webViewUri }}
+                  style={styles.webView}
+                  onMessage={handleWebViewMessage}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  startInLoadingState={true}
+                  renderLoading={() => (
+                    <View style={[styles.loadingContainer, { backgroundColor: dark ? '#000' : '#fff' }]}>
+                      <ActivityIndicator size="large" color="#940304" />
+                      <Text style={[styles.loadingText, { color: dark ? '#fff' : '#666' }]}>Loading payment gateway...</Text>
+                    </View>
+                  )}
+                />
+              </View>
+            </View>
+          ) : (
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
             {currentView === 'deposit' ? (
               <ThemedView style={styles.topupForm}>
@@ -536,7 +677,7 @@ export default function More() {
 
                 <View style={styles.exchangeRateContainer}>
                   <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                  <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+                  <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
                 </View>
               </ThemedView>
             ) : (
@@ -576,7 +717,7 @@ export default function More() {
                 </ThemedView>
                 <View style={[styles.exchangeRateContainer, { marginHorizontal: 20 }]}>
                   <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                  <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+                  <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
                 </View>
               </>
             )}
@@ -601,6 +742,7 @@ export default function More() {
               )}
             </TouchableOpacity>
           </ScrollView>
+          )}
         </SafeAreaView>
       </Modal>
 
@@ -862,5 +1004,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontWeight: '500',
+  },
+  webViewWrapper: {
+    flex: 1,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  webView: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
   },
 });

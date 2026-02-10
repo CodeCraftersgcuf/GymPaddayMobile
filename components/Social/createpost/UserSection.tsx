@@ -17,7 +17,8 @@ interface UserSectionProps {
 import * as SecureStore from 'expo-secure-store';
 
 export default function UserSection({ postText, onTextChange, disabled = false }: UserSectionProps) {
-  const { dark } = useTheme();
+  const theme = useTheme();
+  const dark = theme?.dark ?? false; // Safety check
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
@@ -49,15 +50,25 @@ export default function UserSection({ postText, onTextChange, disabled = false }
           source={{ uri: profileImage }}
           style={styles.avatar}
         />
-        <TextInput
-          style={[styles.textInput, { color: dark ? 'white' : 'black' }]}
-          placeholder=" Let's see what you got!"
-          placeholderTextColor={"#999"}
-          multiline
-          value={postText}
-          onChangeText={onTextChange}
-          editable={!disabled}
-        />
+        <View style={{ flex: 1 }}>
+          <TextInput
+            style={[styles.textInput, { color: dark ? 'white' : 'black' }]}
+            placeholder=" Let's see what you got!"
+            placeholderTextColor={"#999"}
+            multiline
+            value={postText}
+            onChangeText={(text) => {
+              if (text.length <= 500) {
+                onTextChange(text);
+              }
+            }}
+            editable={!disabled}
+            maxLength={500}
+          />
+          <Text style={{ fontSize: 12, color: dark ? '#666' : '#999', textAlign: 'right', marginTop: 4 }}>
+            {postText.length}/500 characters
+          </Text>
+        </View>
       </View>
     </View>
   );

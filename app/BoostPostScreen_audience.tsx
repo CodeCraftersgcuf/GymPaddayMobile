@@ -188,7 +188,7 @@ const PostAudienceScreen: React.FC = () => {
                 },
                 headers: {
                     // 👇 Set your app name and contact (as per OpenStreetMap's requirement)
-                    'User-Agent': 'GymPaddyApp/1.0 (support@gympaddy.hmstech.xyz)',
+                    'User-Agent': 'GymPaddyApp/1.0 (support@gympaddy.skillverse.com.pk)',
                     'Accept-Language': 'en',
                 },
             });

@@ -90,20 +90,15 @@ const SearchScreen = () => {
 
             {isLoading && <ActivityIndicator color="red" size="large" style={{ marginTop: 20 }} />}
 
-            {triggerSearch && !isLoading && (!data || (!data?.users?.length && !data?.posts?.length)) && (
-                <Text style={{ textAlign: 'center', marginTop: 20, color: dark ? '#ccc' : '#666' }}>
-                    No results found.
-                </Text>
-            )}
-
-            {data && (
+            {triggerSearch && !isLoading && data && (
                 <View style={{ flex: 1 }}>
                     {activeTab === 'users' ? (
-                        <FlatList
-                            data={data.users}
-                            keyExtractor={(item) => item.id.toString()}
-                            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
-                            renderItem={({ item }) => (
+                        data.users && data.users.length > 0 ? (
+                            <FlatList
+                                data={data.users}
+                                keyExtractor={(item) => item.id.toString()}
+                                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
+                                renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={[styles.userItem]}
                                     onPress={() =>
@@ -132,15 +127,26 @@ const SearchScreen = () => {
                                     </View>
                                 </TouchableOpacity>
                             )}
-                        />
-
+                            />
+                        ) : (
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 50 }}>
+                                <Ionicons name="search-outline" size={64} color={dark ? '#666' : '#ccc'} />
+                                <Text style={{ textAlign: 'center', marginTop: 16, fontSize: 16, color: dark ? '#ccc' : '#666' }}>
+                                    No users found
+                                </Text>
+                                <Text style={{ textAlign: 'center', marginTop: 8, fontSize: 14, color: dark ? '#888' : '#999' }}>
+                                    Try searching with a different username
+                                </Text>
+                            </View>
+                        )
                     ) : (
                         <View style={{ flex: 1 }}>
-                            <FlatList
-                                data={data.posts}
-                                keyExtractor={(item) => item.id.toString()}
-                                contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 120 }}
-                                renderItem={({ item }) => (
+                            {data.posts && data.posts.length > 0 ? (
+                                <FlatList
+                                    data={data.posts}
+                                    keyExtractor={(item) => item.id.toString()}
+                                    contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 120 }}
+                                    renderItem={({ item }) => (
                                     <PostContainer
                                         showComment={false}
                                         posts={[
@@ -177,10 +183,32 @@ const SearchScreen = () => {
                                         handleMenu={() => { }}
                                     />
                                 )}
-                            />
+                                />
+                            ) : (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 50 }}>
+                                    <Ionicons name="document-text-outline" size={64} color={dark ? '#666' : '#ccc'} />
+                                    <Text style={{ textAlign: 'center', marginTop: 16, fontSize: 16, color: dark ? '#ccc' : '#666' }}>
+                                        No posts found
+                                    </Text>
+                                    <Text style={{ textAlign: 'center', marginTop: 8, fontSize: 14, color: dark ? '#888' : '#999' }}>
+                                        Try searching with different keywords
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     )}
+                </View>
+            )}
 
+            {triggerSearch && !isLoading && !data && (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 50 }}>
+                    <Ionicons name="search-outline" size={64} color={dark ? '#666' : '#ccc'} />
+                    <Text style={{ textAlign: 'center', marginTop: 16, fontSize: 16, color: dark ? '#ccc' : '#666' }}>
+                        No results found
+                    </Text>
+                    <Text style={{ textAlign: 'center', marginTop: 8, fontSize: 14, color: dark ? '#888' : '#999' }}>
+                        Try searching with different keywords
+                    </Text>
                 </View>
             )}
         </SafeAreaView>

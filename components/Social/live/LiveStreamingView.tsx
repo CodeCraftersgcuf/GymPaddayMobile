@@ -9,7 +9,8 @@ import {
   PermissionsAndroid,
   Image,
   ScrollView,
-  BackHandler
+  BackHandler,
+  KeyboardAvoidingView
 } from 'react-native';
 import Modal from 'react-native-modal';
 
@@ -229,7 +230,7 @@ export default function LiveStreamingView({
         {fetchLiveVideoCallToken.data && (
           <WebView
             source={{
-              uri: `https://hmstech.xyz/live.html?channel=${CHANNEL_NAME}&role=host`,
+              uri: `https://skillverse.com.pk/live.html?channel=${CHANNEL_NAME}&role=host`,
             }}
             javaScriptEnabled
             domStorageEnabled
@@ -278,7 +279,7 @@ export default function LiveStreamingView({
                     )}
 
                     <View style={styles.messageRow}>
-                      <Text style={styles.messageText}>{chat.message}</Text>
+                      <Text style={styles.messageText} numberOfLines={3} ellipsizeMode="tail">{chat.message}</Text>
 
                       {chat.hasGift && (
                         <View style={styles.giftContainer}>
@@ -298,6 +299,10 @@ export default function LiveStreamingView({
         </View>
 
         {canType && (
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
           <View style={styles.inputBar}>
             {!!replyTo && (
               <TouchableOpacity style={styles.inputReplyChip} onPress={() => setReplyTo(null)}>
@@ -346,17 +351,21 @@ export default function LiveStreamingView({
                     } as any,
                   ]);
 
+                  // Clear message text immediately for better UX
+                  setMessageText('');
+                  
                   sendChatMessage(
                     { message: text, reply_to: replyTo?.id },
                     {
                       onSuccess: () => {
-                        // clear the draft + reply target
-                        setMessageText('');
+                        // clear the reply target
                         setReplyTo(null);
                       },
                       onError: (e: any) => {
                         // rollback optimistic item
                         setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
+                        // Restore message text on error
+                        setMessageText(text);
                         Alert.alert('Failed to send', e?.message ?? 'Please try again.');
                       },
                     }
@@ -367,15 +376,16 @@ export default function LiveStreamingView({
               </TouchableOpacity>
             </View>
           </View>
+          </KeyboardAvoidingView>
         )}
 
       </View>
 
       {/* Controls */}
       <View style={styles.controlsContainer}>
-        {/* <TouchableOpacity style={styles.endLiveButton} onPress={onEndLive}>
-          <Text style={styles.endLiveButtonText}>End Live</Text>
-        </TouchableOpacity> */}
+        <TouchableOpacity style={styles.endLiveButton} onPress={onEndLive}>
+          <Text style={styles.endLiveButtonText}>End Stream</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.viewAudienceButton}
           onPress={() => setAudienceModalVisible(true)} // ✅ show modal
@@ -668,10 +678,10 @@ const styles = StyleSheet.create({
 
   chatOverlay: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 280, // Increased to avoid overlap with mute buttons and input bar
     left: 16,
     right: 16,
-    maxHeight: 200,
+    maxHeight: 120, // Reduced to prevent overlap with controls, especially with long messages
   },
   chatContainer: {
     flex: 1,
@@ -700,13 +710,15 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   messageText: {
     color: 'white',
     fontSize: 14,
     flex: 1,
+    flexShrink: 1,
   },
   container: {
     flex: 1,
@@ -732,7 +744,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 30,
     gap: 15,
-    marginTop: 10
+    marginTop: 10,
+    zIndex: 1000, // Ensure controls are above chat overlay
+    elevation: 1000, // For Android
   },
   endLiveButton: {
     flex: 1,

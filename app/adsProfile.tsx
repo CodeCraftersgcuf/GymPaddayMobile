@@ -95,7 +95,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
         const url = item.listing.media[0].url;
         imageUrl = url.startsWith('http')
           ? url
-          : `https://gympaddy.hmstech.xyz/storage/${url}`;
+          : `https://gympaddy.skillverse.com.pk/storage/${url}`;
       }
 
       return {

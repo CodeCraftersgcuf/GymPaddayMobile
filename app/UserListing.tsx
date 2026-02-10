@@ -140,7 +140,7 @@ export default function ListingsScreen() {
                     uri: item.media_urls?.[0]
                         ? (item.media_urls[0].startsWith('http')
                             ? item.media_urls[0]
-                            : `https://gympaddy.hmstech.xyz/storage/${item.media_urls[0]}`
+                            : `https://gympaddy.skillverse.com.pk/storage/${item.media_urls[0]}`
                         )
                         : 'https://via.placeholder.com/300x200?text=No+Image',
                 }}

@@ -138,10 +138,13 @@ export default function EditProfileScreen() {
       newErrors.fullName = 'Full name is required';
     }
 
-    // Gender and age are now optional - only validate if provided
-    if (formData.age && formData.age.trim()) {
-      if (isNaN(Number(formData.age)) || Number(formData.age) < 1 || Number(formData.age) > 120) {
-        newErrors.age = 'Please enter a valid age';
+    // Age is required and must match signup requirements
+    if (!formData.age || !formData.age.trim()) {
+      newErrors.age = 'Age is required';
+    } else {
+      const ageNum = Number(formData.age);
+      if (isNaN(ageNum) || ageNum < 13 || ageNum > 120) {
+        newErrors.age = 'Age must be between 13 and 120 years';
       }
     }
 
@@ -186,9 +189,8 @@ export default function EditProfileScreen() {
       if (formData.gender && formData.gender.trim()) {
         form.append('gender', formData.gender);
       }
-      if (formData.age && formData.age.trim()) {
-        form.append('age', formData.age);
-      }
+      // Age is required
+      form.append('age', formData.age);
 
       if (profileImage) {
         // Only append if it's a new image (uri not starting with http)

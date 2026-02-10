@@ -74,6 +74,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
               darkMode={darkMode}
               isReply={true}
               onReplyPress={onReplyPress} // ✅ Pass down
+              onDeletePress={onDeletePress} // ✅ Pass down delete handler
             />
           ))}
         </View>

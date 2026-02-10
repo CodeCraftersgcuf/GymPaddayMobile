@@ -180,7 +180,7 @@ export default function DepositPaymentTab() {
     };
 
     const getHeaderTitle = () => {
-        return currentView === 'deposit' ? 'Deposit' : 'Make Payment';
+        return currentView === 'deposit' ? 'Deosit' : 'Make Paymnt';
     };
 
     const renderDepositView = () => (
@@ -236,7 +236,7 @@ export default function DepositPaymentTab() {
                 {/* Exchange Rate */}
                 <View style={styles.exchangeRateContainer}>
                     <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                    <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+                    <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
                 </View>
                 <TouchableOpacity 
                     style={[styles.proceedButton, isIAPLoading && styles.proceedButtonDisabled]} 

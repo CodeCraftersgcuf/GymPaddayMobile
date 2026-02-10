@@ -15,6 +15,7 @@ import ThemeText from "@/components/ThemedText";
 import { useMutation } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { verifyOtp } from "@/utils/mutations/auth";
 
 const VerifyOtpScreen = () => {
   const { dark } = useTheme();
@@ -27,18 +28,60 @@ const VerifyOtpScreen = () => {
 
   const verifyOtpMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('https://gympaddy.skillverse.com.pk/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otp.join('') }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err?.message || 'Verification failed');
+      const otpCode = otp.join('').trim();
+      
+      if (!email) {
+        throw new Error('Email is required');
       }
-
-      return response.json();
+      
+      if (otpCode.length !== 6) {
+        throw new Error('Please enter a valid 6-digit OTP');
+      }
+      
+      console.log('🔐 Verifying OTP:', { email, otpLength: otpCode.length });
+      
+      try {
+        const result = await verifyOtp({
+          data: {
+            email: email as string,
+            otp: otpCode,
+          },
+        });
+        
+        console.log('✅ OTP verification successful:', result);
+        return result;
+      } catch (error: any) {
+        console.error('❌ OTP verification error:', error);
+        console.error('❌ Error details:', {
+          message: error?.message,
+          data: error?.data,
+          statusCode: error?.statusCode,
+          response: error?.response,
+        });
+        
+        // Extract error message from various possible formats
+        let errorMessage = 'Invalid or expired OTP. Please try again.';
+        
+        // Check ApiError format (from customApiCall)
+        if (error?.data?.message) {
+          errorMessage = error.data.message;
+        } else if (error?.message) {
+          errorMessage = error.message;
+        } else if (error?.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        // Provide more specific error messages
+        if (errorMessage.toLowerCase().includes('expired')) {
+          errorMessage = 'OTP has expired. Please request a new one.';
+        } else if (errorMessage.toLowerCase().includes('invalid')) {
+          errorMessage = 'Invalid OTP. Please check and try again.';
+        }
+        
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: async () => {
       // ✅ Mark onboarding as completed to prevent redirect loop
@@ -54,10 +97,13 @@ const VerifyOtpScreen = () => {
     },
     onError: (error: any) => {
       setOtpError(true);
+      const errorMessage = error?.message || 'Invalid or expired OTP. Please try again.';
+      
       Toast.show({
         type: 'error',
         text1: 'Verification failed',
-        text2: error.message,
+        text2: errorMessage,
+        visibilityTime: 4000,
       });
     },
   });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import ThemeText from '@/components/ThemedText';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createBusiness } from '@/utils/mutations/businesses';
 import { getUserBusinesses } from '@/utils/queries/businesses';
+import { getBusinessStatus } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 
@@ -59,30 +60,158 @@ export default function BusinessRegistrationScreen() {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
     const [hasExistingBusiness, setHasExistingBusiness] = useState(false);
+    const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
 
-    useQuery({
-        queryKey: ['user-businesses'],
+    console.log('🚀 BusinessRegistrationScreen - Component Rendered');
+    console.log('📊 Current state - submissionState:', submissionState);
+    console.log('📊 Current state - hasExistingBusiness:', hasExistingBusiness);
+
+    // Log when component mounts
+    useEffect(() => {
+        console.log('🎯 BusinessRegistrationScreen - Component Mounted');
+        console.log('🔍 Checking business status...');
+    }, []);
+
+    // Check business status using getBusinessStatus endpoint
+    const { data: businessStatusData, isLoading: isLoadingStatus, error: businessStatusError } = useQuery({
+        queryKey: ['get-business-status'],
         queryFn: async () => {
+            console.log('═══════════════════════════════════════');
+            console.log('🔍 [getBusinessStatus] Starting query...');
+            console.log('═══════════════════════════════════════');
             const token = await SecureStore.getItemAsync('auth_token');
-            if (!token) throw new Error('Not authenticated');
-            return getUserBusinesses(token);
+            if (!token) {
+                console.error('❌ [getBusinessStatus] No auth token found');
+                throw new Error('Not authenticated');
+            }
+            console.log('✅ [getBusinessStatus] Auth token found, calling API...');
+            try {
+                const response = await getBusinessStatus(token);
+                console.log('═══════════════════════════════════════');
+                console.log('📊 [getBusinessStatus] RAW Response:', response);
+                console.log('📊 [getBusinessStatus] Response Type:', typeof response);
+                console.log('📊 [getBusinessStatus] Response Keys:', Object.keys(response || {}));
+                console.log('📊 [getBusinessStatus] JSON Response:', JSON.stringify(response, null, 2));
+                console.log('═══════════════════════════════════════');
+                return response;
+            } catch (err) {
+                console.error('❌ [getBusinessStatus] API Call Error:', err);
+                throw err;
+            }
         },
         onSuccess: (data: any) => {
+            console.log('═══════════════════════════════════════');
+            console.log('✅ [getBusinessStatus] onSuccess Triggered');
+            console.log('📊 [getBusinessStatus] Full data:', JSON.stringify(data, null, 2));
+            console.log('📊 [getBusinessStatus] Data type:', typeof data);
+            // Check if user has submitted a business request
+            const status = data?.status || data?.approval_status || data?.data?.status;
+            console.log('📋 [getBusinessStatus] Extracted status:', status);
+            console.log('📋 [getBusinessStatus] data.status:', data?.status);
+            console.log('📋 [getBusinessStatus] data.approval_status:', data?.approval_status);
+            console.log('📋 [getBusinessStatus] data.data?.status:', data?.data?.status);
+            
+            if (status) {
+                if (status === 'approved' || status === 'Approved') {
+                    console.log('✅ [getBusinessStatus] Status: APPROVED');
+                    setSubmissionState('approved');
+                } else if (status === 'rejected' || status === 'Rejected') {
+                    console.log('❌ [getBusinessStatus] Status: REJECTED');
+                    setSubmissionState('rejected');
+                } else {
+                    console.log('⏳ [getBusinessStatus] Status: REVIEWING');
+                    setSubmissionState('reviewing');
+                }
+                setHasExistingBusiness(true);
+                console.log('🔒 [getBusinessStatus] hasExistingBusiness set to: true');
+            } else {
+                console.log('ℹ️ [getBusinessStatus] No status found in response');
+            }
+            console.log('═══════════════════════════════════════');
+        },
+        onError: (error: any) => {
+            console.error('═══════════════════════════════════════');
+            console.error('❌ [getBusinessStatus] Query Error:', error);
+            console.error('❌ [getBusinessStatus] Error message:', error?.message);
+            console.error('❌ [getBusinessStatus] Error stack:', error?.stack);
+            console.error('═══════════════════════════════════════');
+        },
+    });
+
+    // Also check user businesses as fallback
+    const { data: userBusinessesData, error: userBusinessesError } = useQuery({
+        queryKey: ['user-businesses'],
+        queryFn: async () => {
+            console.log('═══════════════════════════════════════');
+            console.log('🔍 [getUserBusinesses] Starting query...');
+            console.log('═══════════════════════════════════════');
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) {
+                console.error('❌ [getUserBusinesses] No auth token found');
+                throw new Error('Not authenticated');
+            }
+            console.log('✅ [getUserBusinesses] Auth token found, calling API...');
+            try {
+                const response = await getUserBusinesses(token);
+                console.log('═══════════════════════════════════════');
+                console.log('📊 [getUserBusinesses] RAW Response:', response);
+                console.log('📊 [getUserBusinesses] Response Type:', typeof response);
+                console.log('📊 [getUserBusinesses] Response Keys:', Object.keys(response || {}));
+                console.log('📊 [getUserBusinesses] JSON Response:', JSON.stringify(response, null, 2));
+                console.log('═══════════════════════════════════════');
+                return response;
+            } catch (err) {
+                console.error('❌ [getUserBusinesses] API Call Error:', err);
+                throw err;
+            }
+        },
+        onSuccess: (data: any) => {
+            console.log('═══════════════════════════════════════');
+            console.log('✅ [getUserBusinesses] onSuccess Triggered');
+            console.log('📊 [getUserBusinesses] Full data:', JSON.stringify(data, null, 2));
             const businesses = data?.data || data?.businesses || data || [];
-            if (Array.isArray(businesses) && businesses.length > 0) {
+            console.log('📋 [getUserBusinesses] Extracted businesses array:', businesses);
+            console.log('📋 [getUserBusinesses] Businesses length:', businesses.length);
+            console.log('📋 [getUserBusinesses] Is array?', Array.isArray(businesses));
+            console.log('📋 [getUserBusinesses] hasExistingBusiness current value:', hasExistingBusiness);
+            
+            if (Array.isArray(businesses) && businesses.length > 0 && !hasExistingBusiness) {
+                console.log('📋 [getUserBusinesses] First business object:', JSON.stringify(businesses[0], null, 2));
                 const status =
                     businesses[0]?.status ||
                     businesses[0]?.approval_status ||
                     (businesses[0]?.is_approved ? 'approved' : 'reviewing');
-                if (status === 'approved') {
+                console.log('📋 [getUserBusinesses] Extracted status:', status);
+                console.log('📋 [getUserBusinesses] businesses[0].status:', businesses[0]?.status);
+                console.log('📋 [getUserBusinesses] businesses[0].approval_status:', businesses[0]?.approval_status);
+                console.log('📋 [getUserBusinesses] businesses[0].is_approved:', businesses[0]?.is_approved);
+                
+                if (status === 'approved' || status === 'Approved') {
+                    console.log('✅ [getUserBusinesses] Status: APPROVED');
                     setSubmissionState('approved');
-                } else if (status === 'rejected') {
+                } else if (status === 'rejected' || status === 'Rejected') {
+                    console.log('❌ [getUserBusinesses] Status: REJECTED');
                     setSubmissionState('rejected');
                 } else {
+                    console.log('⏳ [getUserBusinesses] Status: REVIEWING');
                     setSubmissionState('reviewing');
                 }
                 setHasExistingBusiness(true);
+                console.log('🔒 [getUserBusinesses] hasExistingBusiness set to: true');
+            } else {
+                console.log('ℹ️ [getUserBusinesses] No businesses found or hasExistingBusiness already true');
+                console.log('ℹ️ [getUserBusinesses] Array check:', Array.isArray(businesses));
+                console.log('ℹ️ [getUserBusinesses] Length check:', businesses.length);
+                console.log('ℹ️ [getUserBusinesses] hasExistingBusiness check:', hasExistingBusiness);
             }
+            console.log('═══════════════════════════════════════');
+        },
+        onError: (error: any) => {
+            console.error('═══════════════════════════════════════');
+            console.error('❌ [getUserBusinesses] Query Error:', error);
+            console.error('❌ [getUserBusinesses] Error message:', error?.message);
+            console.error('❌ [getUserBusinesses] Error stack:', error?.stack);
+            console.error('═══════════════════════════════════════');
         },
     });
 
@@ -98,15 +227,18 @@ export default function BusinessRegistrationScreen() {
             Toast.show({
                 type: 'success',
                 text1: 'Business registered successfully!',
+                text2: 'Your submission is under review.',
             });
             setSubmissionState('reviewing');
             setHasExistingBusiness(true);
+            setIsSubmittingLocal(false);
         },
         onError: (error: any) => {
             Toast.show({
                 type: 'error',
                 text1: error?.message || 'Failed to register business',
             });
+            setIsSubmittingLocal(false);
         },
     });
 
@@ -130,8 +262,14 @@ export default function BusinessRegistrationScreen() {
 
     // --- Updated handleSubmit ---
     const handleSubmit = async (values: any) => {
+        // Prevent double submission
+        if (isSubmittingLocal || createBusinessMutation.isPending) {
+            return;
+        }
+
         try {
-            if (hasExistingBusiness) {
+            // Allow resubmission if rejected, but prevent if approved or reviewing
+            if (hasExistingBusiness && submissionState !== 'rejected') {
                 Toast.show({
                     type: 'info',
                     text1: 'Business already registered',
@@ -139,6 +277,10 @@ export default function BusinessRegistrationScreen() {
                 });
                 return;
             }
+            
+            // Set submitting state immediately to disable button
+            setIsSubmittingLocal(true);
+            
             const formData = new FormData();
             formData.append('business_name', values.businessName);
             formData.append('category', values.category);
@@ -161,8 +303,13 @@ export default function BusinessRegistrationScreen() {
                 type: 'error',
                 text1: error?.message || 'Failed to register business',
             });
+            setIsSubmittingLocal(false);
         }
     };
+
+    const isSubmitting = isSubmittingLocal || createBusinessMutation.isPending;
+    // Allow resubmission if rejected, but disable if approved or reviewing
+    const isFormDisabled = (hasExistingBusiness && submissionState !== 'rejected') || isSubmitting;
 
     const getAlertStyle = () => {
         switch (submissionState) {
@@ -239,14 +386,15 @@ export default function BusinessRegistrationScreen() {
                                                 backgroundColor: dark ? "#181818" : "#f8f9fa",
                                                 color: dark ? "white" : "black",
                                                 borderColor: dark ? '#181818' : '#e0e0e0',
-                                            }
-
+                                            },
+                                            isFormDisabled && { opacity: 0.6 }
                                         ]}
                                         placeholder="Business name"
                                         placeholderTextColor="#999"
                                         value={values.businessName}
                                         onChangeText={handleChange('businessName')}
                                         onBlur={handleBlur('businessName')}
+                                        editable={!isFormDisabled}
                                     />
                                     {touched.businessName && errors.businessName && (
                                         <Text style={styles.errorText}>{errors.businessName}</Text>
@@ -263,9 +411,11 @@ export default function BusinessRegistrationScreen() {
                                             {
                                                 backgroundColor: dark ? "#181818" : "#f8f9fa",
                                                 borderColor: dark ? '#181818' : '#e0e0e0',
-                                            }
+                                            },
+                                            isFormDisabled && { opacity: 0.6 }
                                         ]}
-                                        onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                                        onPress={() => !isFormDisabled && setShowCategoryDropdown(!showCategoryDropdown)}
+                                        disabled={isFormDisabled}
                                     >
                                         <ThemeText style={[styles.dropdownText, !values.category && styles.placeholder]}>
                                             {values.category || 'Category'}
@@ -319,7 +469,8 @@ export default function BusinessRegistrationScreen() {
                                                 backgroundColor:dark ? "#181818" : "#f8f9fa",
                                                 color: dark ? "white" : "black",
                                                 borderColor : dark? '#181818' : '#e0e0e0',
-                                            }
+                                            },
+                                            isFormDisabled && { opacity: 0.6 }
                                         ]}
                                         placeholder="Address"
                                         placeholderTextColor="#999"
@@ -328,6 +479,7 @@ export default function BusinessRegistrationScreen() {
                                         onBlur={handleBlur('address')}
                                         multiline
                                         numberOfLines={3}
+                                        editable={!isFormDisabled}
                                     />
                                     {touched.address && errors.address && (
                                         <Text style={styles.errorText}>{errors.address}</Text>
@@ -344,7 +496,8 @@ export default function BusinessRegistrationScreen() {
                                                 backgroundColor:dark ? "#181818" : "#f8f9fa",
                                                 color: dark ? "white" : "black",
                                                 borderColor : dark? '#181818' : '#e0e0e0',
-                                            }
+                                            },
+                                            isFormDisabled && { opacity: 0.6 }
                                         ]}
                                         placeholder="Business Email"
                                         placeholderTextColor="#999"
@@ -353,6 +506,7 @@ export default function BusinessRegistrationScreen() {
                                         onBlur={handleBlur('businessEmail')}
                                         keyboardType="email-address"
                                         autoCapitalize="none"
+                                        editable={!isFormDisabled}
                                     />
                                     {touched.businessEmail && errors.businessEmail && (
                                         <Text style={styles.errorText}>{errors.businessEmail}</Text>
@@ -369,7 +523,8 @@ export default function BusinessRegistrationScreen() {
                                                 backgroundColor:dark ? "#181818" : "#f8f9fa",
                                                 color: dark ? "white" : "black",
                                                 borderColor : dark? '#181818' : '#e0e0e0',
-                                            }
+                                            },
+                                            isFormDisabled && { opacity: 0.6 }
                                         ]}
                                         placeholder="Business phone number"
                                         placeholderTextColor="#999"
@@ -377,6 +532,7 @@ export default function BusinessRegistrationScreen() {
                                         onChangeText={handleChange('businessPhone')}
                                         onBlur={handleBlur('businessPhone')}
                                         keyboardType="phone-pad"
+                                        editable={!isFormDisabled}
                                     />
                                     {touched.businessPhone && errors.businessPhone && (
                                         <Text style={styles.errorText}>{errors.businessPhone}</Text>
@@ -385,7 +541,15 @@ export default function BusinessRegistrationScreen() {
 
                                 {/* Document Upload */}
                                 <ThemedView darkColor='#181818' style={styles.uploadContainer}>
-                                    <TouchableOpacity style={[styles.uploadButton,{backgroundColor:dark? "#181818":"#f8f9fa"}]} onPress={pickImage}>
+                                    <TouchableOpacity 
+                                        style={[
+                                            styles.uploadButton,
+                                            {backgroundColor:dark? "#181818":"#f8f9fa"},
+                                            isFormDisabled && { opacity: 0.6 }
+                                        ]} 
+                                        onPress={() => !isFormDisabled && pickImage()}
+                                        disabled={isFormDisabled}
+                                    >
                                         <Ionicons name="cloud-upload-outline" size={40} color="#ccc" />
                                         <Text style={styles.uploadText}>
                                             Upload a clear picture of your business certificate
@@ -422,16 +586,24 @@ export default function BusinessRegistrationScreen() {
                                 style={[
                                     styles.saveButton,
                                     submissionState === 'approved' && styles.saveButtonSuccess,
-                                    (createBusinessMutation.isLoading || hasExistingBusiness) && { opacity: 0.6 }
+                                    isFormDisabled && { opacity: 0.6 }
                                 ]}
-                                onPress={() => handleSubmit()}
-                                disabled={createBusinessMutation.isLoading || hasExistingBusiness}
+                                onPress={() => {
+                                    if (!isFormDisabled) {
+                                        handleSubmit(); // Formik's handleSubmit will call onSubmit with values
+                                    }
+                                }}
+                                disabled={isFormDisabled}
                             >
                                 <Text style={styles.saveButtonText}>
-                                    {createBusinessMutation.isLoading
-                                        ? 'Saving...'
+                                    {isSubmitting
+                                        ? 'Submitting...'
                                         : hasExistingBusiness
-                                            ? 'Submitted'
+                                            ? submissionState === 'approved'
+                                                ? 'Approved'
+                                                : submissionState === 'rejected'
+                                                    ? 'Rejected - Resubmit'
+                                                    : 'Under Review'
                                             : 'Save'}
                                 </Text>
                             </TouchableOpacity>

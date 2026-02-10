@@ -19,10 +19,12 @@ interface SelectedMediaProps {
 }
 
 export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedia, disabled = false }: SelectedMediaProps) {
+  const theme = useTheme();
+  const dark = theme?.dark ?? false; // Safety check
+  
   if (selectedMedia.length === 0) {
     return null;
   }
-  const {dark} = useTheme();
 
   const formatDuration = (duration?: number) => {
     if (!duration) return '';

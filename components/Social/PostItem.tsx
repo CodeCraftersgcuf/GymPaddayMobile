@@ -74,11 +74,12 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalVisibleBottomSheet, setModalVisibleBottomSheet] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(false);
+  const [isPlaying, setIsPlaying] = useState<Record<number, boolean>>({});
+  const [isBuffering, setIsBuffering] = useState<Record<number, boolean>>({});
   const [videoAspectRatio, setVideoAspectRatio] = useState<number | undefined>(undefined);
-  const [showVideoControls, setShowVideoControls] = useState(true);
-  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showVideoControls, setShowVideoControls] = useState<Record<number, boolean>>({});
+  const [videoLoaded, setVideoLoaded] = useState<Record<number, boolean>>({});
+  const controlsTimeoutRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({});
 
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
@@ -95,9 +96,12 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
   useEffect(() => {
     return () => {
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-      }
+      // Clear all timeouts on unmount
+      Object.values(controlsTimeoutRef.current).forEach((timeout) => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+      });
     };
   }, []);
 
@@ -158,6 +162,18 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     }
 
     setImagesData(mediaArray);
+    
+    // Auto-play video if it's the first item
+    if (post.videoUrl && mediaArray[0] === post.videoUrl) {
+      setTimeout(() => {
+        const videoRef = videoRefs.current[0];
+        if (videoRef) {
+          videoRef.playAsync().catch(console.error);
+          setIsPlaying(prev => ({ ...prev, 0: true }));
+          setShowVideoControls(prev => ({ ...prev, 0: false }));
+        }
+      }, 100);
+    }
   }, [post]);
 
 
@@ -221,11 +237,30 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     setCurrentIndex(newIndex);
 
     Object.keys(videoRefs.current).forEach((key) => {
-      const ref = videoRefs.current[parseInt(key)];
-      if (parseInt(key) === newIndex) {
-        ref?.playAsync();
+      const videoIndex = parseInt(key);
+      const ref = videoRefs.current[videoIndex];
+      if (videoIndex === newIndex) {
+        // Play video and ensure it's visible (only if loaded)
+        if (ref && videoLoaded[videoIndex]) {
+          ref.playAsync().catch(console.error);
+          // State will be updated by onPlaybackStatusUpdate
+          // Hide controls after 3 seconds
+          if (controlsTimeoutRef.current[videoIndex]) {
+            clearTimeout(controlsTimeoutRef.current[videoIndex]!);
+          }
+          controlsTimeoutRef.current[videoIndex] = setTimeout(() => {
+            setShowVideoControls(prev => {
+              if (prev[videoIndex] === false) return prev;
+              return { ...prev, [videoIndex]: false };
+            });
+          }, 3000);
+        }
       } else {
-        ref?.pauseAsync();
+        // Pause other videos (only if loaded)
+        if (ref && videoLoaded[videoIndex]) {
+          ref.pauseAsync().catch(console.error);
+          // State will be updated by onPlaybackStatusUpdate
+        }
       }
     });
   };
@@ -289,30 +324,44 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
         return;
       }
 
-      const fileExtension = currentMedia.split('.').pop();
-      const fileName = currentMedia.split('/').pop();
-      const fileUri = FileSystem?.cacheDirectory + fileName;
-
+      const fileExtension = currentMedia.split('.').pop()?.toLowerCase();
+      const fileName = currentMedia.split('/').pop() || `media_${Date.now()}.${fileExtension}`;
+      const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'mkv';
+      
       // Request permission
-      if (Platform.OS === 'android') {
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission required', 'Please allow media library access to save files.');
-          return;
-        }
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow media library access to save files.');
+        return;
       }
 
-      // Download
+      // Create a unique file name to avoid conflicts
+      const timestamp = Date.now();
+      const uniqueFileName = `${timestamp}_${fileName}`;
+      const fileUri = `${FileSystem.cacheDirectory}${uniqueFileName}`;
+
+      // Download the file
       const downloadResumable = FileSystem.createDownloadResumable(currentMedia, fileUri);
-      const { uri } = await downloadResumable.downloadAsync();
+      const downloadResult = await downloadResumable.downloadAsync();
+      
+      if (!downloadResult || !downloadResult.uri) {
+        throw new Error('Download failed - no file URI returned');
+      }
 
       // Save to media library
-      const asset = await MediaLibrary.createAssetAsync(uri);
-      await MediaLibrary.createAlbumAsync('Download', asset, false);
+      const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+      
+      // Try to save to a specific album, or just save to default if album creation fails
+      try {
+        await MediaLibrary.createAlbumAsync('GymPaddy', asset, false);
+      } catch (albumError) {
+        // If album already exists or creation fails, just save to default gallery
+        console.log('Album creation failed, saving to default gallery:', albumError);
+      }
 
-      Alert.alert('Downloaded', `${fileExtension?.includes('mp4') ? 'Video' : 'Image'} saved to your gallery.`);
-    } catch (error) {
-      Alert.alert('Download Error', 'Failed to download media.');
+      Alert.alert('Downloaded', `${isVideo ? 'Video' : 'Image'} saved to your gallery.`);
+    } catch (error: any) {
+      Alert.alert('Download Error', error?.message || 'Failed to download media. Please try again.');
       console.error('Download error:', error);
     }
   };
@@ -381,50 +430,103 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
               return isVideo ? (
                 <View style={styles.carouselVideoWrapper}>
-                  <Video
-                    ref={(ref) => {
-                      if (ref) videoRefs.current[index] = ref;
-                    }}
-                    source={{ uri: item }}
-                    style={[
-                      styles.videoPlayer,
-                      videoAspectRatio && { aspectRatio: videoAspectRatio }
-                    ]}
-                    resizeMode="contain"
-                    isLooping
-                    isMuted={isMuted}
-                    shouldPlay={isPlaying}
-                    onLoadStart={() => setIsBuffering(true)}
-                    onLoad={(data) => {
-                      setIsBuffering(false);
-                      // Calculate and set aspect ratio from video natural size
-                      if (data.naturalSize) {
-                        const ratio = data.naturalSize.width / data.naturalSize.height;
-                        setVideoAspectRatio(ratio);
+                  <Pressable
+                    onPress={() => {
+                      // Toggle controls visibility on tap
+                      setShowVideoControls(prev => ({ ...prev, [index]: true }));
+                      // Clear existing timeout
+                      if (controlsTimeoutRef.current[index]) {
+                        clearTimeout(controlsTimeoutRef.current[index]!);
+                      }
+                      // Hide controls again after 3 seconds if video is playing
+                      if (isPlaying[index]) {
+                        controlsTimeoutRef.current[index] = setTimeout(() => {
+                          setShowVideoControls(prev => ({ ...prev, [index]: false }));
+                        }, 3000);
                       }
                     }}
-                    onPlaybackStatusUpdate={(status) => {
-                      if ('isPlaying' in status) {
-                        setIsPlaying(status.isPlaying);
-                        if (status.isPlaying) {
-                          if (controlsTimeoutRef.current) {
-                            clearTimeout(controlsTimeoutRef.current);
-                          }
-                          controlsTimeoutRef.current = setTimeout(() => {
-                            setShowVideoControls(false);
-                          }, 2000);
-                        } else {
-                          if (controlsTimeoutRef.current) {
-                            clearTimeout(controlsTimeoutRef.current);
-                          }
-                          setShowVideoControls(true);
+                    style={styles.videoPressable}
+                  >
+                    <Video
+                      ref={(ref) => {
+                        if (ref) {
+                          videoRefs.current[index] = ref;
                         }
-                      }
-                    }}
-                  />
+                      }}
+                      source={{ uri: item }}
+                      style={styles.videoPlayer}
+                      resizeMode="cover"
+                      isLooping
+                      isMuted={isMuted}
+                      shouldPlay={index === currentIndex && isPlaying[index] && videoLoaded[index]}
+                      useNativeControls={false}
+                      onLoadStart={() => {
+                        setIsBuffering(prev => ({ ...prev, [index]: true }));
+                        setVideoLoaded(prev => ({ ...prev, [index]: false }));
+                      }}
+                      onLoad={async (data) => {
+                        setIsBuffering(prev => ({ ...prev, [index]: false }));
+                        setVideoLoaded(prev => ({ ...prev, [index]: true }));
+                        // Calculate and set aspect ratio from video natural size
+                        if (data.naturalSize) {
+                          const ratio = data.naturalSize.width / data.naturalSize.height;
+                          setVideoAspectRatio(ratio);
+                        }
+                        // Auto-play if this is the current video
+                        if (index === currentIndex) {
+                          const ref = videoRefs.current[index];
+                          if (ref) {
+                            try {
+                              // Don't set state here - let onPlaybackStatusUpdate handle it
+                              await ref.playAsync();
+                            } catch (error) {
+                              console.error('Error playing video:', error);
+                            }
+                          }
+                        }
+                      }}
+                      onError={(error) => {
+                        console.error('Video playback error:', error);
+                        setIsBuffering(prev => ({ ...prev, [index]: false }));
+                      }}
+                      onPlaybackStatusUpdate={(status) => {
+                        if (status.isLoaded && 'isPlaying' in status) {
+                          const playing = status.isPlaying;
+                          // Only update state if it actually changed to prevent infinite loops
+                          setIsPlaying(prev => {
+                            if (prev[index] === playing) return prev;
+                            return { ...prev, [index]: playing };
+                          });
+                          
+                          if (playing) {
+                            // Clear existing timeout
+                            if (controlsTimeoutRef.current[index]) {
+                              clearTimeout(controlsTimeoutRef.current[index]!);
+                            }
+                            // Hide controls after 3 seconds when playing starts
+                            controlsTimeoutRef.current[index] = setTimeout(() => {
+                              setShowVideoControls(prev => {
+                                if (prev[index] === false) return prev; // Prevent unnecessary update
+                                return { ...prev, [index]: false };
+                              });
+                            }, 3000);
+                          } else {
+                            // Show controls when paused
+                            if (controlsTimeoutRef.current[index]) {
+                              clearTimeout(controlsTimeoutRef.current[index]!);
+                            }
+                            setShowVideoControls(prev => {
+                              if (prev[index] === true) return prev; // Prevent unnecessary update
+                              return { ...prev, [index]: true };
+                            });
+                          }
+                        }
+                      }}
+                    />
+                  </Pressable>
 
                   {/* Loader */}
-                  {isBuffering && (
+                  {isBuffering[index] && (
                     <ActivityIndicator
                       size="large"
                       color="#fff"
@@ -433,22 +535,39 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                   )}
 
                   {/* Play Button */}
-                  {!isBuffering && showVideoControls && (
+                  {!isBuffering[index] && showVideoControls[index] && (
                     <TouchableOpacity
                       style={styles.playButton}
                       onPress={async () => {
                         const ref = videoRefs.current[index];
-                        if (ref) {
-                          if (isPlaying) {
-                            await ref.pauseAsync();
-                          } else {
-                            await ref.playAsync();
+                        if (ref && videoLoaded[index]) {
+                          try {
+                            if (isPlaying[index]) {
+                              await ref.pauseAsync();
+                              // State will be updated by onPlaybackStatusUpdate
+                            } else {
+                              await ref.playAsync();
+                              // State will be updated by onPlaybackStatusUpdate
+                              // Show controls temporarily, then hide after 3 seconds
+                              setShowVideoControls(prev => ({ ...prev, [index]: false }));
+                              if (controlsTimeoutRef.current[index]) {
+                                clearTimeout(controlsTimeoutRef.current[index]!);
+                              }
+                              controlsTimeoutRef.current[index] = setTimeout(() => {
+                                setShowVideoControls(prev => {
+                                  if (prev[index] === false) return prev;
+                                  return { ...prev, [index]: false };
+                                });
+                              }, 3000);
+                            }
+                          } catch (error) {
+                            console.error('Error toggling playback:', error);
                           }
                         }
                       }}
                     >
                       <Image
-                        source={isPlaying ? images.pauseIcon : images.playIcon}
+                        source={isPlaying[index] ? images.pauseIcon : images.playIcon}
                         style={styles.playIcon}
                       />
                     </TouchableOpacity>
@@ -625,13 +744,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 };
 
 const styles = StyleSheet.create({
+  videoPressable: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   videoPlayer: {
     width: '100%',
-    aspectRatio: undefined, // Let video keep its original aspect ratio
-    minHeight: 300, // Match container
-    maxHeight: 600, // Match container
-    backgroundColor: 'black',
-    alignSelf: 'center',
+    height: '100%',
+    backgroundColor: 'transparent',
   },
   bottomSheetOverlay: {
     flex: 1,
@@ -895,14 +1020,14 @@ const styles = StyleSheet.create({
   },
   carouselVideoWrapper: {
     width: width - 20,
-    minHeight: 300, // Minimum height for very short videos
-    maxHeight: 600, // Maximum height for very tall videos
+    height: width - 20, // Make it square like images for consistency
     borderRadius: 18,
-    backgroundColor: 'black',
+    backgroundColor: '#000',
     alignSelf: 'center',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
 
 

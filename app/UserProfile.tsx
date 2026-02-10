@@ -126,6 +126,17 @@ export default function ProfileScreen() {
       return await fetchUserProfile(token, Number(user_id));
     },
     enabled: !!user_id,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (formerly cacheTime)
+    retry: (failureCount, error: any) => {
+      // Don't retry on rate limit errors (429)
+      if (error?.statusCode === 429) {
+        return false;
+      }
+      // Retry up to 2 times for other errors
+      return failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
   });
 
   const {
@@ -164,6 +175,21 @@ export default function ProfileScreen() {
     };
     fetchUserData();
   }, []);
+
+  // Show error toast for rate limiting
+  useEffect(() => {
+    if (error) {
+      const apiError = error as any;
+      if (apiError?.statusCode === 429) {
+        Toast.show({
+          type: 'error',
+          text1: 'Too Many Requests',
+          text2: apiError.message || 'Please wait a moment before trying again.',
+          visibilityTime: 5000,
+        });
+      }
+    }
+  }, [error]);
 
   // Map API users
   const mapApiUsers = (

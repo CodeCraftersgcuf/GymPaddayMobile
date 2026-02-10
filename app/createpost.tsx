@@ -48,8 +48,10 @@ export default function CreatePostScreen() {
   const [loading, setLoading] = useState(true);
   const [viewingMedia, setViewingMedia] = useState<GalleryMedia | null>(null);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
 
-  const { dark } = useTheme();
+  const theme = useTheme();
+  const dark = theme?.dark ?? false; // Safety check in case theme context isn't initialized
   const router = useRouter();
   const  tokenn = async ()=>{
     const token = await SecureStore.getItemAsync('auth_token');
@@ -100,6 +102,7 @@ export default function CreatePostScreen() {
     },
     onError: (error: any) => {
       console.error('❌ Post Creation Error:', error);
+      setIsSubmittingLocal(false); // Re-enable input on error
       handleMutationError(error, 'Failed to Create Post');
     },
   });
@@ -122,11 +125,12 @@ export default function CreatePostScreen() {
     },
     onError: (error: any) => {
       console.error('❌ Post Update Error:', error);
+      setIsSubmittingLocal(false); // Re-enable input on error
       handleMutationError(error, 'Failed to Update Post');
     },
   });
 
-  const isSubmitting = createPostMutation.isPending || updatePostMutation.isPending;
+  const isSubmitting = isSubmittingLocal || createPostMutation.isPending || updatePostMutation.isPending;
 
   const handleMutationError = (error: any, defaultMessage: string) => {
     if (error?.response) {
@@ -424,12 +428,28 @@ export default function CreatePostScreen() {
   const handleSubmit = async () => {
     try {
       if (isSubmitting) return;
+      
+      // Disable input immediately when share button is clicked
+      setIsSubmittingLocal(true);
+      
       // Validation
       if (!postText.trim() && selectedMedia.length === 0) {
+        setIsSubmittingLocal(false); // Re-enable if validation fails
         Toast.show({
           type: 'error',
           text1: 'Add content',
           text2: 'Write a caption or select at least one photo/video.',
+        });
+        return;
+      }
+      
+      // Validate character limit
+      if (postText.length > 500) {
+        setIsSubmittingLocal(false);
+        Toast.show({
+          type: 'error',
+          text1: 'Text too long',
+          text2: 'Please limit your post to 500 characters. Current: ' + postText.length + '/500',
         });
         return;
       }
@@ -438,6 +458,7 @@ export default function CreatePostScreen() {
       const token = await SecureStore.getItemAsync('auth_token');
       console.log("The Token is: ", token);
       if (!token) {
+        setIsSubmittingLocal(false); // Re-enable if auth fails
         Toast.show({
           type: 'error',
           text1: 'Authentication Error',
@@ -457,12 +478,14 @@ export default function CreatePostScreen() {
 
       // Process and add media files
       if (selectedMedia.length > 0) {
+        console.log(`📸 Processing ${selectedMedia.length} media file(s)...`);
         for (let i = 0; i < selectedMedia.length; i++) {
           const media = selectedMedia[i];
 
           try {
             // Skip existing media that hasn't changed (starts with 'existing_')
             if (media.id.startsWith('existing_') && isEditMode) {
+              console.log(`⏭️ Skipping existing media: ${media.id}`);
               continue;
             }
 
@@ -470,13 +493,15 @@ export default function CreatePostScreen() {
             const mimeType = media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
             const fileName = `media_${Date.now()}_${i}.${fileExtension}`;
 
+            console.log(`📎 Adding media ${i + 1}/${selectedMedia.length}: ${fileName} (${media.mediaType})`);
+            
             formData.append('media[]', {
               uri: media.uri,
               name: fileName,
               type: mimeType,
             } as any);
           } catch (error) {
-            console.error(`Error processing media ${i}:`, error);
+            console.error(`❌ Error processing media ${i}:`, error);
             Toast.show({
               type: 'error',
               text1: 'Media Processing Error',
@@ -485,6 +510,7 @@ export default function CreatePostScreen() {
             return;
           }
         }
+        console.log(`✅ All media files processed successfully`);
       }
 
       // If no media, add media_url as fallback (for API compatibility)
@@ -492,10 +518,16 @@ export default function CreatePostScreen() {
         formData.append('media_url', '');
       }
 
+      // Log FormData contents for debugging
+      console.log('📦 FormData prepared:', {
+        hasText: !!postText.trim(),
+        mediaCount: selectedMedia.length,
+        isEditMode,
+      });
+
       // Call appropriate mutation based on mode
       if (isEditMode && postId) {
         console.log('🔄 Updating post with ID:', postId);
-        // updatePostMutation();
         updatePostMutation.mutate({
           postId,
           data: formData,
@@ -503,6 +535,7 @@ export default function CreatePostScreen() {
         });
       } else {
         console.log('✨ Creating new post');
+        console.log('🌐 API Endpoint:', 'https://gympaddy.skillverse.com.pk/api/user/posts');
         createPostMutation.mutate({
           data: formData,
           token,
@@ -511,6 +544,7 @@ export default function CreatePostScreen() {
 
     } catch (error) {
       console.error('Error in handleSubmit:', error);
+      setIsSubmittingLocal(false); // Re-enable input on error
       Toast.show({
         type: 'error',
         text1: 'Submission Error',

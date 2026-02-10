@@ -231,7 +231,7 @@ const User_liveViewMain: React.FC = () => {
         {channelName ? (
           <WebView
             source={{
-              uri: `https://hmstech.xyz/live.html?channel=${channelName}`,
+              uri: `https://skillverse.com.pk/live.html?channel=${channelName}`,
             }}
             javaScriptEnabled
             domStorageEnabled
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   },
   chatOverlay: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 100, // Increased from 20 to avoid overlap with bottom input controls
     left: 16,
     right: 16,
     maxHeight: 300,

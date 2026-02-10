@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Pressable,
   Text,
+  StatusBar,
 } from 'react-native';
 import { Audio, Video } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,7 +22,7 @@ const { width, height } = Dimensions.get('window');
 const STORY_DURATION = 4000; // Reduced from 5000ms to 4000ms for faster transitions
 
 const fixUrl = (url: string) =>
-  url?.replace('https://gympaddy.hmstech.xyz/storage//', 'https://gympaddy.hmstech.xyz/storage/');
+  url?.replace('https://gympaddy.skillverse.com.pk/storage//', 'https://gympaddy.skillverse.com.pk/storage/');
 
 const UserStoryPreview = () => {
   const { selected } = useLocalSearchParams();
@@ -44,27 +45,27 @@ const UserStoryPreview = () => {
     let isCancelled = false;
 
     const cleanupMedia = async () => {
-      setIsMediaLoaded(false);
-      progress.setValue(0);
-
-      if (musicSound) {
-        await musicSound.stopAsync();
-        await musicSound.unloadAsync();
-        setMusicSound(null);
+      // Stop animation
+      if (animationRef.current) {
+        animationRef.current.stop();
       }
-    };
+      
+      // Reset progress to 0
+      progress.setValue(0);
+      setIsMediaLoaded(false);
 
-    const playMusicAfterMediaLoads = async () => {
-      if (currentStory?.music_url) {
+      // Stop and cleanup music
+      if (musicSound) {
         try {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: currentStory.music_url },
-            { shouldPlay: true }
-          );
-          if (!isCancelled) setMusicSound(sound);
-        } catch (err) {
-          console.warn('Failed to play music:', err);
+          await musicSound.stopAsync();
+          await musicSound.unloadAsync();
+        } catch (e) {
+          // Silently ignore cleanup errors
+          if (__DEV__) {
+            console.warn('Error cleaning up music:', e);
+          }
         }
+        setMusicSound(null);
       }
     };
 
@@ -85,43 +86,58 @@ const UserStoryPreview = () => {
     };
   }, [musicSound]);
 
+  // Start progress animation when media loads
   useEffect(() => {
-    if (isMediaLoaded && currentStory?.media_type === 'photo' && !isPaused) {
-      animationRef.current = Animated.timing(progress, {
-        toValue: 1,
-        duration: STORY_DURATION,
-        useNativeDriver: false,
-      });
-      animationRef.current.start(({ finished }) => {
-        if (finished) handleNext();
-      });
+    if (isMediaLoaded && !isPaused) {
+      if (currentStory?.media_type === 'photo') {
+        // Reset progress to 0 first
+        progress.setValue(0);
+        
+        // For photos, animate progress bar smoothly
+        animationRef.current = Animated.timing(progress, {
+          toValue: 1,
+          duration: STORY_DURATION,
+          useNativeDriver: false,
+        });
+        animationRef.current.start(({ finished }) => {
+          if (finished) handleNext();
+        });
+      }
+      // For videos, progress is updated via onPlaybackStatusUpdate
     }
-  }, [isMediaLoaded, isPaused]);
+  }, [isMediaLoaded, isPaused, currentStory?.media_type, currentIndex]);
 
   const handleNext = useCallback(() => {
-    if (animationRef.current) animationRef.current.stop();
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
     
-    // Faster state update
+    // Reset states
     setIsMediaLoaded(false);
+    progress.setValue(0);
     
     if (currentIndex < stories.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
       router.back();
     }
-  }, [currentIndex, stories.length, router]);
+  }, [currentIndex, stories.length, router, progress]);
 
   const handlePrev = useCallback(() => {
-    if (animationRef.current) animationRef.current.stop();
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
     
+    // Reset states
     setIsMediaLoaded(false);
+    progress.setValue(0);
     
     if (currentIndex > 0) {
       setCurrentIndex((prev) => prev - 1);
     } else {
       router.back();
     }
-  }, [currentIndex, router]);
+  }, [currentIndex, router, progress]);
 
   const handlePressIn = () => {
     setIsPaused(true);
@@ -131,35 +147,72 @@ const UserStoryPreview = () => {
 
   const handlePressOut = () => {
     setIsPaused(false);
-    if (currentStory?.media_type === 'photo') {
-      const remaining = (1 - (progress as any)._value) * STORY_DURATION;
-      animationRef.current = Animated.timing(progress, {
-        toValue: 1,
-        duration: remaining,
-        useNativeDriver: false,
-      });
-      animationRef.current.start(({ finished }) => {
-        if (finished) handleNext();
-      });
-    } else {
-      // ✅ Resume video
+    if (currentStory?.media_type === 'photo' && isMediaLoaded) {
+      // Get current progress value
+      const currentProgress = (progress as any)._value || 0;
+      const remaining = (1 - currentProgress) * STORY_DURATION;
+      
+      if (remaining > 0) {
+        animationRef.current = Animated.timing(progress, {
+          toValue: 1,
+          duration: remaining,
+          useNativeDriver: false,
+        });
+        animationRef.current.start(({ finished }) => {
+          if (finished) handleNext();
+        });
+      } else {
+        // If no time remaining, go to next
+        handleNext();
+      }
+    } else if (currentStory?.media_type === 'video') {
+      // Resume video
       videoRef.current?.playAsync?.();
     }
   };
-const playMusicAfterMediaLoads = async () => {
-  console.log('playMusicAfterMediaLoads and current stories', currentStory);
-  if (currentStory?.music_url) {
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: currentStory.music_url },
-        { shouldPlay: true }
-      );
-      setMusicSound(sound);
-    } catch (err) {
-      console.warn('Failed to play music:', err);
+  const playMusicAfterMediaLoads = useCallback(async () => {
+    if (currentStory?.music_url) {
+      try {
+        // Stop any existing music first
+        if (musicSound) {
+          try {
+            await musicSound.stopAsync();
+            await musicSound.unloadAsync();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+        }
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: currentStory.music_url },
+          { 
+            shouldPlay: true,
+            isLooping: true, // Loop music for story
+          }
+        );
+        setMusicSound(sound);
+      } catch (err: any) {
+        // Only log non-network errors or log silently for network issues
+        const errorMessage = err?.message || String(err);
+        const isNetworkError = 
+          errorMessage.includes('UnknownHostException') ||
+          errorMessage.includes('Unable to resolve host') ||
+          errorMessage.includes('Network request failed') ||
+          errorMessage.includes('ECONNREFUSED') ||
+          errorMessage.includes('ENOTFOUND') ||
+          errorMessage.includes('HttpDataSourceException');
+        
+        // Silently handle network errors (expected when offline or CDN unavailable)
+        if (!isNetworkError) {
+          // Only log unexpected errors
+          if (__DEV__) {
+            console.warn('Failed to play music (non-network error):', err);
+          }
+        }
+        // Network errors are expected and don't need logging
+      }
     }
-  }
-};
+  }, [currentStory?.music_url, musicSound]);
 // Enhanced preloading - preload next 2 stories for ultra-smooth transitions
 useEffect(() => {
   const preloadStories = async () => {
@@ -200,21 +253,22 @@ useEffect(() => {
         <>
           <CachedImage
             source={{ uri: fixedUrl }}
-            cacheKey={`story-${currentStory.id}`} // makes it unique per story
+            cacheKey={`story-${currentStory.id}`}
             style={styles.media}
             resizeMode="cover"
-onLoad={async () => {
-  setIsMediaLoaded(true);
-  if (!isPaused) {
-    await videoRef.current?.playAsync?.();
-  }
-
-  if (currentStory?.music_url) {
-    await playMusicAfterMediaLoads(); // <-- THIS LINE FIXES THE MUSIC
-  }
-}}
-
-            
+            onLoadStart={() => {
+              setIsMediaLoaded(false);
+              progress.setValue(0);
+            }}
+            onLoad={async () => {
+              setIsMediaLoaded(true);
+              // Small delay to ensure image is fully rendered
+              await new Promise(resolve => setTimeout(resolve, 100));
+              // Start music after image loads
+              if (currentStory?.music_url) {
+                await playMusicAfterMediaLoads();
+              }
+            }}
           />
           {!isMediaLoaded && (
             <View style={styles.loader}>
@@ -237,23 +291,32 @@ onLoad={async () => {
           resizeMode="cover"
           shouldPlay={!isPaused}
           style={styles.media}
-onLoad={async () => {
-  setIsMediaLoaded(true);
-  if (!isPaused) {
-    await videoRef.current?.playAsync?.();
-  }
-
-  if (currentStory?.music_url) {
-    console.log("Video loaded, calling playMusicAfterMediaLoads");
-    await playMusicAfterMediaLoads();
-  }
-}}
-// }}
+          onLoadStart={() => {
+            setIsMediaLoaded(false);
+            progress.setValue(0);
+          }}
+          onLoad={async () => {
+            setIsMediaLoaded(true);
+            if (!isPaused) {
+              await videoRef.current?.playAsync?.();
+            }
+            // Start music after video loads
+            if (currentStory?.music_url) {
+              await playMusicAfterMediaLoads();
+            }
+          }}
           onPlaybackStatusUpdate={(status) => {
             if (status.isLoaded) {
+              // Update progress bar based on video position - smooth animation
+              if (status.durationMillis && status.positionMillis !== undefined) {
+                const progressValue = Math.min(status.positionMillis / status.durationMillis, 1);
+                progress.setValue(progressValue);
+              }
+              
               if (status.didJustFinish) {
                 handleNext();
-              } else if (!status.isPlaying && !isPaused) {
+              } else if (!status.isPlaying && !isPaused && !status.didJustFinish) {
+                // Auto-resume if video stopped unexpectedly
                 videoRef.current?.playAsync?.();
               }
             }
@@ -271,31 +334,40 @@ onLoad={async () => {
 
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
-      {stories.map((_, index) => (
-        <View key={index} style={styles.progressTrack}>
-          <Animated.View
-            style={[
-              styles.progressBar,
-              index === currentIndex && {
-                flex: progress,
-              },
-              index < currentIndex && {
-                backgroundColor: '#fff',
-                flex: 1,
-              },
-              index > currentIndex && {
-                backgroundColor: '#ffffff55',
-                flex: 0,
-              },
-            ]}
-          />
-        </View>
-      ))}
+      {stories.map((_, index) => {
+        const isActive = index === currentIndex;
+        const isCompleted = index < currentIndex;
+        
+        return (
+          <View key={index} style={styles.progressTrack}>
+            <Animated.View
+              style={[
+                styles.progressBar,
+                isActive && {
+                  width: progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+                isCompleted && {
+                  width: '100%',
+                  backgroundColor: '#fff',
+                },
+                !isActive && !isCompleted && {
+                  width: '0%',
+                  backgroundColor: '#ffffff55',
+                },
+              ]}
+            />
+          </View>
+        );
+      })}
     </View>
   );
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderMedia()}
       {renderProgressBar()}
       
@@ -361,16 +433,17 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? 30 : 50,
+    top: Platform.OS === 'android' ? 40 : 60,
     left: 10,
     right: 10,
     flexDirection: 'row',
     gap: 4,
-    zIndex: 100,
+    zIndex: 1000,
+    elevation: 1000, // For Android
   },
   progressTrack: {
     flex: 1,
-    height: 2.5,
+    height: 3,
     backgroundColor: '#ffffff33',
     marginHorizontal: 2,
     overflow: 'hidden',

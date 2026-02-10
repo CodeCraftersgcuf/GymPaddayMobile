@@ -51,7 +51,7 @@ const validationSchema = Yup.object().shape({
     .required("Age is required")
     .min(13, "Must be at least 13 years old")
     .max(120, "Age must be less than 120"),
-  gender: Yup.string().optional(),
+  gender: Yup.string().nullable().notRequired(),
   password: Yup.string()
     .min(8, "Password must be at least 8 characters")
     .required("Password is required"),
@@ -512,7 +512,7 @@ export default function Register() {
                             }}
                             style={[
                               styles.registerButton,
-                              (Object.keys(errors).length > 0 || mutation.isPending) && styles.disabledButton
+                              (Object.keys(errors).filter(key => key !== 'gender').length > 0 || mutation.isPending) && styles.disabledButton
                             ]}
                             disabled={mutation.isPending}
                           >

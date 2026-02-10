@@ -35,5 +35,25 @@ export const deleteComment = async ({
   id: number;
   token: string;
 }) => {
-  return await apiCall(API_ENDPOINTS.USER.COMMENTS.Delete(id), "DELETE", undefined, token);
+  try {
+    const response = await fetch(API_ENDPOINTS.USER.COMMENTS.Delete(id), {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('❌ Delete Comment Error:', error);
+    throw error;
+  }
 };

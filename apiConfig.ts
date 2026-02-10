@@ -44,7 +44,7 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
-      TopUp: API_DOMAIN + "/user/wallet/topup",
+      TopUp: API_DOMAIN + "/user/top-up",
       Withdraw: API_DOMAIN + "/user/wallet/withdraw",
     },
     GIFTS: {

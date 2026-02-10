@@ -45,8 +45,8 @@ interface ListingItem {
 }
 
 export default function MarketplaceScreen() {
-  const { dark } = useTheme();
-  const isDark = dark;
+  const themeContext = useTheme();
+  const isDark = themeContext?.dark ?? false;
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   // Default to 'all' so all listings show by default
@@ -85,11 +85,43 @@ export default function MarketplaceScreen() {
   }, []);
   const nigeriaLocations = [
     { id: 'all', name: 'All' },
-    { id: 'lagos', name: 'Lagos' },
-    { id: 'abuja', name: 'Abuja' },
+    { id: 'abia', name: 'Abia' },
+    { id: 'adamawa', name: 'Adamawa' },
+    { id: 'akwa-ibom', name: 'Akwa Ibom' },
+    { id: 'anambra', name: 'Anambra' },
+    { id: 'bauchi', name: 'Bauchi' },
+    { id: 'bayelsa', name: 'Bayelsa' },
+    { id: 'benue', name: 'Benue' },
+    { id: 'borno', name: 'Borno' },
+    { id: 'cross-river', name: 'Cross River' },
+    { id: 'delta', name: 'Delta' },
+    { id: 'ebonyi', name: 'Ebonyi' },
+    { id: 'edo', name: 'Edo' },
+    { id: 'ekiti', name: 'Ekiti' },
+    { id: 'enugu', name: 'Enugu' },
+    { id: 'gombe', name: 'Gombe' },
+    { id: 'imo', name: 'Imo' },
+    { id: 'jigawa', name: 'Jigawa' },
     { id: 'kaduna', name: 'Kaduna' },
-    { id: 'portharcourt', name: 'Port Harcourt' },
-    { id: 'ibadan', name: 'Ibadan' },
+    { id: 'kano', name: 'Kano' },
+    { id: 'katsina', name: 'Katsina' },
+    { id: 'kebbi', name: 'Kebbi' },
+    { id: 'kogi', name: 'Kogi' },
+    { id: 'kwara', name: 'Kwara' },
+    { id: 'lagos', name: 'Lagos' },
+    { id: 'nasarawa', name: 'Nasarawa' },
+    { id: 'niger', name: 'Niger' },
+    { id: 'ogun', name: 'Ogun' },
+    { id: 'ondo', name: 'Ondo' },
+    { id: 'osun', name: 'Osun' },
+    { id: 'oyo', name: 'Oyo' },
+    { id: 'plateau', name: 'Plateau' },
+    { id: 'rivers', name: 'Rivers' },
+    { id: 'sokoto', name: 'Sokoto' },
+    { id: 'taraba', name: 'Taraba' },
+    { id: 'yobe', name: 'Yobe' },
+    { id: 'zamfara', name: 'Zamfara' },
+    { id: 'abuja', name: 'FCT Abuja' },
   ];
 
   const theme = {
@@ -153,7 +185,7 @@ export default function MarketplaceScreen() {
   };
 
   // const BASE_STORAGE_URL = 'http://192.168.175.151:8000/storage/';
-  const BASE_STORAGE_URL = 'https://gympaddy.hmstech.xyz/storage/';
+  const BASE_STORAGE_URL = 'https://gympaddy.skillverse.com.pk/storage/';
 
 
   const apiListings = Array.isArray(data?.data)
@@ -183,7 +215,7 @@ export default function MarketplaceScreen() {
       return {
         id: String(item.id),
         title: item.title,
-        price: formatNaira(item.price),
+        price: typeof item.price === 'number' ? item.price : Number(item.price) || 0,
         category: categoryName,
         image: imageUrl,
         isTopAd: !!item.isTopAd,
@@ -277,7 +309,7 @@ React.useEffect(() => {
           {item.title}
         </Text>
         <Text style={styles.listingPrice}>
-          ₦{Intl.NumberFormat('en-NG').format(Math.floor(item.price))}
+          ₦{Intl.NumberFormat('en-NG').format(Math.floor(item.price || 0))}
         </Text>
 
         {/* <TouchableOpacity onPress={() => router.push('/marketView')} style={styles.sellerInfo}> */}
@@ -450,14 +482,21 @@ React.useEffect(() => {
         style={styles.modal}
       >
         <View style={styles.bottomSheetContent}>
-          {nigeriaLocations.map(loc => (
-            <TouchableOpacity key={loc.id} onPress={() => {
-              setSelectedLocation(loc.id);
-              setShowLocationSheet(false);
-            }}>
-              <Text style={styles.bottomSheetItem}>{loc.name}</Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView 
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            style={{ maxHeight: '100%' }}
+            contentContainerStyle={{ padding: 20 }}
+          >
+            {nigeriaLocations.map(loc => (
+              <TouchableOpacity key={loc.id} onPress={() => {
+                setSelectedLocation(loc.id);
+                setShowLocationSheet(false);
+              }}>
+                <Text style={styles.bottomSheetItem}>{loc.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </Modal>
 
@@ -705,10 +744,9 @@ const styles = StyleSheet.create({
   },
   bottomSheetContent: {
     backgroundColor: 'white',
-    padding: 20,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '50%', // optional: prevents full screen takeover
+    maxHeight: '80%', // increased height for better scrolling
   },
   bottomSheetItem: {
     paddingVertical: 14,

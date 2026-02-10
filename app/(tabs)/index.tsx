@@ -245,7 +245,7 @@ export default function SocialFeedScreen() {
 
   useEffect(() => {
     if (data?.pages) {
-      const allPosts = data.pages.flatMap(page => page.data); // assuming response has .data field
+      const allPosts = data.pages.flatMap(page => page.data || []); // assuming response has .data field
 
       const formatted = allPosts.map((post: any) => ({
         id: Number(post.id),
@@ -283,7 +283,14 @@ export default function SocialFeedScreen() {
         })) || [],
       }));
 
-      const filtered = formatted.filter((post: any) => !hiddenPostIds.includes(post.id));
+      // Filter out hidden posts - ensure we check against the hiddenPostIds array
+      const hiddenIdsSet = new Set(hiddenPostIds.map(id => Number(id)));
+      const filtered = formatted.filter((post: any) => {
+        const postId = Number(post.id);
+        return !hiddenIdsSet.has(postId);
+      });
+      
+      console.log('📊 Filtering posts - Total:', formatted.length, 'Hidden:', hiddenPostIds.length, 'Filtered:', filtered.length);
       setPosts(filtered);
     }
   }, [data, hiddenPostIds]);
@@ -306,12 +313,24 @@ export default function SocialFeedScreen() {
     const loadHiddenPosts = async () => {
       try {
         const stored = await AsyncStorage.getItem('hidden_post_ids');
-        const parsed = stored ? JSON.parse(stored) : [];
-        if (Array.isArray(parsed)) {
-          setHiddenPostIds(parsed);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            // Ensure all IDs are numbers
+            const numericIds = parsed.map(id => Number(id)).filter(id => !isNaN(id));
+            console.log('📦 Loaded hidden post IDs from storage:', numericIds.length, 'posts');
+            setHiddenPostIds(numericIds);
+          } else {
+            console.warn('⚠️ Stored hidden posts is not an array:', parsed);
+            setHiddenPostIds([]);
+          }
+        } else {
+          console.log('ℹ️ No hidden posts found in storage');
+          setHiddenPostIds([]);
         }
       } catch (err) {
-        console.error('Failed to load hidden posts', err);
+        console.error('❌ Failed to load hidden posts:', err);
+        setHiddenPostIds([]);
       }
     };
     loadHiddenPosts();
@@ -360,20 +379,43 @@ export default function SocialFeedScreen() {
   //   return <LoadingIndicator text="Loading posts..." />;
   // }
 
-  const handleHidePost = () => {
-    console.log('Hiding post:', idCan);
-    setBottomIndex(-1); // Close the bottom sheet
-
+  const handleHidePost = async () => {
+    console.log('🔒 Hiding post:', idCan);
+    
     if (idCan.postId) {
-      setPosts(prev => prev.filter(p => Number(p.id) !== Number(idCan.postId)));
+      const postIdToHide = Number(idCan.postId);
+      
+      // Immediately remove from UI
+      setPosts(prev => prev.filter(p => Number(p.id) !== postIdToHide));
+      
+      // Update hidden posts list
       setHiddenPostIds(prev => {
-        const updated = [...prev, Number(idCan.postId)];
-        AsyncStorage.setItem('hidden_post_ids', JSON.stringify(updated)).catch((err) => {
-          console.error('Failed to persist hidden posts', err);
-        });
+        // Check if already hidden to avoid duplicates
+        if (prev.includes(postIdToHide)) {
+          console.log('⚠️ Post already in hidden list:', postIdToHide);
+          return prev;
+        }
+        
+        const updated = [...prev, postIdToHide];
+        
+        // Save to AsyncStorage
+        AsyncStorage.setItem('hidden_post_ids', JSON.stringify(updated))
+          .then(() => {
+            console.log('✅ Hidden post saved to storage:', postIdToHide);
+          })
+          .catch((err) => {
+            console.error('❌ Failed to persist hidden posts:', err);
+          });
+        
         return updated;
       });
-      setBottomIndex(-1); // Close the bottom sheet
+      
+      // Close the bottom sheet
+      setBottomIndex(-1);
+      
+      console.log('✅ Post hidden successfully:', postIdToHide);
+    } else {
+      console.warn('⚠️ No postId found in idCan:', idCan);
     }
   };
   const mapApiCommentsToInternal = (apiComments: any[]): Comment[] => {
@@ -395,12 +437,22 @@ export default function SocialFeedScreen() {
 
       const uniqueUserIds = Array.from(new Set(posts.map(post => post.user?.id)));
 
-      for (const id of uniqueUserIds) {
-        console.log('Prefetching profile for user ID:', id);
-        queryClient.prefetchQuery({
-          queryKey: ['userProfile', id],
-          queryFn: () => fetchUserProfile(token, id),
-        });
+      // Prefetch profiles with delay to avoid rate limiting
+      // Limit to first 10 users to prevent too many requests
+      const limitedUserIds = uniqueUserIds.slice(0, 10);
+      
+      for (let i = 0; i < limitedUserIds.length; i++) {
+        const id = limitedUserIds[i];
+        // Add delay between requests to avoid rate limiting
+        setTimeout(() => {
+          console.log('Prefetching profile for user ID:', id);
+          queryClient.prefetchQuery({
+            queryKey: ['userProfile', id],
+            queryFn: () => fetchUserProfile(token, id),
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            gcTime: 10 * 60 * 1000, // 10 minutes
+          });
+        }, i * 200); // 200ms delay between each request
       }
     };
 

@@ -16,19 +16,31 @@ export const loginUser = async ({
 export const registerUser = async ({
   data,
 }: {
-  data: {
-    username: string;
-    fullname: string;
-    email: string;
-    phone: string;
-    age: number;
-    gender: string;
-    password: string;
-    password_confirmation: string;
-  };
+  data: FormData;
 }) => {
-  console.log("Register data:", data);
-  return await apiCall(API_ENDPOINTS.AUTH.Register, "POST", data);
+  try {
+    console.log("Register data:", data);
+    
+    const response = await fetch(API_ENDPOINTS.AUTH.Register, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        // Don't set Content-Type for FormData - let React Native set it automatically with boundary
+      },
+      body: data,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('❌ Register Error:', error);
+    throw error;
+  }
 };
 
 export const forgotPassword = async ({

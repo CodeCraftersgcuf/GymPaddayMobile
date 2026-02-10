@@ -19,7 +19,7 @@ export default function DailyCallScreen() {
   // Define the URL based on call type
   const callUrl =
     callType === 'voice'
-      ? `https://hmstech.xyz/agora.html?role=${type}&room=${channelName}`
+      ? `https://skillverse.com.pk/agora.html?role=${type}&room=${channelName}`
       : roomUrl
   const getToken = async () => {
     return await SecureStore.getItemAsync('auth_token');

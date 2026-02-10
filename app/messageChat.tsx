@@ -73,9 +73,26 @@ export default function MessageChat() {
     queryFn: async () => {
       const token = await getToken();
       if (!token) throw new Error('No token found');
-      return fetchChatMessages(token, conversation_id);
+      const result = await fetchChatMessages(token, conversation_id);
+      // Mark messages as read when conversation is opened
+      if (result?.messages && result.messages.length > 0) {
+        try {
+          await fetch(`https://gympaddy.skillverse.com.pk/api/user/mark-messages-read`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ conversation_id }),
+          });
+        } catch (error) {
+          console.error('Failed to mark messages as read:', error);
+        }
+      }
+      return result;
     },
     enabled: !!conversation_id,
+    refetchInterval: 3000, // Refetch every 3 seconds to get new messages
   });
   const [lastCallId, setLastCallId] = useState<number | null>(null);
 
@@ -99,7 +116,7 @@ export default function MessageChat() {
   const messages = data?.messages?.map((msg: any) => {
     let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
     if (imageUrl && !imageUrl.startsWith('http')) {
-      imageUrl = `https://gympaddy.hmstech.xyz/storage/${imageUrl}`;
+      imageUrl = `https://gympaddy.skillverse.com.pk/storage/${imageUrl}`;
     }
     return {
       id: String(msg.id),
@@ -178,9 +195,19 @@ export default function MessageChat() {
       console.log('Send message error:', err);
     }
   });
+  const [isSending, setIsSending] = useState(false);
   const handleSendMessage = () => {
-    if ((newMessage.trim() || attachedImage) && !sendMessageMutation.isLoading) {
-      sendMessageMutation.mutate({ text: newMessage.trim(), imageUri: attachedImage });
+    if (isSending || sendMessageMutation.isLoading) return; // Prevent duplicate sends
+    if ((newMessage.trim() || attachedImage)) {
+      setIsSending(true);
+      sendMessageMutation.mutate(
+        { text: newMessage.trim(), imageUri: attachedImage },
+        {
+          onSettled: () => {
+            setIsSending(false);
+          }
+        }
+      );
     }
   };
   useEffect(() => {
@@ -314,9 +341,9 @@ export default function MessageChat() {
           ]}
         >
           {/* Render image if present */}
-          {item.image && (
+          {(item.image || item.image_url || item.imagePath) && (
             <Image
-              source={{ uri: item.image }}
+              source={{ uri: item.image || item.image_url || item.imagePath }}
               style={{
                 width: 160,
                 height: 160,
@@ -356,7 +383,23 @@ export default function MessageChat() {
       return fetchUserProfile(token, otherUser.id);
     },
     enabled: !!otherUser?.id,
+    staleTime: 0, // Always fetch fresh data for online status
+    refetchInterval: 10000, // Refetch every 10 seconds to get updated online status
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    retry: (failureCount, error: any) => {
+      // Don't retry on rate limit errors (429)
+      if (error?.statusCode === 429) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
+
+  // Merge otherUserProfile data to get updated online status
+  const userWithUpdatedStatus = otherUserProfile?.data
+    ? { ...otherUser, ...otherUserProfile.data, is_online: otherUserProfile.data.is_online }
+    : otherUser;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -413,13 +456,13 @@ export default function MessageChat() {
 
               <View style={styles.userInfo}>
                 <Image
-                  source={{ uri: otherUser?.profile_picture_url }}
+                  source={{ uri: userWithUpdatedStatus?.profile_picture_url }}
                   style={styles.userImage}
                 />
                 <View style={styles.userDetails}>
-                  <Text style={styles.userName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
-                  <Text style={styles.onlineStatus}>
-                    {otherUser?.is_online ? 'Online' : 'Offline'}
+                  <Text style={[styles.userName, { color: theme.text }]}>{userWithUpdatedStatus?.fullname ?? userWithUpdatedStatus?.username ?? 'User'}</Text>
+                  <Text style={[styles.onlineStatus, { color: userWithUpdatedStatus?.is_online ? '#4CD964' : '#999' }]}>
+                    {userWithUpdatedStatus?.is_online ? 'Online' : 'Offline'}
                   </Text>
                 </View>
               </View>
@@ -429,7 +472,7 @@ export default function MessageChat() {
                   <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
                   {/* <Icon name="call" size={20} color={theme.text} /> */}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
+                <TouchableOpacity style={[styles.actionButton, { backgroundColor: dark ? '#0D0D0D' : '#FAFAFA' }]} onPress={handleVideoCall}>
                   <MaterialIcons name="videocam" size={20} color={theme.text} />
                 </TouchableOpacity>
               </View>

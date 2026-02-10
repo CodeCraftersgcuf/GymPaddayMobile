@@ -22,6 +22,7 @@ import { images } from '@/constants';
 import * as SecureStore from 'expo-secure-store';
 import { useMutation } from '@tanstack/react-query';
 import { deleteComment } from '@/utils/mutations/comments';
+import Toast from 'react-native-toast-message';
 
 interface Comment {
   id: string;
@@ -88,10 +89,27 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
       return deleteComment({ id: commentId, token });
     },
     onSuccess: (_, commentId) => {
-      setLocalComments(prev => prev.filter(item => item.id !== commentId.toString()));
+      // Recursively remove comment from local state (handles nested replies)
+      const removeCommentRecursively = (comments: Comment[]): Comment[] => {
+        return comments
+          .filter(item => item.id !== commentId.toString())
+          .map(item => ({
+            ...item,
+            replies: item.replies ? removeCommentRecursively(item.replies) : undefined
+          }));
+      };
+      
+      setLocalComments(prev => removeCommentRecursively(prev));
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Comment deleted',
+        text2: 'The comment has been removed.',
+      });
     },
     onError: (error: any) => {
-      Alert.alert('Delete Failed', error?.message || 'Unable to delete comment');
+      console.error('Delete comment error:', error);
+      Alert.alert('Delete Failed', error?.message || 'Unable to delete comment. Please try again.');
     }
   });
 
@@ -158,10 +176,20 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
     setReplyToUsername(username);
   };
   const handleDeletePress = (commentId: string, userId: string) => {
-    if (currentUserId && currentUserId !== userId) {
+    // Compare user IDs (handle both string and number formats)
+    const currentUserIdStr = currentUserId?.toString();
+    const commentUserIdStr = userId?.toString();
+    
+    if (currentUserIdStr && currentUserIdStr !== commentUserIdStr) {
       Alert.alert('Not allowed', 'You can only delete your own comments.');
       return;
     }
+    
+    if (!currentUserIdStr) {
+      Alert.alert('Error', 'Unable to verify user. Please try again.');
+      return;
+    }
+    
     Alert.alert(
       'Delete Comment',
       'Are you sure you want to delete this comment?',

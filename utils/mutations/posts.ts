@@ -1,4 +1,3 @@
-import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../apiConfig";
 
 export const createPost = async ({
@@ -8,7 +7,28 @@ export const createPost = async ({
   data: FormData;
   token: string;
 }) => {
-  return await apiCall(API_ENDPOINTS.USER.POSTS.Create, "POST", data, token);
+  try {
+    const response = await fetch(API_ENDPOINTS.USER.POSTS.Create, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        // Don't set Content-Type for FormData - let the browser/React Native set it automatically with boundary
+      },
+      body: data,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('❌ Create Post Error:', error);
+    throw error;
+  }
 };
 
 export const createBoostedPost = async ({
@@ -98,19 +118,19 @@ export const createBoostedListing = async ({
 
 
 export const updatePost = async ({
-  id,
+  postId,
   data,
   token,
 }: {
-  id: number;
-  data: {
+  postId: string | number;
+  data: FormData | {
     title?: string;
     content?: string;
     media_url?: string;
   };
   token: string;
 }) => {
-  return await apiCall(API_ENDPOINTS.USER.POSTS.Update(id), "PUT", data, token);
+  return await apiCall(API_ENDPOINTS.USER.POSTS.Update(Number(postId)), "PUT", data, token);
 };
 
 export const deletePost = async ({

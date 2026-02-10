@@ -75,13 +75,47 @@ const FloatingLabelPhoneInput: React.FC<FloatingLabelPhoneInputProps> = ({
   const [phoneNumber, setPhoneNumber] = useState(() => extractPhoneNumber(value || "", initialCountryCode));
 
   const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
-    Animated.timing(animatedIsFocused, {
-      toValue: isFocused || phoneNumber ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+    // Stop any existing animation before starting a new one
+    if (animationRef.current) {
+      try {
+        animationRef.current.stop();
+      } catch (e) {
+        // Ignore errors when stopping animation
+      }
+      animationRef.current = null;
+    }
+
+    try {
+      animationRef.current = Animated.timing(animatedIsFocused, {
+        toValue: isFocused || phoneNumber ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      });
+
+      animationRef.current.start(({ finished }) => {
+        if (finished) {
+          animationRef.current = null;
+        }
+      });
+    } catch (error) {
+      console.warn('Animation error:', error);
+      animationRef.current = null;
+    }
+
+    // Cleanup function
+    return () => {
+      if (animationRef.current) {
+        try {
+          animationRef.current.stop();
+        } catch (e) {
+          // Ignore errors when stopping animation
+        }
+        animationRef.current = null;
+      }
+    };
   }, [isFocused, phoneNumber]);
 
   useEffect(() => {
@@ -260,10 +294,18 @@ const FloatingLabelPhoneInput: React.FC<FloatingLabelPhoneInputProps> = ({
         <TextInput
           autoComplete="off"
           style={styles.input}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => {
-            setIsFocused(false);
-            if (onBlur) onBlur();
+          onFocus={() => {
+            setIsFocused(true);
+          }}
+          onBlur={(e) => {
+            try {
+              setIsFocused(false);
+              if (onBlur) {
+                onBlur();
+              }
+            } catch (error) {
+              console.warn('Blur handler error:', error);
+            }
           }}
           value={phoneNumber}
           onChangeText={handlePhoneChange}

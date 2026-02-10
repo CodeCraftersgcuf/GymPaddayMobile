@@ -97,7 +97,7 @@ export default function AddListingScreen() {
         if (passedListing && Array.isArray(passedListing.media_urls)) {
             return passedListing.media_urls.map((uri, idx) => ({
                 id: idx + 1,
-                uri: uri.startsWith('http') ? uri : `https://gympaddy.hmstech.xyz/storage/${uri}`,
+                uri: uri.startsWith('http') ? uri : `https://gympaddy.skillverse.com.pk/storage/${uri}`,
             }));
         }
         // Fallback: 4 empty slots
