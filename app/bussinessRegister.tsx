@@ -8,7 +8,6 @@ import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 import { useTheme } from '@/contexts/themeContext';
 import { useQuery } from '@tanstack/react-query';
-import { getUserBusinesses } from '@/utils/queries/businesses';
 import { getBusinessStatus } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 
@@ -69,35 +68,47 @@ export default function BusinessUpgradeScreen() {
         },
     });
 
-    // Handle business status data
+    // Handle business status data - This is the primary source for business status
     useEffect(() => {
         if (businessStatusData) {
             console.log('═══════════════════════════════════════');
             console.log('✅ [getBusinessStatus] Data received');
             console.log('📊 [getBusinessStatus] Full data:', JSON.stringify(businessStatusData, null, 2));
             console.log('📊 [getBusinessStatus] Data type:', typeof businessStatusData);
-            // Check if user has submitted a business request
-            const status = businessStatusData?.status || businessStatusData?.approval_status || businessStatusData?.data?.status;
-            console.log('📋 [getBusinessStatus] Extracted status:', status);
-            console.log('📋 [getBusinessStatus] data.status:', businessStatusData?.status);
-            console.log('📋 [getBusinessStatus] data.approval_status:', businessStatusData?.approval_status);
-            console.log('📋 [getBusinessStatus] data.data?.status:', businessStatusData?.data?.status);
             
-            if (status) {
+            // The API returns: { status: "success", data: { status: "not_found"|"pending"|"approved"|"rejected", business: {...} } }
+            const status = businessStatusData?.data?.status || businessStatusData?.status;
+            const business = businessStatusData?.data?.business;
+            console.log('📋 [getBusinessStatus] Extracted status:', status);
+            console.log('📋 [getBusinessStatus] data.data?.status:', businessStatusData?.data?.status);
+            console.log('📋 [getBusinessStatus] Has business object:', !!business);
+            
+            // Handle different status values
+            if (status && status !== 'not_found') {
                 if (status === 'approved' || status === 'Approved') {
                     console.log('✅ [getBusinessStatus] Status: APPROVED');
                     setSubmissionState('approved');
+                    setHasExistingBusiness(true);
                 } else if (status === 'rejected' || status === 'Rejected') {
                     console.log('❌ [getBusinessStatus] Status: REJECTED');
                     setSubmissionState('rejected');
-                } else {
-                    console.log('⏳ [getBusinessStatus] Status: REVIEWING');
+                    setHasExistingBusiness(true);
+                } else if (status === 'pending' || status === 'Pending') {
+                    console.log('⏳ [getBusinessStatus] Status: PENDING/REVIEWING');
                     setSubmissionState('reviewing');
+                    setHasExistingBusiness(true);
+                } else {
+                    // Any other status means there's a business
+                    console.log('⏳ [getBusinessStatus] Status: REVIEWING (default)');
+                    setSubmissionState('reviewing');
+                    setHasExistingBusiness(true);
                 }
-                setHasExistingBusiness(true);
                 console.log('🔒 [getBusinessStatus] hasExistingBusiness set to: true');
             } else {
-                console.log('ℹ️ [getBusinessStatus] No status found in response');
+                // status is "not_found" or null/undefined - user has no business
+                console.log('ℹ️ [getBusinessStatus] No business found for current user (status: not_found)');
+                setHasExistingBusiness(false);
+                setSubmissionState('idle');
             }
             console.log('═══════════════════════════════════════');
         }
@@ -113,96 +124,14 @@ export default function BusinessUpgradeScreen() {
         }
     }, [businessStatusError]);
 
-    // Also check user businesses as fallback
-    const { data: userBusinessesData, isLoading: isLoadingBusinesses, error: userBusinessesError } = useQuery({
-        queryKey: ['user-businesses'],
-        queryFn: async () => {
-            console.log('═══════════════════════════════════════');
-            console.log('🔍 [getUserBusinesses] Starting query...');
-            console.log('═══════════════════════════════════════');
-            const token = await SecureStore.getItemAsync('auth_token');
-            if (!token) {
-                console.error('❌ [getUserBusinesses] No auth token found');
-                throw new Error('Not authenticated');
-            }
-            console.log('✅ [getUserBusinesses] Auth token found, calling API...');
-            try {
-                const response = await getUserBusinesses(token);
-                console.log('═══════════════════════════════════════');
-                console.log('📊 [getUserBusinesses] RAW Response:', response);
-                console.log('📊 [getUserBusinesses] Response Type:', typeof response);
-                console.log('📊 [getUserBusinesses] Response Keys:', Object.keys(response || {}));
-                console.log('📊 [getUserBusinesses] JSON Response:', JSON.stringify(response, null, 2));
-                console.log('═══════════════════════════════════════');
-                return response;
-            } catch (err) {
-                console.error('❌ [getUserBusinesses] API Call Error:', err);
-                throw err;
-            }
-        },
-    });
 
-    // Update checking status when queries complete
+    // Update checking status when query completes
     useEffect(() => {
-        if (!isLoadingStatus && !isLoadingBusinesses) {
+        if (!isLoadingStatus) {
             setIsCheckingStatus(false);
             console.log('✅ Status check completed');
         }
-    }, [isLoadingStatus, isLoadingBusinesses]);
-
-    // Handle user businesses data
-    useEffect(() => {
-        if (userBusinessesData && !hasExistingBusiness) {
-            console.log('═══════════════════════════════════════');
-            console.log('✅ [getUserBusinesses] Data received');
-            console.log('📊 [getUserBusinesses] Full data:', JSON.stringify(userBusinessesData, null, 2));
-            const businesses = userBusinessesData?.data || userBusinessesData?.businesses || userBusinessesData || [];
-            console.log('📋 [getUserBusinesses] Extracted businesses array:', businesses);
-            console.log('📋 [getUserBusinesses] Businesses length:', businesses.length);
-            console.log('📋 [getUserBusinesses] Is array?', Array.isArray(businesses));
-            console.log('📋 [getUserBusinesses] hasExistingBusiness current value:', hasExistingBusiness);
-            
-            if (Array.isArray(businesses) && businesses.length > 0) {
-                console.log('📋 [getUserBusinesses] First business object:', JSON.stringify(businesses[0], null, 2));
-                const status =
-                    businesses[0]?.status ||
-                    businesses[0]?.approval_status ||
-                    (businesses[0]?.is_approved ? 'approved' : 'reviewing');
-                console.log('📋 [getUserBusinesses] Extracted status:', status);
-                console.log('📋 [getUserBusinesses] businesses[0].status:', businesses[0]?.status);
-                console.log('📋 [getUserBusinesses] businesses[0].approval_status:', businesses[0]?.approval_status);
-                console.log('📋 [getUserBusinesses] businesses[0].is_approved:', businesses[0]?.is_approved);
-                
-                if (status === 'approved' || status === 'Approved') {
-                    console.log('✅ [getUserBusinesses] Status: APPROVED');
-                    setSubmissionState('approved');
-                } else if (status === 'rejected' || status === 'Rejected') {
-                    console.log('❌ [getUserBusinesses] Status: REJECTED');
-                    setSubmissionState('rejected');
-                } else {
-                    console.log('⏳ [getUserBusinesses] Status: REVIEWING');
-                    setSubmissionState('reviewing');
-                }
-                setHasExistingBusiness(true);
-                console.log('🔒 [getUserBusinesses] hasExistingBusiness set to: true');
-            } else {
-                console.log('ℹ️ [getUserBusinesses] No businesses found');
-                console.log('ℹ️ [getUserBusinesses] Array check:', Array.isArray(businesses));
-                console.log('ℹ️ [getUserBusinesses] Length check:', businesses.length);
-            }
-            console.log('═══════════════════════════════════════');
-        }
-    }, [userBusinessesData, hasExistingBusiness]);
-
-    // Handle user businesses error
-    useEffect(() => {
-        if (userBusinessesError) {
-            console.error('═══════════════════════════════════════');
-            console.error('❌ [getUserBusinesses] Query Error:', userBusinessesError);
-            console.error('❌ [getUserBusinesses] Error message:', userBusinessesError?.message);
-            console.error('═══════════════════════════════════════');
-        }
-    }, [userBusinessesError]);
+    }, [isLoadingStatus]);
 
     const getStatusMessage = () => {
         switch (submissionState) {

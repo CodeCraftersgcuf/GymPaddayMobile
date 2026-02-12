@@ -1,4 +1,4 @@
-import { apiCall } from "../customApiCall";
+import { apiCall, ApiError } from "../customApiCall";
 import { API_ENDPOINTS } from "../../apiConfig";
 
 export const loginUser = async ({
@@ -33,13 +33,37 @@ export const registerUser = async ({
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result?.message || `HTTP error! status: ${response.status}`);
+      // Log the full error response for debugging
+      console.error('❌ Register Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: result,
+      });
+      
+      // Throw ApiError to preserve validation errors structure
+      throw new ApiError(
+        result,
+        response.statusText,
+        result?.message || `HTTP error! status: ${response.status}`,
+        response.status
+      );
     }
 
     return result;
   } catch (error: any) {
+    // If it's already an ApiError, re-throw it
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    
+    // For other errors, log and wrap in ApiError
     console.error('❌ Register Error:', error);
-    throw error;
+    throw new ApiError(
+      { message: error?.message || 'Registration failed' },
+      'Network Error',
+      error?.message || 'Registration failed. Please try again.',
+      500
+    );
   }
 };
 

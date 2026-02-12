@@ -18,11 +18,11 @@ interface props {
     } | {}
     onHidePost?: () => void; // add this!
     onClose?: () => void; // add this
-
+    hiddenPostIds?: number[]; // Array of hidden post IDs
 }
 
 
-const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, type, idCan, onHidePost, onClose }) => {
+const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, type, idCan, onHidePost, onClose, hiddenPostIds = [] }) => {
     const bottomSheetRef = useRef<BottomSheet>(null);
     const { dark } = useTheme();
     const [userId, setUserId] = useState<string | null>(null);
@@ -54,10 +54,32 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
         }
     }, [userId]);
 
+    // Close bottom sheet when BottomIndex becomes -1
+    useEffect(() => {
+        if (BottomIndex === -1) {
+            bottomSheetRef.current?.close();
+        } else if (BottomIndex >= 0) {
+            bottomSheetRef.current?.snapToIndex(BottomIndex);
+        }
+    }, [BottomIndex]);
+
 
     const handleSheetChanges = useCallback((index: number) => {
         console.log('handleSheetChanges', index);
-    }, []);
+        // Close the sheet when index becomes -1
+        if (index === -1) {
+            setbottomIndex(-1);
+        }
+    }, [setbottomIndex]);
+
+    // Close the bottom sheet programmatically
+    const closeBottomSheet = useCallback(() => {
+        bottomSheetRef.current?.close();
+        setbottomIndex(-1);
+        if (onClose) {
+            onClose();
+        }
+    }, [onClose, setbottomIndex]);
     return (
         <BottomSheet
             ref={bottomSheetRef}
@@ -99,8 +121,14 @@ const PostDetailBottomsheet: React.FC<props> = ({ BottomIndex, setbottomIndex, t
             >
                 {
                     userId && idCan.userId && userId === idCan.userId.toString()
-                        ? <UserPostDetail idCan={idCan} />
-                        : <ViewpostDetail onHide={onHidePost} onClose={onClose} userId={idCan.userId} />
+                        ? <UserPostDetail idCan={idCan} onClose={closeBottomSheet} />
+                        : <ViewpostDetail 
+                            onHide={onHidePost} 
+                            onClose={closeBottomSheet} 
+                            userId={idCan.userId} 
+                            postId={idCan.postId}
+                            hiddenPostIds={hiddenPostIds}
+                          />
 
                 }
 

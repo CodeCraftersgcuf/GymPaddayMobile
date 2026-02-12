@@ -113,22 +113,25 @@ export default function MessageChat() {
   const receiverName = firstMessage?.receiver?.fullname || 'User';
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
 
-  const messages = data?.messages?.map((msg: any) => {
-    let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
-    if (imageUrl && !imageUrl.startsWith('http')) {
-      imageUrl = `https://gympaddy.skillverse.com.pk/storage/${imageUrl}`;
-    }
-    return {
-      id: String(msg.id),
-      isCurrentUser: msg.direction === 'sent',
-      text: msg.message,
-      timestamp: new Date(msg.created_at),
-      senderPicture: msg.direction === 'sent'
-        ? msg.sender?.profile_picture_url
-        : msg.receiver?.profile_picture_url,
-      image: imageUrl,
-    }
-  }) || [];
+  const messages = [
+    ...(data?.messages?.map((msg: any) => {
+      let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `https://gympaddy.skillverse.com.pk/storage/${imageUrl}`;
+      }
+      return {
+        id: String(msg.id),
+        isCurrentUser: msg.direction === 'sent',
+        text: msg.message || '',
+        timestamp: new Date(msg.created_at),
+        senderPicture: msg.direction === 'sent'
+          ? msg.sender?.profile_picture_url
+          : msg.receiver?.profile_picture_url,
+        image: imageUrl,
+      }
+    }) || []),
+    ...(optimisticMessages || []), // Add optimistic messages at the end, ensure it's an array
+  ];
 
 
   const sendMessageMutation = useMutation({
@@ -187,8 +190,9 @@ export default function MessageChat() {
       }
     },
     onSuccess: () => {
-      setNewMessage('');
-      setAttachedImage(null);
+      // Don't clear here - already cleared in handleSendMessage for optimistic UI
+      // setNewMessage('');
+      // setAttachedImage(null);
       refetch();
     },
     onError: (err) => {
@@ -199,10 +203,46 @@ export default function MessageChat() {
   const handleSendMessage = () => {
     if (isSending || sendMessageMutation.isLoading) return; // Prevent duplicate sends
     if ((newMessage.trim() || attachedImage)) {
+      const messageText = newMessage.trim();
+      const imageUri = attachedImage;
+      
+      // Create optimistic message
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMessage = {
+        id: optimisticId,
+        isCurrentUser: true,
+        text: messageText,
+        timestamp: new Date(),
+        senderPicture: currentUser?.profile_picture_url || '',
+        image: imageUri,
+        isOptimistic: true, // Flag to identify optimistic messages
+      };
+      
+      // Add optimistic message immediately
+      setOptimisticMessages(prev => [...prev, optimisticMessage]);
+      
+      // Clear input immediately for better UX
+      setNewMessage('');
+      setAttachedImage(null);
+      
+      // Scroll to bottom to show the new message
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      
       setIsSending(true);
       sendMessageMutation.mutate(
-        { text: newMessage.trim(), imageUri: attachedImage },
+        { text: messageText, imageUri: imageUri },
         {
+          onSuccess: () => {
+            // Remove optimistic message - it will be replaced by the real one from refetch
+            setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+          },
+          onError: () => {
+            // Remove optimistic message on error
+            setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+            // Restore message text on error
+            setNewMessage(messageText);
+            if (imageUri) setAttachedImage(imageUri);
+          },
           onSettled: () => {
             setIsSending(false);
           }
@@ -310,10 +350,12 @@ export default function MessageChat() {
   }
 
   const renderMessage = ({ item, index }) => {
+    if (!item) return null; // Guard against undefined items
+    
     const isCurrentUser = item.isCurrentUser;
     const showAvatar =
       !isCurrentUser &&
-      (index === 0 || messages[index - 1].senderId !== item.senderId);
+      (index === 0 || (messages[index - 1] && messages[index - 1].senderId !== item.senderId));
 
     return (
       <View
@@ -397,9 +439,9 @@ export default function MessageChat() {
   });
 
   // Merge otherUserProfile data to get updated online status
-  const userWithUpdatedStatus = otherUserProfile?.data
+  const userWithUpdatedStatus = otherUserProfile?.data && otherUser
     ? { ...otherUser, ...otherUserProfile.data, is_online: otherUserProfile.data.is_online }
-    : otherUser;
+    : otherUser || {};
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -414,6 +456,20 @@ export default function MessageChat() {
     return () => clearInterval(interval);
   }, [refetch]);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
+  
+  // Get current user data for optimistic messages
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    (async () => {
+      const userDataStr = await SecureStore.getItemAsync('user_data');
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        setCurrentUser(userData);
+      }
+    })();
+  }, []);
+
   const handlePickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -481,13 +537,14 @@ export default function MessageChat() {
             {/* Profile Card */}
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={messages || []}
               style={styles.messagesContainer}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item?.id || String(Math.random())}
               scrollEnabled={true}
               refreshing={refreshing}
               onRefresh={handleRefresh}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+              ListEmptyComponent={<View />}
               ListHeaderComponent={
                 <View style={[styles.profileCard, { backgroundColor: dark ? '#181818' : 'white' }]}>
                   <Image
@@ -585,13 +642,13 @@ export default function MessageChat() {
               <TouchableOpacity
                 style={[
                   styles.sendButton,
-                  (!newMessage.trim() && !attachedImage) && styles.sendButtonDisabled
+                  ((!newMessage.trim() && !attachedImage) || isSending || sendMessageMutation.isPending || sendMessageMutation.isLoading) && styles.sendButtonDisabled
                 ]}
                 onPress={handleSendMessage}
-                disabled={!newMessage.trim() && !attachedImage}
+                disabled={(!newMessage.trim() && !attachedImage) || isSending || sendMessageMutation.isPending || sendMessageMutation.isLoading}
               >
-                {sendMessageMutation.isLoading ? (
-                  <Text>Sending...</Text>
+                {isSending || sendMessageMutation.isPending || sendMessageMutation.isLoading ? (
+                  <ActivityIndicator size="small" color={dark ? 'white' : 'black'} />
                 ) : (
                   <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"} />
                 )}

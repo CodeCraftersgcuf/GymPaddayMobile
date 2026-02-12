@@ -14,12 +14,17 @@ interface ViewpostDetailProps {
     onReport?: () => void;
     onClose?: () => void;
     userId?: string | number; // Optional userId prop for future use
+    postId?: string | number; // Post ID to check if it's hidden
+    hiddenPostIds?: number[]; // Array of hidden post IDs
 }
 
-const ViewpostDetail: React.FC<ViewpostDetailProps> = ({ onHide, onReport, onClose,userId }) => {
+const ViewpostDetail: React.FC<ViewpostDetailProps> = ({ onHide, onReport, onClose, userId, postId, hiddenPostIds = [] }) => {
     const { dark } = useTheme();
     const [reportModalVisible, setReportModalVisible] = useState(false);
-const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
+    
+    // Check if this post is already hidden
+    const isPostHidden = postId ? hiddenPostIds.includes(Number(postId)) : false;
 
 const followMutation = useMutation({
   mutationFn: async () => {
@@ -54,8 +59,13 @@ const handleFollow = () => {
 };
 
     const handleHide = () => {
-        if (onHide) onHide();
-        if (onClose) onClose();
+        if (onHide) {
+            onHide();
+        }
+        // Close the bottom sheet after hiding
+        if (onClose) {
+            onClose();
+        }
     };
 
     const handleReport = () => {
@@ -77,11 +87,12 @@ const handleFollow = () => {
             title: 'Follow User',
             handleFunction: handleFollow,
         },
-        {
+        // Only show "Hide Post" option if the post is not already hidden
+        ...(isPostHidden ? [] : [{
             icon: images.eysIcon,
             title: 'Hide Post',
             handleFunction: handleHide,
-        },
+        }]),
         {
             icon: images.reportIcons,
             title: 'Report post',

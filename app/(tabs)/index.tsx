@@ -55,8 +55,9 @@ export default function SocialFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { dark } = useTheme();
   const route = useRouter();
-  const [posts, setPosts] = useState<PostData[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const queryClient = useQueryClient();
+  const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
 
   // const { data, isLoading, refetch } = useQuery({
   //   queryKey: ['userPosts'],
@@ -74,10 +75,13 @@ export default function SocialFeedScreen() {
     fetchNextPage,
     hasNextPage,
     refetch,
+    error,
+    isError,
   } = useInfiniteQuery({
     queryKey: ['userPosts'],
     queryFn: async ({ pageParam = 1 }) => {
       const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token');
       return getUserPosts(token, pageParam); // Accepts page number
     },
     initialPageParam: 1, // ✅ Required
@@ -88,6 +92,20 @@ export default function SocialFeedScreen() {
       }
       return undefined;
     },
+    retry: (failureCount, error: any) => {
+      // Don't retry on authentication errors (401, 403)
+      if (error?.statusCode === 401 || error?.statusCode === 403) {
+        return false;
+      }
+      // Retry up to 3 times for network errors
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff: 1s, 2s, 4s
+      return Math.min(1000 * 2 ** attemptIndex, 4000);
+    },
+    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 
 
@@ -307,7 +325,6 @@ export default function SocialFeedScreen() {
 
   const [BottomIndex, setBottomIndex] = useState(-1);
   const [PostType, setPostType] = useState('ViewerPost');
-  const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
 
   useEffect(() => {
     const loadHiddenPosts = async () => {
@@ -382,13 +399,10 @@ export default function SocialFeedScreen() {
   const handleHidePost = async () => {
     console.log('🔒 Hiding post:', idCan);
     
-    if (idCan.postId) {
+    if (idCan && 'postId' in idCan && idCan.postId) {
       const postIdToHide = Number(idCan.postId);
       
-      // Immediately remove from UI
-      setPosts(prev => prev.filter(p => Number(p.id) !== postIdToHide));
-      
-      // Update hidden posts list
+      // Update hidden posts list first to ensure state is updated
       setHiddenPostIds(prev => {
         // Check if already hidden to avoid duplicates
         if (prev.includes(postIdToHide)) {
@@ -409,6 +423,9 @@ export default function SocialFeedScreen() {
         
         return updated;
       });
+      
+      // Immediately remove from UI
+      setPosts(prev => prev.filter(p => Number(p.id) !== postIdToHide));
       
       // Close the bottom sheet
       setBottomIndex(-1);
@@ -498,16 +515,59 @@ export default function SocialFeedScreen() {
             />
           }
         >
-          <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />
-          <PostContainer
-            posts={posts}
-            onCommentPress={handleCommentPress}
-            handleMenu={handleMenu}
-          />
+          {isError && posts.length === 0 && (
+            <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+              <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
+                {error?.message?.includes('Network') || error?.message?.includes('timeout') 
+                  ? 'Network connection error. Please check your internet connection.'
+                  : 'Failed to load posts. Please try again.'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => refetch()}
+                style={{
+                  backgroundColor: '#940304',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  marginTop: 10,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {!isError && (
+            <>
+              <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />
+              <PostContainer
+                posts={posts}
+                onCommentPress={handleCommentPress}
+                handleMenu={handleMenu}
+              />
+            </>
+          )}
           {isFetchingNextPage && (
             <View style={{ paddingVertical: 20, alignItems: 'center', marginBottom: 100, zIndex: 100 }}>
               <ActivityIndicator size="small" color="#940304" />
               <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
+            </View>
+          )}
+          {isError && posts.length > 0 && (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
+                Failed to load more posts
+              </Text>
+              <TouchableOpacity
+                onPress={() => fetchNextPage()}
+                style={{
+                  backgroundColor: '#940304',
+                  paddingHorizontal: 15,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -535,7 +595,7 @@ export default function SocialFeedScreen() {
         idCan={idCan}
         onHidePost={handleHidePost}
         onClose={() => setBottomIndex(-1)} // pass this
-
+        hiddenPostIds={hiddenPostIds}
       />
     </GestureHandlerRootView>
   );

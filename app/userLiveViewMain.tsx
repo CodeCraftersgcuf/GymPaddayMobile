@@ -12,6 +12,9 @@ import {
   Modal,
   Pressable,
   Alert,
+  Keyboard,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons as Icon } from '@expo/vector-icons';
@@ -174,6 +177,28 @@ const User_liveViewMain: React.FC = () => {
   };
 
   const [giftQuantities, setGiftQuantities] = React.useState<{ [id: string]: number }>({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Listen to keyboard events to adjust chat overlay position
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   const updateQuantity = (id: string, change: number) => {
     setGiftQuantities(prev => {
@@ -245,7 +270,11 @@ const User_liveViewMain: React.FC = () => {
             No channel specified
           </Text>
         )}
-        <View style={styles.chatOverlay}>
+        {/* Chat Overlay - Position adjusts based on keyboard */}
+        <View style={[
+          styles.chatOverlay,
+          { bottom: keyboardHeight > 0 ? keyboardHeight + 80 : 100 }
+        ]}>
           <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
             {chatMessages.map((chat) => (
               <View key={chat.id} style={styles.chatMessage}>
@@ -288,29 +317,34 @@ const User_liveViewMain: React.FC = () => {
 
       {/* Bottom Input - Only show when no panel is active */}
       {activePanel === 'none' && (
-        <View style={[styles.bottomContainer, { backgroundColor: themeStyles.backgroundColor }]}>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={[styles.textInput, {
-                backgroundColor: themeStyles.secondaryBackground,
-                color: themeStyles.textColor
-              }]}
-              placeholder="Type a message"
-              placeholderTextColor={themeStyles.textColorSecondary}
-              value={message}
-              onChangeText={setMessage}
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-              <Icon name="send" size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.giftButton}
-              onPress={() => setActivePanel('gifts')}
-            >
-              <Icon name="gift" size={24} color="#940304" />
-            </TouchableOpacity>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <View style={[styles.bottomContainer, { backgroundColor: themeStyles.backgroundColor }]}>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[styles.textInput, {
+                  backgroundColor: themeStyles.secondaryBackground,
+                  color: themeStyles.textColor
+                }]}
+                placeholder="Type a message"
+                placeholderTextColor={themeStyles.textColorSecondary}
+                value={message}
+                onChangeText={setMessage}
+              />
+              <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+                <Icon name="send" size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.giftButton}
+                onPress={() => setActivePanel('gifts')}
+              >
+                <Icon name="gift" size={24} color="#940304" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );
@@ -364,7 +398,6 @@ const styles = StyleSheet.create({
   },
   chatOverlay: {
     position: 'absolute',
-    bottom: 100, // Increased from 20 to avoid overlap with bottom input controls
     left: 16,
     right: 16,
     maxHeight: 300,

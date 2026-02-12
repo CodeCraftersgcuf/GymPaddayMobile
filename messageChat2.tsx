@@ -97,18 +97,35 @@ export default function MessageChat() {
   const receiverImage = firstMessage?.receiver?.profile_picture_url || '';
   const receiverName = firstMessage?.receiver?.fullname || 'User';
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
-  // Transform fetched data
-  const messages = data?.messages?.map((msg: any) => {
-    return {
-      id: String(msg.id),
-      isCurrentUser: msg.direction === 'sent',
-      text: msg.message,
-      timestamp: new Date(msg.created_at),
-      senderPicture: msg.direction === 'sent'
-        ? msg.sender?.profile_picture_url
-        : msg.receiver?.profile_picture_url,
-    }
-  }) || [];
+  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
+  
+  // Get current user data for optimistic messages
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    (async () => {
+      const userDataStr = await SecureStore.getItemAsync('user_data');
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        setCurrentUser(userData);
+      }
+    })();
+  }, []);
+
+  // Transform fetched data and merge with optimistic messages
+  const messages = [
+    ...(data?.messages?.map((msg: any) => {
+      return {
+        id: String(msg.id),
+        isCurrentUser: msg.direction === 'sent',
+        text: msg.message,
+        timestamp: new Date(msg.created_at),
+        senderPicture: msg.direction === 'sent'
+          ? msg.sender?.profile_picture_url
+          : msg.receiver?.profile_picture_url,
+      }
+    }) || []),
+    ...optimisticMessages, // Add optimistic messages at the end
+  ];
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -121,16 +138,51 @@ export default function MessageChat() {
       );
     },
     onSuccess: () => {
-      setNewMessage('');
+      // Don't clear here - already cleared in handleSendMessage for optimistic UI
+      // setNewMessage('');
       refetch();
     },
   });
 
   // Handle send button
   const handleSendMessage = () => {
-    if (newMessage.trim() && !sendMessageMutation.isLoading) {
-      sendMessageMutation.mutate(newMessage.trim());
+    if (!newMessage.trim() || sendMessageMutation.isPending || sendMessageMutation.isLoading) {
+      return; // Prevent duplicate sends
     }
+    const messageToSend = newMessage.trim();
+    
+    // Create optimistic message
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMessage = {
+      id: optimisticId,
+      isCurrentUser: true,
+      text: messageToSend,
+      timestamp: new Date(),
+      senderPicture: currentUser?.profile_picture_url || '',
+      isOptimistic: true, // Flag to identify optimistic messages
+    };
+    
+    // Add optimistic message immediately
+    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    
+    // Clear input immediately for better UX
+    setNewMessage('');
+    
+    // Scroll to bottom to show the new message
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    
+    sendMessageMutation.mutate(messageToSend, {
+      onSuccess: () => {
+        // Remove optimistic message - it will be replaced by the real one from refetch
+        setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+      },
+      onError: () => {
+        // Remove optimistic message on error
+        setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+        // Restore message text on error
+        setNewMessage(messageToSend);
+      },
+    });
   };
 
   // Auto-scroll after new messages
@@ -303,11 +355,13 @@ export default function MessageChat() {
   }
 
   const renderMessage = ({ item, index }) => {
+    if (!item) return null; // Guard against undefined items
+    
     const isCurrentUser = item.isCurrentUser;
 
     const showAvatar =
       !isCurrentUser &&
-      (index === 0 || messages[index - 1].senderId !== item.senderId);
+      (index === 0 || (messages[index - 1] && messages[index - 1].senderId !== item.senderId));
 
     return (
       <View
@@ -613,17 +667,17 @@ export default function MessageChat() {
               {/* Messages */}
               <FlatList
                 ref={flatListRef}
-                data={messages}
+                data={messages || []}
                 style={styles.messagesContainer}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item?.id || String(Math.random())}
                 scrollEnabled={true}
-                          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 renderItem={renderMessage}
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
+                ListEmptyComponent={<View />}
               />
 
               {/* Input Container */}
@@ -642,13 +696,13 @@ export default function MessageChat() {
                 <TouchableOpacity
                   style={[
                     styles.sendButton,
-                    !newMessage.trim() && styles.sendButtonDisabled
+                    (!newMessage.trim() || sendMessageMutation.isPending || sendMessageMutation.isLoading) && styles.sendButtonDisabled
                   ]}
                   onPress={handleSendMessage}
-                  disabled={!newMessage.trim()}
+                  disabled={!newMessage.trim() || sendMessageMutation.isPending || sendMessageMutation.isLoading}
                 >
-                  {sendMessageMutation.isLoading ? (
-                    <Text>Sending...</Text>
+                  {sendMessageMutation.isPending || sendMessageMutation.isLoading ? (
+                    <ActivityIndicator size="small" color={dark ? 'white' : 'black'} />
                   ) : (
                     <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"} />
                   )}

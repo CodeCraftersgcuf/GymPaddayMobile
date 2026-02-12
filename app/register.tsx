@@ -51,7 +51,7 @@ const validationSchema = Yup.object().shape({
     .required("Age is required")
     .min(13, "Must be at least 13 years old")
     .max(120, "Age must be less than 120"),
-  gender: Yup.string().nullable().notRequired(),
+  gender: Yup.string().required("Gender is required"),
   password: Yup.string()
     .min(8, "Password must be at least 8 characters")
     .required("Password is required"),
@@ -118,9 +118,8 @@ export default function Register() {
     if (values.age && values.age.toString().trim()) {
       formData.append('age', values.age.toString());
     }
-    if (values.gender && values.gender.trim()) {
-      formData.append('gender', values.gender.toLowerCase());
-    }
+    // Gender is now required, so always append it
+    formData.append('gender', values.gender.toLowerCase());
     formData.append('password', values.password);
     formData.append('password_confirmation', values.password);
 
@@ -486,7 +485,7 @@ export default function Register() {
                             error={touched.age && errors.age ? errors.age : ""}
                           />
                           <FloatingLabelGenderPicker
-                            label="Gender (Optional)"
+                            label="Gender"
                             value={values.gender}
                             error={touched.gender && errors.gender ? errors.gender : ""}
                             onPress={() => bottomSheetRef.current?.snapToIndex(0)}
@@ -512,9 +511,9 @@ export default function Register() {
                             }}
                             style={[
                               styles.registerButton,
-                              (Object.keys(errors).filter(key => key !== 'gender').length > 0 || mutation.isPending) && styles.disabledButton
+                              (Object.keys(errors).length > 0 || mutation.isPending) && styles.disabledButton
                             ]}
-                            disabled={mutation.isPending}
+                            disabled={Object.keys(errors).length > 0 || mutation.isPending}
                           >
                             <ThemeText style={styles.registerButtonText}>
                               {mutation.isPending ? "Registering..." : "Register"}

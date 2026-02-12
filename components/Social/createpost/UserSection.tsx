@@ -58,16 +58,37 @@ export default function UserSection({ postText, onTextChange, disabled = false }
             multiline
             value={postText}
             onChangeText={(text) => {
+              // Strictly enforce 500 character limit
               if (text.length <= 500) {
                 onTextChange(text);
+              } else {
+                // If user tries to paste or type beyond limit, truncate and notify
+                const truncated = text.substring(0, 500);
+                onTextChange(truncated);
               }
             }}
             editable={!disabled}
             maxLength={500}
           />
-          <Text style={{ fontSize: 12, color: dark ? '#666' : '#999', textAlign: 'right', marginTop: 4 }}>
-            {postText.length}/500 characters
-          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            {postText.length >= 450 && (
+              <Text style={{ fontSize: 11, color: postText.length >= 500 ? '#F44336' : '#FF9800', flex: 1 }}>
+                {postText.length >= 500 ? 'Character limit reached!' : `Approaching limit (${500 - postText.length} remaining)`}
+              </Text>
+            )}
+            <Text style={{ 
+              fontSize: 12, 
+              color: postText.length >= 500 
+                ? '#F44336' 
+                : postText.length >= 450 
+                  ? '#FF9800' 
+                  : dark ? '#666' : '#999', 
+              textAlign: 'right',
+              fontWeight: postText.length >= 450 ? '600' : '400'
+            }}>
+              {postText.length}/500 characters
+            </Text>
+          </View>
         </View>
       </View>
     </View>

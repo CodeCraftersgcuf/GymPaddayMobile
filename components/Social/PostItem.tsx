@@ -325,7 +325,6 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       }
 
       const fileExtension = currentMedia.split('.').pop()?.toLowerCase();
-      const fileName = currentMedia.split('/').pop() || `media_${Date.now()}.${fileExtension}`;
       const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'mkv';
       
       // Request permission
@@ -335,21 +334,48 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
         return;
       }
 
-      // Create a unique file name to avoid conflicts
+      // Create a unique file name with current timestamp to ensure it appears as recent
       const timestamp = Date.now();
-      const uniqueFileName = `${timestamp}_${fileName}`;
-      const fileUri = `${FileSystem.cacheDirectory}${uniqueFileName}`;
+      const mediaType = isVideo ? 'video' : 'image';
+      const uniqueFileName = `GymPaddy_${mediaType}_${timestamp}.${fileExtension}`;
+      const downloadUri = `${FileSystem.cacheDirectory}${uniqueFileName}`;
 
       // Download the file
-      const downloadResumable = FileSystem.createDownloadResumable(currentMedia, fileUri);
+      const downloadResumable = FileSystem.createDownloadResumable(currentMedia, downloadUri);
       const downloadResult = await downloadResumable.downloadAsync();
       
       if (!downloadResult || !downloadResult.uri) {
         throw new Error('Download failed - no file URI returned');
       }
 
+      // For videos, copy the file to a new location with current timestamp
+      // This ensures the file gets a new creation date and appears in recent files
+      let finalUri = downloadResult.uri;
+      if (isVideo) {
+        const finalFileName = `GymPaddy_Video_${timestamp}.${fileExtension}`;
+        const finalFileUri = `${FileSystem.documentDirectory}${finalFileName}`;
+        
+        // Copy the downloaded file to a new location
+        // This creates a new file with current system timestamp
+        // Using documentDirectory ensures the file is treated as a new file by the OS
+        await FileSystem.copyAsync({
+          from: downloadResult.uri,
+          to: finalFileUri,
+        });
+        
+        // Verify the file was copied
+        const fileInfo = await FileSystem.getInfoAsync(finalFileUri);
+        if (!fileInfo.exists) {
+          throw new Error('Failed to create video file copy');
+        }
+        
+        finalUri = finalFileUri;
+        console.log('📹 Video copied to new location with current timestamp:', finalUri);
+      }
+
       // Save to media library
-      const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+      // The file will now have the current timestamp as its creation date
+      const asset = await MediaLibrary.createAssetAsync(finalUri);
       
       // Try to save to a specific album, or just save to default if album creation fails
       try {
@@ -357,6 +383,15 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       } catch (albumError) {
         // If album already exists or creation fails, just save to default gallery
         console.log('Album creation failed, saving to default gallery:', albumError);
+      }
+
+      // Clean up temporary files
+      try {
+        if (downloadResult.uri !== finalUri) {
+          await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+        }
+      } catch (cleanupError) {
+        console.log('Cleanup error (non-critical):', cleanupError);
       }
 
       Alert.alert('Downloaded', `${isVideo ? 'Video' : 'Image'} saved to your gallery.`);

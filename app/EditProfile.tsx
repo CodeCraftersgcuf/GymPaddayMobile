@@ -113,10 +113,58 @@ export default function EditProfileScreen() {
   });
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+    // Special handling for age field to enforce minimum age requirement
+    if (field === 'age') {
+      // Only allow numeric input
+      const numericValue = value.replace(/[^\d]/g, '');
+      
+      // If user enters a value, validate it in real-time
+      if (numericValue) {
+        const ageNum = Number(numericValue);
+        
+        // Prevent entering age less than 13 (but allow typing "1" to build "13", "14", etc.)
+        // Only block if they've completed a number less than 13 (2+ digits and < 13)
+        if (numericValue.length >= 2 && ageNum < 13) {
+          // Show error immediately for invalid age
+          setErrors(prev => ({ 
+            ...prev, 
+            [field]: 'Age must be at least 13 years old (same as signup requirement)' 
+          }));
+          return; // Don't update if trying to enter invalid age
+        }
+        
+        // Prevent values over 120
+        if (ageNum > 120) {
+          setErrors(prev => ({ 
+            ...prev, 
+            [field]: 'Age must be less than 120 years' 
+          }));
+          return; // Don't update if over 120
+        }
+        
+        // Clear error if input is valid
+        if (errors[field]) {
+          setErrors(prev => ({ ...prev, [field]: '' }));
+        }
+      } else {
+        // If field becomes empty, show required error since age is required
+        if (numericValue === '') {
+          setErrors(prev => ({ 
+            ...prev, 
+            [field]: 'Age is required (same as signup requirement)' 
+          }));
+        } else if (errors[field]) {
+          setErrors(prev => ({ ...prev, [field]: '' }));
+        }
+      }
+      
+      setFormData(prev => ({ ...prev, [field]: numericValue }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+      // Clear error when user starts typing
+      if (errors[field]) {
+        setErrors(prev => ({ ...prev, [field]: '' }));
+      }
     }
   };
 
@@ -138,13 +186,17 @@ export default function EditProfileScreen() {
       newErrors.fullName = 'Full name is required';
     }
 
-    // Age is required and must match signup requirements
+    // Age is required and must match signup requirements (minimum 13 years)
     if (!formData.age || !formData.age.trim()) {
-      newErrors.age = 'Age is required';
+      newErrors.age = 'Age is required (same as signup requirement)';
     } else {
       const ageNum = Number(formData.age);
-      if (isNaN(ageNum) || ageNum < 13 || ageNum > 120) {
-        newErrors.age = 'Age must be between 13 and 120 years';
+      if (isNaN(ageNum)) {
+        newErrors.age = 'Age must be a valid number';
+      } else if (ageNum < 13) {
+        newErrors.age = 'Age must be at least 13 years old (same as signup requirement)';
+      } else if (ageNum > 120) {
+        newErrors.age = 'Age must be less than 120 years';
       }
     }
 
@@ -325,7 +377,7 @@ export default function EditProfileScreen() {
             />
 
             <FloatingLabelInput
-              label="Age (Optional)"
+              label="Age"
               value={formData.age}
               onChangeText={(text) => handleInputChange('age', text)}
               error={errors.age}

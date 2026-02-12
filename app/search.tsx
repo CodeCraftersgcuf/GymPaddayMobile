@@ -25,6 +25,17 @@ const SearchScreen = () => {
     const { dark } = useTheme();
     const router = useRouter();
 
+    // Helper to get users from response
+    const getUsersFromData = (data: any) => {
+        return data?.users || data?.data?.users || [];
+    };
+
+    // Helper to check if users exist
+    const hasUsers = (data: any) => {
+        const users = getUsersFromData(data);
+        return Array.isArray(users) && users.length > 0;
+    };
+
     const { data, isLoading } = useQuery({
         queryKey: ['searchResults', query],
         queryFn: async () => {
@@ -93,40 +104,40 @@ const SearchScreen = () => {
             {triggerSearch && !isLoading && data && (
                 <View style={{ flex: 1 }}>
                     {activeTab === 'users' ? (
-                        data.users && data.users.length > 0 ? (
+                        hasUsers(data) ? (
                             <FlatList
-                                data={data.users}
+                                data={getUsersFromData(data)}
                                 keyExtractor={(item) => item.id.toString()}
                                 contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
                                 renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={[styles.userItem]}
-                                    onPress={() =>
-                                        router.push({
-                                            pathname: '/UserProfile',
-                                            params: { user_id: item.id },
-                                        })
-                                    }
-                                >
-                                    <Image
-                                        source={
-                                            item.profile_picture_url
-                                                ? { uri: item.profile_picture_url }
-                                                : require('@/assets/icons/more/User.png') // adjust path if needed
+                                    <TouchableOpacity
+                                        style={[styles.userItem]}
+                                        onPress={() =>
+                                            router.push({
+                                                pathname: '/UserProfile',
+                                                params: { user_id: item.id },
+                                            })
                                         }
-                                        style={styles.avatar}
-                                        resizeMode="cover"
-                                    />
-                                    <View style={styles.userInfo}>
-                                        <Text style={[styles.fullname, { color: dark ? '#fff' : '#000' }]}>
-                                            {item.fullname ?? 'Unnamed User'}
-                                        </Text>
-                                        <Text style={[styles.username, { color: dark ? '#ccc' : '#666' }]}>
-                                            @{item.username}
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-                            )}
+                                    >
+                                        <Image
+                                            source={
+                                                item.profile_picture_url
+                                                    ? { uri: item.profile_picture_url }
+                                                    : require('@/assets/icons/more/User.png')
+                                            }
+                                            style={styles.avatar}
+                                            resizeMode="cover"
+                                        />
+                                        <View style={styles.userInfo}>
+                                            <Text style={[styles.fullname, { color: dark ? '#fff' : '#000' }]}>
+                                                {item.fullname ?? 'Unnamed User'}
+                                            </Text>
+                                            <Text style={[styles.username, { color: dark ? '#ccc' : '#666' }]}>
+                                                @{item.username}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
                             />
                         ) : (
                             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 50 }}>

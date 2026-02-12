@@ -446,10 +446,12 @@ export default function CreatePostScreen() {
       // Validate character limit
       if (postText.length > 500) {
         setIsSubmittingLocal(false);
+        const excessChars = postText.length - 500;
         Toast.show({
           type: 'error',
-          text1: 'Text too long',
-          text2: 'Please limit your post to 500 characters. Current: ' + postText.length + '/500',
+          text1: 'Text Too Long',
+          text2: `Your post exceeds the 500 character limit by ${excessChars} character${excessChars > 1 ? 's' : ''}. Please shorten your text to continue.`,
+          visibilityTime: 4000,
         });
         return;
       }

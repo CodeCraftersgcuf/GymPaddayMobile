@@ -10,7 +10,8 @@ import {
   Image,
   ScrollView,
   BackHandler,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Keyboard
 } from 'react-native';
 import Modal from 'react-native-modal';
 
@@ -208,9 +209,31 @@ export default function LiveStreamingView({
   const [replyText, setReplyText] = useState('');
   const [replyModalVisible, setReplyModalVisible] = useState(false);
   const [messageText, setMessageText] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   // const canType = currentUserRole === 'host' || currentUserRole === 'admin';
 
   const canType = true;
+
+  // Listen to keyboard events to adjust chat overlay position
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}>
@@ -250,7 +273,15 @@ export default function LiveStreamingView({
           />
         )}
 
-        <View style={styles.chatOverlay}>
+        {/* Chat Overlay - Position adjusts based on keyboard and controls container */}
+        <View style={[
+          styles.chatOverlay,
+          { 
+            bottom: keyboardHeight > 0 
+              ? keyboardHeight + 100 
+              : 220 // Positioned above controls container (120px) + input bar (60px) + margin (40px)
+          }
+        ]}>
           <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
             {chatMessages.map((chat) => (
               <TouchableOpacity
@@ -302,6 +333,7 @@ export default function LiveStreamingView({
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={styles.keyboardAvoidingView}
           >
           <View style={styles.inputBar}>
             {!!replyTo && (
@@ -678,10 +710,16 @@ const styles = StyleSheet.create({
 
   chatOverlay: {
     position: 'absolute',
-    bottom: 280, // Increased to avoid overlap with mute buttons and input bar
     left: 16,
     right: 16,
     maxHeight: 120, // Reduced to prevent overlap with controls, especially with long messages
+    zIndex: 1, // Below controls container
+  },
+  keyboardAvoidingView: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   chatContainer: {
     flex: 1,
@@ -738,6 +776,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     backgroundColor: 'black',
+    position: 'relative', // Ensure absolute children are positioned relative to this
   },
   controlsContainer: {
     flexDirection: 'row',
@@ -747,6 +786,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     zIndex: 1000, // Ensure controls are above chat overlay
     elevation: 1000, // For Android
+    backgroundColor: 'transparent', // Ensure it's visible
+    position: 'relative', // Ensure it's in the normal flow
   },
   endLiveButton: {
     flex: 1,

@@ -14,8 +14,9 @@ const UserPostDetail: React.FC<{
   idCan: {
     userId: any;
     postId: any;
-  }
-}> = ({ idCan }) => {
+  };
+  onClose?: () => void;
+}> = ({ idCan, onClose }) => {
   const router = useRouter();
   const { dark } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
@@ -69,6 +70,10 @@ const UserPostDetail: React.FC<{
               });
 
               await clientQuery.invalidateQueries(['userPosts']); // ✅ fixed typo from invalidateQuerie → invalidateQueries
+              // Close the bottom sheet after successful deletion
+              if (onClose) {
+                onClose();
+              }
               Alert.alert('Success', 'Post deleted successfully');
               router.back(); // or navigate somewhere else if needed
             } catch (error) {

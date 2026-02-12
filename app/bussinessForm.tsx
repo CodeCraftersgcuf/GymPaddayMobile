@@ -15,7 +15,6 @@ import ThemeText from '@/components/ThemedText';
 //Code Related to the integration
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createBusiness } from '@/utils/mutations/businesses';
-import { getUserBusinesses } from '@/utils/queries/businesses';
 import { getBusinessStatus } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
@@ -104,28 +103,40 @@ export default function BusinessRegistrationScreen() {
             console.log('✅ [getBusinessStatus] onSuccess Triggered');
             console.log('📊 [getBusinessStatus] Full data:', JSON.stringify(data, null, 2));
             console.log('📊 [getBusinessStatus] Data type:', typeof data);
-            // Check if user has submitted a business request
-            const status = data?.status || data?.approval_status || data?.data?.status;
-            console.log('📋 [getBusinessStatus] Extracted status:', status);
-            console.log('📋 [getBusinessStatus] data.status:', data?.status);
-            console.log('📋 [getBusinessStatus] data.approval_status:', data?.approval_status);
-            console.log('📋 [getBusinessStatus] data.data?.status:', data?.data?.status);
             
-            if (status) {
+            // The API returns: { status: "success", data: { status: "not_found"|"pending"|"approved"|"rejected", business: {...} } }
+            const status = data?.data?.status || data?.status;
+            const business = data?.data?.business;
+            console.log('📋 [getBusinessStatus] Extracted status:', status);
+            console.log('📋 [getBusinessStatus] data.data?.status:', data?.data?.status);
+            console.log('📋 [getBusinessStatus] Has business object:', !!business);
+            
+            // Handle different status values
+            if (status && status !== 'not_found') {
                 if (status === 'approved' || status === 'Approved') {
                     console.log('✅ [getBusinessStatus] Status: APPROVED');
                     setSubmissionState('approved');
+                    setHasExistingBusiness(true);
                 } else if (status === 'rejected' || status === 'Rejected') {
                     console.log('❌ [getBusinessStatus] Status: REJECTED');
                     setSubmissionState('rejected');
-                } else {
-                    console.log('⏳ [getBusinessStatus] Status: REVIEWING');
+                    setHasExistingBusiness(true);
+                } else if (status === 'pending' || status === 'Pending') {
+                    console.log('⏳ [getBusinessStatus] Status: PENDING/REVIEWING');
                     setSubmissionState('reviewing');
+                    setHasExistingBusiness(true);
+                } else {
+                    // Any other status means there's a business
+                    console.log('⏳ [getBusinessStatus] Status: REVIEWING (default)');
+                    setSubmissionState('reviewing');
+                    setHasExistingBusiness(true);
                 }
-                setHasExistingBusiness(true);
                 console.log('🔒 [getBusinessStatus] hasExistingBusiness set to: true');
             } else {
-                console.log('ℹ️ [getBusinessStatus] No status found in response');
+                // status is "not_found" or null/undefined - user has no business
+                console.log('ℹ️ [getBusinessStatus] No business found for current user (status: not_found)');
+                setHasExistingBusiness(false);
+                setSubmissionState('idle');
             }
             console.log('═══════════════════════════════════════');
         },
@@ -138,82 +149,6 @@ export default function BusinessRegistrationScreen() {
         },
     });
 
-    // Also check user businesses as fallback
-    const { data: userBusinessesData, error: userBusinessesError } = useQuery({
-        queryKey: ['user-businesses'],
-        queryFn: async () => {
-            console.log('═══════════════════════════════════════');
-            console.log('🔍 [getUserBusinesses] Starting query...');
-            console.log('═══════════════════════════════════════');
-            const token = await SecureStore.getItemAsync('auth_token');
-            if (!token) {
-                console.error('❌ [getUserBusinesses] No auth token found');
-                throw new Error('Not authenticated');
-            }
-            console.log('✅ [getUserBusinesses] Auth token found, calling API...');
-            try {
-                const response = await getUserBusinesses(token);
-                console.log('═══════════════════════════════════════');
-                console.log('📊 [getUserBusinesses] RAW Response:', response);
-                console.log('📊 [getUserBusinesses] Response Type:', typeof response);
-                console.log('📊 [getUserBusinesses] Response Keys:', Object.keys(response || {}));
-                console.log('📊 [getUserBusinesses] JSON Response:', JSON.stringify(response, null, 2));
-                console.log('═══════════════════════════════════════');
-                return response;
-            } catch (err) {
-                console.error('❌ [getUserBusinesses] API Call Error:', err);
-                throw err;
-            }
-        },
-        onSuccess: (data: any) => {
-            console.log('═══════════════════════════════════════');
-            console.log('✅ [getUserBusinesses] onSuccess Triggered');
-            console.log('📊 [getUserBusinesses] Full data:', JSON.stringify(data, null, 2));
-            const businesses = data?.data || data?.businesses || data || [];
-            console.log('📋 [getUserBusinesses] Extracted businesses array:', businesses);
-            console.log('📋 [getUserBusinesses] Businesses length:', businesses.length);
-            console.log('📋 [getUserBusinesses] Is array?', Array.isArray(businesses));
-            console.log('📋 [getUserBusinesses] hasExistingBusiness current value:', hasExistingBusiness);
-            
-            if (Array.isArray(businesses) && businesses.length > 0 && !hasExistingBusiness) {
-                console.log('📋 [getUserBusinesses] First business object:', JSON.stringify(businesses[0], null, 2));
-                const status =
-                    businesses[0]?.status ||
-                    businesses[0]?.approval_status ||
-                    (businesses[0]?.is_approved ? 'approved' : 'reviewing');
-                console.log('📋 [getUserBusinesses] Extracted status:', status);
-                console.log('📋 [getUserBusinesses] businesses[0].status:', businesses[0]?.status);
-                console.log('📋 [getUserBusinesses] businesses[0].approval_status:', businesses[0]?.approval_status);
-                console.log('📋 [getUserBusinesses] businesses[0].is_approved:', businesses[0]?.is_approved);
-                
-                if (status === 'approved' || status === 'Approved') {
-                    console.log('✅ [getUserBusinesses] Status: APPROVED');
-                    setSubmissionState('approved');
-                } else if (status === 'rejected' || status === 'Rejected') {
-                    console.log('❌ [getUserBusinesses] Status: REJECTED');
-                    setSubmissionState('rejected');
-                } else {
-                    console.log('⏳ [getUserBusinesses] Status: REVIEWING');
-                    setSubmissionState('reviewing');
-                }
-                setHasExistingBusiness(true);
-                console.log('🔒 [getUserBusinesses] hasExistingBusiness set to: true');
-            } else {
-                console.log('ℹ️ [getUserBusinesses] No businesses found or hasExistingBusiness already true');
-                console.log('ℹ️ [getUserBusinesses] Array check:', Array.isArray(businesses));
-                console.log('ℹ️ [getUserBusinesses] Length check:', businesses.length);
-                console.log('ℹ️ [getUserBusinesses] hasExistingBusiness check:', hasExistingBusiness);
-            }
-            console.log('═══════════════════════════════════════');
-        },
-        onError: (error: any) => {
-            console.error('═══════════════════════════════════════');
-            console.error('❌ [getUserBusinesses] Query Error:', error);
-            console.error('❌ [getUserBusinesses] Error message:', error?.message);
-            console.error('❌ [getUserBusinesses] Error stack:', error?.stack);
-            console.error('═══════════════════════════════════════');
-        },
-    });
 
     // --- Mutation for business creation ---
     const createBusinessMutation = useMutation({
