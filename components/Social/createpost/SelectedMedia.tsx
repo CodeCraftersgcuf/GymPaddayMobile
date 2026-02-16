@@ -80,6 +80,7 @@ export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedi
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 16,
   },
   scrollContent: {

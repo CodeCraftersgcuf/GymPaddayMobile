@@ -24,6 +24,12 @@ export const showApiErrorToast = (
         'password': 'Password',
         'password_confirmation': 'Password Confirmation',
         'profile_picture': 'Profile Picture',
+        'business_name': 'Business Name',
+        'business_email': 'Business Email',
+        'business_phone': 'Business Phone',
+        'photo': 'Business Certificate / Document',
+        'category': 'Category',
+        'address': 'Address',
       };
       
       Object.keys(errors).forEach((field) => {

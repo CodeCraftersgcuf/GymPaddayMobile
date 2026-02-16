@@ -622,7 +622,6 @@ export default function MessageChat() {
                   />
                   <View style={styles.userDetails}>
                     <Text style={styles.userName}>{otherUser?.fullname ?? otherUser?.username ?? 'User'}</Text>
-                    <Text style={styles.onlineStatus}>Online</Text>
                   </View>
                 </View>
 
@@ -758,10 +757,6 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  onlineStatus: {
-    fontSize: 12,
-    color: '#4CD964',
   },
   headerActions: {
     flexDirection: 'row',

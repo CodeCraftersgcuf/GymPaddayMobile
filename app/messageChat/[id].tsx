@@ -78,9 +78,6 @@ export default function messageChat() {
           />
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{otherUser.username}</Text>
-            {otherUser.online && (
-              <Text style={styles.onlineStatus}>Online</Text>
-            )}
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -235,10 +232,6 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  onlineStatus: {
-    fontSize: 12,
-    color: '#4CD964',
   },
   headerActions: {
     flexDirection: 'row',

@@ -198,14 +198,21 @@ const ReviewAdScreen: React.FC = () => {
         },
         onError: (error: any) => {
             let detail = '';
-            if (error?.response?.data?.errors) {
-                detail = Object.values(error.response.data.errors).flat().join('\n');
+            const apiErrors = error?.response?.data?.errors ?? error?.data?.errors;
+            if (apiErrors && typeof apiErrors === 'object') {
+                detail = Object.values(apiErrors).flat().join('\n');
             }
+            const message =
+                detail ||
+                error?.response?.data?.message ||
+                error?.data?.message ||
+                (typeof error?.message === 'string' ? error.message : '') ||
+                (isEditableBool ? 'Failed to update ad' : 'Failed to boost post');
             Toast.show({
                 type: 'error',
                 text1: isEditableBool ? 'Update Failed' : 'Boost Failed',
-                text2: detail || error?.message || (isEditableBool ? 'Failed to update ad' : 'Failed to boost post'),
-                visibilityTime: 2000,
+                text2: message,
+                visibilityTime: 4000,
             });
         }
     });

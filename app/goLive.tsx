@@ -113,6 +113,7 @@ export default function HomeScreen() {
                 dark={dark}
                 livestreamId={channelInfo?.id}
                 channelName={channelInfo?.agora_channel}
+                selectedDuration={selectedDuration}
                 onEndLive={handleEndLive}
                 onThreeDotsPress={() => { }}
             />

@@ -50,6 +50,9 @@ export default function MessageChat() {
   const flatListRef = useRef<FlatList<any>>(null);
   const router = useRouter();
   const [callerUid, setCallerUid] = useState<number | null>(null);
+  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const theme = {
     background: dark ? '#000000' : '#ffffff',
     secondary: dark ? '#181818' : '#f5f5f5',
@@ -113,25 +116,25 @@ export default function MessageChat() {
   const receiverName = firstMessage?.receiver?.fullname || 'User';
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
 
-  const messages = [
-    ...(data?.messages?.map((msg: any) => {
-      let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
-      if (imageUrl && !imageUrl.startsWith('http')) {
-        imageUrl = `https://gympaddy.skillverse.com.pk/storage/${imageUrl}`;
-      }
-      return {
-        id: String(msg.id),
-        isCurrentUser: msg.direction === 'sent',
-        text: msg.message || '',
-        timestamp: new Date(msg.created_at),
-        senderPicture: msg.direction === 'sent'
-          ? msg.sender?.profile_picture_url
-          : msg.receiver?.profile_picture_url,
-        image: imageUrl,
-      }
-    }) || []),
-    ...(optimisticMessages || []), // Add optimistic messages at the end, ensure it's an array
-  ];
+  const serverMessages = (data?.messages?.map((msg: any) => {
+    let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      imageUrl = `https://gympaddy.skillverse.com.pk/storage/${imageUrl}`;
+    }
+    return {
+      id: String(msg.id),
+      isCurrentUser: msg.direction === 'sent',
+      text: msg.message || '',
+      timestamp: new Date(msg.created_at),
+      senderPicture: msg.direction === 'sent'
+        ? msg.sender?.profile_picture_url
+        : msg.receiver?.profile_picture_url,
+      image: imageUrl,
+    };
+  }) || []);
+  const messages = [...serverMessages, ...(optimisticMessages || [])].sort(
+    (a, b) => (a.timestamp?.getTime() ?? 0) - (b.timestamp?.getTime() ?? 0)
+  );
 
 
   const sendMessageMutation = useMutation({
@@ -190,9 +193,6 @@ export default function MessageChat() {
       }
     },
     onSuccess: () => {
-      // Don't clear here - already cleared in handleSendMessage for optimistic UI
-      // setNewMessage('');
-      // setAttachedImage(null);
       refetch();
     },
     onError: (err) => {
@@ -232,14 +232,12 @@ export default function MessageChat() {
       sendMessageMutation.mutate(
         { text: messageText, imageUri: imageUri },
         {
-          onSuccess: () => {
-            // Remove optimistic message - it will be replaced by the real one from refetch
+          onSuccess: async () => {
+            await refetch();
             setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
           },
           onError: () => {
-            // Remove optimistic message on error
             setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
-            // Restore message text on error
             setNewMessage(messageText);
             if (imageUri) setAttachedImage(imageUri);
           },
@@ -455,11 +453,8 @@ export default function MessageChat() {
     }, 3000);
     return () => clearInterval(interval);
   }, [refetch]);
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
-  
-  // Get current user data for optimistic messages
-  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Load current user data for optimistic message avatar
   useEffect(() => {
     (async () => {
       const userDataStr = await SecureStore.getItemAsync('user_data');
@@ -517,9 +512,6 @@ export default function MessageChat() {
                 />
                 <View style={styles.userDetails}>
                   <Text style={[styles.userName, { color: theme.text }]}>{userWithUpdatedStatus?.fullname ?? userWithUpdatedStatus?.username ?? 'User'}</Text>
-                  <Text style={[styles.onlineStatus, { color: userWithUpdatedStatus?.is_online ? '#4CD964' : '#999' }]}>
-                    {userWithUpdatedStatus?.is_online ? 'Online' : 'Offline'}
-                  </Text>
                 </View>
               </View>
 
@@ -696,10 +688,6 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  onlineStatus: {
-    fontSize: 12,
-    color: '#4CD964',
   },
   headerActions: {
     flexDirection: 'row',

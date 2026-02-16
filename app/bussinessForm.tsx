@@ -18,6 +18,7 @@ import { createBusiness } from '@/utils/mutations/businesses';
 import { getBusinessStatus } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
+import { showApiErrorToast } from '@/utils/showApiErrorToast';
 
 
 const validationSchema = Yup.object().shape({
@@ -169,10 +170,7 @@ export default function BusinessRegistrationScreen() {
             setIsSubmittingLocal(false);
         },
         onError: (error: any) => {
-            Toast.show({
-                type: 'error',
-                text1: error?.message || 'Failed to register business',
-            });
+            showApiErrorToast(error, 'Failed to register business');
             setIsSubmittingLocal(false);
         },
     });
@@ -234,10 +232,7 @@ export default function BusinessRegistrationScreen() {
             }
             createBusinessMutation.mutate(formData);
         } catch (error: any) {
-            Toast.show({
-                type: 'error',
-                text1: error?.message || 'Failed to register business',
-            });
+            showApiErrorToast(error, 'Failed to register business');
             setIsSubmittingLocal(false);
         }
     };

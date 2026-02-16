@@ -70,7 +70,7 @@ export default function UserSection({ postText, onTextChange, disabled = false }
             editable={!disabled}
             maxLength={500}
           />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 44 }}>
             {postText.length >= 450 && (
               <Text style={{ fontSize: 11, color: postText.length >= 500 ? '#F44336' : '#FF9800', flex: 1 }}>
                 {postText.length >= 500 ? 'Character limit reached!' : `Approaching limit (${500 - postText.length} remaining)`}
@@ -98,7 +98,8 @@ export default function UserSection({ postText, onTextChange, disabled = false }
 const styles = StyleSheet.create({
   container: {
     padding: 16,
-
+    paddingBottom: 24,
+    marginBottom: 8,
   },
   userInfo: {
     flexDirection: 'row',

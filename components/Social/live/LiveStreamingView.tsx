@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,8 +30,10 @@ interface LiveStreamingViewProps {
   dark: boolean;
   onEndLive: () => void;
   onThreeDotsPress: () => void;
-  channelName: string
-  livestreamId?: string
+  channelName: string;
+  livestreamId?: string;
+  /** User-selected duration before going live, e.g. "15 Min", "1 Hour". Stream auto-ends when reached. */
+  selectedDuration?: string;
 }
 
 interface ChatMessage {
@@ -42,18 +44,29 @@ interface ChatMessage {
   hasGift?: boolean;
   giftCount?: number;
 }
+/** Parse duration string (e.g. "15 Min", "1 Hour", "3 Hours") to total seconds */
+function parseDurationToSeconds(durationStr: string | undefined): number | null {
+  if (!durationStr || typeof durationStr !== 'string') return null;
+  const s = durationStr.trim();
+  const hourMatch = s.match(/^(\d+)\s*Hours?/i);
+  if (hourMatch) return parseInt(hourMatch[1], 10) * 3600;
+  const minMatch = s.match(/^(\d+)\s*Min/i);
+  if (minMatch) return parseInt(minMatch[1], 10) * 60;
+  return null;
+}
+
 export default function LiveStreamingView({
   dark,
   onEndLive,
   onThreeDotsPress,
   channelName,
-  livestreamId
+  livestreamId,
+  selectedDuration,
 }: LiveStreamingViewProps) {
   const UID = 12345;
   const CHANNEL_NAME = channelName ?? 'live_stream';
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const chatScrollRef = useRef<ScrollView>(null);
   const fetchLiveVideoCallToken = useMutation({
     mutationFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
@@ -111,6 +124,15 @@ export default function LiveStreamingView({
     }
   }, [chats]);
 
+  // Auto-scroll to latest comment when new messages arrive
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      const timer = setTimeout(() => {
+        chatScrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [chatMessages.length]);
 
   const audienceQuery = useQuery({
     queryKey: ['audience', livestreamId],
@@ -182,6 +204,18 @@ export default function LiveStreamingView({
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-end stream when selected duration is reached (only once)
+  const selectedDurationSeconds = parseDurationToSeconds(selectedDuration);
+  const hasAutoEndedRef = useRef(false);
+  useEffect(() => {
+    if (selectedDurationSeconds == null || selectedDurationSeconds <= 0 || hasAutoEndedRef.current) return;
+    if (duration >= selectedDurationSeconds) {
+      hasAutoEndedRef.current = true;
+      onEndLive();
+    }
+  }, [duration, selectedDurationSeconds, onEndLive]);
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -237,52 +271,54 @@ export default function LiveStreamingView({
 
   return (
     <View style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}>
-      {/* Header */}
+      {/* Back button only – title lives in web */}
       <View style={styles.header}>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={onEndLive} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={dark ? '#FFF' : '#000'} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: dark ? '#FFF' : '#000' }]}>Live Streaming</Text>
-        <View style={{ width: 24 }} /> {/* Spacer to balance layout */}
       </View>
       <View style={styles.streamContainer}>
-        {fetchLiveVideoCallToken.isPending && (
-          <ActivityIndicator size="large" color="#940304" />
-        )}
+        {/* Video area only – WebView does not extend under app input bar, so web's bottom bar stays visible */}
+        <View style={styles.webViewWrapper}>
+          {fetchLiveVideoCallToken.isPending && (
+            <ActivityIndicator size="large" color="#940304" style={styles.loaderCenter} />
+          )}
 
-        {fetchLiveVideoCallToken.data && (
-          <WebView
-            source={{
-              uri: `https://skillverse.com.pk/live.html?channel=${CHANNEL_NAME}&role=host`,
-            }}
-            javaScriptEnabled
-            domStorageEnabled
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            allowsFullscreenVideo
-            style={{ flex: 1 }}
-            onMessage={(event) => {
-              const message = event.nativeEvent.data;
-              console.log("📩 Message from WebView:", message);
+          {fetchLiveVideoCallToken.data && (
+            <WebView
+              source={{
+                uri: `https://skillverse.com.pk/live.html?channel=${CHANNEL_NAME}&role=host`,
+              }}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              allowsFullscreenVideo
+              style={styles.webView}
+              onMessage={(event) => {
+                const message = event.nativeEvent.data;
+                console.log("📩 Message from WebView:", message);
 
-              if (message === "stream_ended") {
-                // Call your handler to exit the live view
-                onEndLive(); // 👈 this should navigate away or close the screen
-              }
-            }}
-          />
-        )}
+                if (message === "stream_ended") {
+                  onEndLive();
+                }
+              }}
+            />
+          )}
 
-        {/* Chat Overlay - Position adjusts based on keyboard and controls container */}
-        <View style={[
-          styles.chatOverlay,
-          { 
-            bottom: keyboardHeight > 0 
-              ? keyboardHeight + 100 
-              : 220 // Positioned above controls container (120px) + input bar (60px) + margin (40px)
-          }
-        ]}>
-          <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
+          {/* Chat Overlay – floats over video area only */}
+          <View style={[
+            styles.chatOverlay,
+            {
+              bottom: keyboardHeight > 0 ? keyboardHeight + 60 : 16,
+            }
+          ]}>
+          <ScrollView
+            ref={chatScrollRef}
+            style={styles.chatContainer}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
+          >
             {chatMessages.map((chat) => (
               <TouchableOpacity
                 key={chat.id}
@@ -327,13 +363,14 @@ export default function LiveStreamingView({
             ))}
 
           </ScrollView>
+          </View>
         </View>
 
         {canType && (
-          <KeyboardAvoidingView 
+          <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-            style={styles.keyboardAvoidingView}
+            style={styles.inputBarSection}
           >
           <View style={styles.inputBar}>
             {!!replyTo && (
@@ -413,14 +450,11 @@ export default function LiveStreamingView({
 
       </View>
 
-      {/* Controls */}
+      {/* App controls – End Stream is only in web view; web posts "stream_ended" to trigger onEndLive */}
       <View style={styles.controlsContainer}>
-        <TouchableOpacity style={styles.endLiveButton} onPress={onEndLive}>
-          <Text style={styles.endLiveButtonText}>End Stream</Text>
-        </TouchableOpacity>
         <TouchableOpacity
           style={styles.viewAudienceButton}
-          onPress={() => setAudienceModalVisible(true)} // ✅ show modal
+          onPress={() => setAudienceModalVisible(true)}
         >
           <Text
             style={[
@@ -444,8 +478,6 @@ export default function LiveStreamingView({
             View Insights
           </Text>
         </TouchableOpacity>
-
-
       </View>
       <Modal
         isVisible={audienceModalVisible}
@@ -715,12 +747,6 @@ const styles = StyleSheet.create({
     maxHeight: 120, // Reduced to prevent overlap with controls, especially with long messages
     zIndex: 1, // Below controls container
   },
-  keyboardAvoidingView: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
   chatContainer: {
     flex: 1,
   },
@@ -763,20 +789,37 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
+  backButton: {
+    padding: 4,
   },
   streamContainer: {
     flex: 1,
     width: '100%',
     backgroundColor: 'black',
-    position: 'relative', // Ensure absolute children are positioned relative to this
+    flexDirection: 'column',
+  },
+  webViewWrapper: {
+    flex: 1,
+    position: 'relative',
+    minHeight: 0,
+  },
+  webView: {
+    flex: 1,
+    width: '100%',
+  },
+  loaderCenter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  inputBarSection: {
+    backgroundColor: '#0E0E0E',
   },
   controlsContainer: {
     flexDirection: 'row',
@@ -784,22 +827,10 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     gap: 15,
     marginTop: 10,
-    zIndex: 1000, // Ensure controls are above chat overlay
-    elevation: 1000, // For Android
-    backgroundColor: 'transparent', // Ensure it's visible
-    position: 'relative', // Ensure it's in the normal flow
-  },
-  endLiveButton: {
-    flex: 1,
-    backgroundColor: '#940304',
-    borderRadius: 10,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  endLiveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    zIndex: 1000,
+    elevation: 1000,
+    backgroundColor: 'transparent',
+    position: 'relative',
   },
   viewAudienceButton: {
     flex: 1,

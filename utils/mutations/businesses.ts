@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from "../../apiConfig";
+import { ApiError } from "../customApiCall";
 
 export const createBusiness = async ({
   token,
@@ -22,11 +23,23 @@ export const createBusiness = async ({
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.message || 'Failed to create business account');
+      // Preserve full API response (message + validation errors) so UI can show them
+      throw new ApiError(
+        result,
+        response.statusText,
+        result?.message || 'Failed to create business account',
+        response.status
+      );
     }
     return result;
   } catch (error: any) {
+    if (error instanceof ApiError) throw error;
     console.error('❌ Fetch Error (createBusiness):', error);
-    throw new Error(error.message || 'Network error occurred');
+    throw new ApiError(
+      { message: error?.message || 'Network error occurred' },
+      'Network Error',
+      error?.message || 'Network error occurred',
+      500
+    );
   }
 };

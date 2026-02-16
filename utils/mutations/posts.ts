@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from "../../apiConfig";
+import { apiCall } from "../customApiCall";
 
 export const createPost = async ({
   data,
