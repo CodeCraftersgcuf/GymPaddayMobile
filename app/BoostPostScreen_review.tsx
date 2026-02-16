@@ -204,16 +204,26 @@ const ReviewAdScreen: React.FC = () => {
             }
             const message =
                 detail ||
-                error?.response?.data?.message ||
                 error?.data?.message ||
+                error?.response?.data?.message ||
                 (typeof error?.message === 'string' ? error.message : '') ||
                 (isEditableBool ? 'Failed to update ad' : 'Failed to boost post');
+
+            const statusCode = error?.statusCode || error?.response?.status || error?.data?.code;
+            const title =
+                statusCode === 409
+                    ? 'Already Boosted'
+                    : isEditableBool
+                        ? 'Update Failed'
+                        : 'Boost Failed';
+
             Toast.show({
                 type: 'error',
-                text1: isEditableBool ? 'Update Failed' : 'Boost Failed',
+                text1: title,
                 text2: message,
                 visibilityTime: 4000,
             });
+            Alert.alert(title, message);
         }
     });
 

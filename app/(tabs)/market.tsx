@@ -54,6 +54,8 @@ export default function MarketplaceScreen() {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [showLocationSheet, setShowLocationSheet] = useState(false);
   const [showCategorySheet, setShowCategorySheet] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
  const queryClient = new QueryClient();
 
   const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
@@ -87,19 +89,34 @@ export default function MarketplaceScreen() {
     { id: 'all', name: 'All' },
     { id: 'abia', name: 'Abia' },
     { id: 'adamawa', name: 'Adamawa' },
+    { id: 'agege', name: 'Agege, Lagos' },
+    { id: 'ajah', name: 'Ajah, Lagos' },
     { id: 'akwa-ibom', name: 'Akwa Ibom' },
+    { id: 'alimosho', name: 'Alimosho, Lagos' },
     { id: 'anambra', name: 'Anambra' },
+    { id: 'asaba', name: 'Asaba, Delta' },
     { id: 'bauchi', name: 'Bauchi' },
     { id: 'bayelsa', name: 'Bayelsa' },
+    { id: 'benin-city', name: 'Benin City, Edo' },
     { id: 'benue', name: 'Benue' },
     { id: 'borno', name: 'Borno' },
+    { id: 'calabar', name: 'Calabar, Cross River' },
     { id: 'cross-river', name: 'Cross River' },
     { id: 'delta', name: 'Delta' },
     { id: 'ebonyi', name: 'Ebonyi' },
     { id: 'edo', name: 'Edo' },
     { id: 'ekiti', name: 'Ekiti' },
     { id: 'enugu', name: 'Enugu' },
+    { id: 'festac', name: 'Festac, Lagos' },
+    { id: 'abuja', name: 'FCT Abuja' },
+    { id: 'garki', name: 'Garki, Abuja' },
+    { id: 'gbagada', name: 'Gbagada, Lagos' },
     { id: 'gombe', name: 'Gombe' },
+    { id: 'gwarinpa', name: 'Gwarinpa, Abuja' },
+    { id: 'ibadan', name: 'Ibadan, Oyo' },
+    { id: 'ikeja', name: 'Ikeja, Lagos' },
+    { id: 'ikorodu', name: 'Ikorodu, Lagos' },
+    { id: 'ikoyi', name: 'Ikoyi, Lagos' },
     { id: 'imo', name: 'Imo' },
     { id: 'jigawa', name: 'Jigawa' },
     { id: 'kaduna', name: 'Kaduna' },
@@ -109,20 +126,36 @@ export default function MarketplaceScreen() {
     { id: 'kogi', name: 'Kogi' },
     { id: 'kwara', name: 'Kwara' },
     { id: 'lagos', name: 'Lagos' },
+    { id: 'lagos-island', name: 'Lagos Island, Lagos' },
+    { id: 'lekki', name: 'Lekki, Lagos' },
+    { id: 'maitama', name: 'Maitama, Abuja' },
+    { id: 'maryland', name: 'Maryland, Lagos' },
+    { id: 'mushin', name: 'Mushin, Lagos' },
     { id: 'nasarawa', name: 'Nasarawa' },
     { id: 'niger', name: 'Niger' },
     { id: 'ogun', name: 'Ogun' },
     { id: 'ondo', name: 'Ondo' },
+    { id: 'oshodi', name: 'Oshodi, Lagos' },
     { id: 'osun', name: 'Osun' },
+    { id: 'owerri', name: 'Owerri, Imo' },
     { id: 'oyo', name: 'Oyo' },
     { id: 'plateau', name: 'Plateau' },
+    { id: 'port-harcourt', name: 'Port Harcourt, Rivers' },
     { id: 'rivers', name: 'Rivers' },
     { id: 'sokoto', name: 'Sokoto' },
+    { id: 'surulere', name: 'Surulere, Lagos' },
     { id: 'taraba', name: 'Taraba' },
+    { id: 'victoria-island', name: 'Victoria Island, Lagos' },
+    { id: 'warri', name: 'Warri, Delta' },
+    { id: 'wuse', name: 'Wuse, Abuja' },
+    { id: 'yaba', name: 'Yaba, Lagos' },
     { id: 'yobe', name: 'Yobe' },
     { id: 'zamfara', name: 'Zamfara' },
-    { id: 'abuja', name: 'FCT Abuja' },
   ];
+
+  const filteredLocations = nigeriaLocations.filter((loc) =>
+    loc.name.toLowerCase().includes(locationSearchQuery.toLowerCase())
+  );
 
   const theme = {
     background: isDark ? '#000000' : '#FFFFFF',
@@ -476,46 +509,115 @@ React.useEffect(() => {
       </ScrollView>
       <Modal
         isVisible={showLocationSheet}
-        onBackdropPress={() => setShowLocationSheet(false)}
-        onSwipeComplete={() => setShowLocationSheet(false)}
+        onBackdropPress={() => { setShowLocationSheet(false); setLocationSearchQuery(''); }}
+        onSwipeComplete={() => { setShowLocationSheet(false); setLocationSearchQuery(''); }}
         swipeDirection="down"
         style={styles.modal}
       >
         <View style={styles.bottomSheetContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Location</Text>
+            <TouchableOpacity onPress={() => { setShowLocationSheet(false); setLocationSearchQuery(''); }}>
+              <AntDesign name="close" size={22} color="#333" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <Feather name="search" size={18} color="#999" />
+            <TextInput
+              style={styles.modalSearchInput}
+              placeholder="Search location..."
+              placeholderTextColor="#999"
+              value={locationSearchQuery}
+              onChangeText={setLocationSearchQuery}
+              autoCorrect={false}
+            />
+            {locationSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setLocationSearchQuery('')}>
+                <AntDesign name="closecircle" size={16} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
           <ScrollView 
             showsVerticalScrollIndicator={true}
             nestedScrollEnabled={true}
             style={{ maxHeight: '100%' }}
-            contentContainerStyle={{ padding: 20 }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
           >
-            {nigeriaLocations.map(loc => (
+            {filteredLocations.map(loc => (
               <TouchableOpacity key={loc.id} onPress={() => {
                 setSelectedLocation(loc.id);
                 setShowLocationSheet(false);
+                setLocationSearchQuery('');
               }}>
-                <Text style={styles.bottomSheetItem}>{loc.name}</Text>
+                <Text style={[
+                  styles.bottomSheetItem,
+                  selectedLocation === loc.id && { color: '#940304', fontWeight: '600' }
+                ]}>{loc.name}</Text>
               </TouchableOpacity>
             ))}
+            {filteredLocations.length === 0 && (
+              <Text style={{ textAlign: 'center', color: '#999', paddingVertical: 20 }}>No locations found</Text>
+            )}
           </ScrollView>
         </View>
       </Modal>
 
       <Modal
         isVisible={showCategorySheet}
-        onBackdropPress={() => setShowCategorySheet(false)}
-        onSwipeComplete={() => setShowCategorySheet(false)}
+        onBackdropPress={() => { setShowCategorySheet(false); setCategorySearchQuery(''); }}
+        onSwipeComplete={() => { setShowCategorySheet(false); setCategorySearchQuery(''); }}
         swipeDirection="down"
         style={styles.modal}
       >
         <View style={styles.bottomSheetContent}>
-          {categories.map(cat => (
-            <TouchableOpacity key={cat.id} onPress={() => {
-              setSelectedCategory(cat.id);
-              setShowCategorySheet(false);
-            }}>
-              <Text style={styles.bottomSheetItem}>{cat.title}</Text>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Category</Text>
+            <TouchableOpacity onPress={() => { setShowCategorySheet(false); setCategorySearchQuery(''); }}>
+              <AntDesign name="close" size={22} color="#333" />
             </TouchableOpacity>
-          ))}
+          </View>
+          <View style={styles.modalSearchContainer}>
+            <Feather name="search" size={18} color="#999" />
+            <TextInput
+              style={styles.modalSearchInput}
+              placeholder="Search category..."
+              placeholderTextColor="#999"
+              value={categorySearchQuery}
+              onChangeText={setCategorySearchQuery}
+              autoCorrect={false}
+            />
+            {categorySearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setCategorySearchQuery('')}>
+                <AntDesign name="closecircle" size={16} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <ScrollView
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            style={{ maxHeight: '100%' }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {categories
+              .filter(cat => cat.title.toLowerCase().includes(categorySearchQuery.toLowerCase()))
+              .map(cat => (
+                <TouchableOpacity key={cat.id} onPress={() => {
+                  setSelectedCategory(cat.id);
+                  setShowCategorySheet(false);
+                  setCategorySearchQuery('');
+                }}>
+                  <Text style={[
+                    styles.bottomSheetItem,
+                    selectedCategory === cat.id && { color: '#940304', fontWeight: '600' }
+                  ]}>{cat.title}</Text>
+                </TouchableOpacity>
+              ))}
+            {categories.filter(cat => cat.title.toLowerCase().includes(categorySearchQuery.toLowerCase())).length === 0 && (
+              <Text style={{ textAlign: 'center', color: '#999', paddingVertical: 20 }}>No categories found</Text>
+            )}
+          </ScrollView>
         </View>
       </Modal>
 
@@ -753,6 +855,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F2',
+    borderRadius: 10,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  modalSearchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 15,
+    color: '#333',
   },
 
 });

@@ -20,8 +20,6 @@ import ThemedView from "@/components/ThemedView";
 
 
 //Code Related to the integration
-import { useMutation } from "@tanstack/react-query";
-import { verifyOtp } from "@/utils/mutations/auth";
 import Toast from "react-native-toast-message";
 import { useLocalSearchParams } from 'expo-router';
 
@@ -35,30 +33,19 @@ const codeverification = () => {
 
   console.log("Email from params:", email); // Debugging line to check if email is received correctly
 
-  const mutation = useMutation({
-    mutationFn: verifyOtp,
-    onSuccess: (_data, variables) => {
-      Toast.show({ type: 'success', text1: 'OTP verified!' });
-      route.push({
-        pathname: '/resetpassword',
-        params: {
-          email: email as string,
-          otp: variables.data.otp, // or variables.data.otp depending on your API naming
-        },
-      });
-    },
-    onError: (error: any) => {
-      Toast.show({ type: 'error', text1: error.message || 'Invalid code' });
-      
-    },
-  });
-
-
   const handleLogin = (values: { code: string }) => {
-    mutation.mutate({
-      data: {
+    if (!email) {
+      Toast.show({ type: 'error', text1: 'Missing email information' });
+      return;
+    }
+    // Don't call verifyOtp here — it consumes the OTP on the server.
+    // Pass the OTP directly to the reset password screen, which will
+    // validate it via the reset-password endpoint.
+    route.push({
+      pathname: '/resetpassword',
+      params: {
         email: email as string,
-        otp: values.code, // make sure your API expects `token` not `otp`
+        otp: values.code,
       },
     });
   };
@@ -155,16 +142,14 @@ const codeverification = () => {
                     {/* Login Button */}
                     <Pressable
                       onPress={() => handleSubmit()}
-                      disabled={mutation.isPending}
                       style={{
-                        backgroundColor: mutation.isPending ? '#940304AA' : '#940304',
+                        backgroundColor: '#940304',
                         paddingVertical: 15,
                         borderRadius: 10,
-                        opacity: mutation.isPending ? 0.6 : 1,
                       }}
                     >
                       <ThemeText style={{ textAlign: 'center', color: 'white', fontWeight: '500', fontSize: 16 }}>
-                        {mutation.isPending ? 'Processing...' : 'Proceed'}
+                        Proceed
                       </ThemeText>
                     </Pressable>
 
