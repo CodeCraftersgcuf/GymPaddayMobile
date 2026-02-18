@@ -21,6 +21,7 @@ const API_ENDPOINTS = {
     PROFILE: {
       PROFILE: (userId: number) => `${API_DOMAIN}/user/userDetails/${userId}`,
       EditProfile: API_DOMAIN + "/user/edit-profile",
+      DeleteAccount: API_DOMAIN + "/user/delete-account",
     },
     POSTS: {
       BoostPost: (id: number) => API_DOMAIN + `/user/boost-post/${id}`,

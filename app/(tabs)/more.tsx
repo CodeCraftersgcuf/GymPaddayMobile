@@ -23,6 +23,7 @@ import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { API_ENDPOINTS } from '@/apiConfig';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import { useMutation } from '@tanstack/react-query';
 import { topUpWallet } from '@/utils/mutations/wallets';
@@ -44,6 +45,9 @@ export default function More() {
   const [openTheme, setopenTheme] = useState(false)
   const [refreshing, setRefreshing] = useState(false);
   const [showTopupModal, setShowTopupModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const route = useRouter();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
@@ -468,14 +472,8 @@ export default function More() {
         );
         break;
       case 'delete-account':
-        Alert.alert(
-          'Delete Account',
-          'This action cannot be undone. Are you sure?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive' }
-          ]
-        );
+        setDeletePassword('');
+        setShowDeleteAccountModal(true);
         break;
       default:
         Alert.alert('Feature', `${id} feature coming soon`);
@@ -770,6 +768,98 @@ export default function More() {
           </View>
         </View>
       </Modal>
+
+      {/* Delete Account Modal */}
+      <Modal
+        visible={showDeleteAccountModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDeleteAccountModal(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={[styles.deleteModalContainer, { backgroundColor: dark ? '#1a1a1a' : '#fff' }]}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowDeleteAccountModal(false)} style={styles.modalCloseButton}>
+                <Ionicons name="close" size={24} color={dark ? 'white' : '#333'} />
+              </TouchableOpacity>
+              <ThemeText style={styles.modalTitle}>Delete Account</ThemeText>
+              <View style={styles.placeholder} />
+            </View>
+
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
+              <ThemeText style={{ marginBottom: 8, fontSize: 14, color: dark ? '#ccc' : '#555' }}>
+                This action cannot be undone. Enter your password to confirm.
+              </ThemeText>
+              <TextInput
+                style={[styles.textInput, {
+                  color: dark ? '#fff' : '#000',
+                  borderColor: dark ? '#444' : '#E5E5E5',
+                  backgroundColor: dark ? '#2a2a2a' : '#fafafa',
+                  marginTop: 12,
+                }]}
+                placeholder="Enter your password"
+                placeholderTextColor={dark ? '#888' : '#aaa'}
+                secureTextEntry
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={[styles.deleteConfirmButton, { opacity: isDeletingAccount ? 0.6 : 1 }]}
+                disabled={isDeletingAccount}
+                onPress={async () => {
+                  if (!deletePassword) {
+                    Alert.alert('Error', 'Please enter your password.');
+                    return;
+                  }
+                  setIsDeletingAccount(true);
+                  try {
+                    const token = await SecureStore.getItemAsync('auth_token');
+                    const response = await fetch(API_ENDPOINTS.USER.PROFILE.DeleteAccount, {
+                      method: 'DELETE',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ password: deletePassword }),
+                    });
+                    if (!response.ok) {
+                      const errorBody = await response.text();
+                      console.error('[Delete Account] HTTP', response.status, response.statusText);
+                      console.error('[Delete Account] Response body:', errorBody);
+                      let message = 'Failed to delete account. Please try again.';
+                      try {
+                        const parsed = JSON.parse(errorBody);
+                        if (parsed?.errors?.password) {
+                          message = parsed.errors.password[0];
+                        } else if (parsed?.message) {
+                          message = parsed.message;
+                        }
+                      } catch {}
+                      Alert.alert('Error', message);
+                      return;
+                    }
+                    await SecureStore.deleteItemAsync('auth_token');
+                    await SecureStore.deleteItemAsync('user_data');
+                    setShowDeleteAccountModal(false);
+                    route.replace('/login');
+                  } catch (e) {
+                    console.error('[Delete Account] Error:', e);
+                    Alert.alert('Error', 'Failed to delete account. Please try again.');
+                  } finally {
+                    setIsDeletingAccount(false);
+                  }
+                }}
+              >
+                {isDeletingAccount
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Delete My Account</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1024,5 +1114,17 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 14,
+  },
+  deleteModalContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 10,
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#FF3B30',
+    marginTop: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
   },
 });
