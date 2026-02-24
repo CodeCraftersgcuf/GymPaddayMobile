@@ -5,17 +5,20 @@ export class ApiError extends Error {
   data: any;
   statusText: string = '';
   statusCode?: number;
+  errorCode?: string;
 
   constructor(
     data: any,
     statusText: string,
     message: string,
-    statusCode?: number
+    statusCode?: number,
+    errorCode?: string
   ) {
     super(message);
     this.data = data;
     this.statusText = statusText;
     this.statusCode = statusCode;
+    this.errorCode = errorCode;
   }
 }
 
@@ -86,6 +89,11 @@ export const apiCall = async (
       if (error.response) {
         const status = error.response.status;
         const responseData = error.response.data;
+        const apiErrorCode = responseData?.error?.code || responseData?.code;
+        const apiErrorMessage =
+          responseData?.error?.message ||
+          responseData?.message ||
+          'Something went wrong';
         
         // Handle rate limiting (429) with user-friendly message
         if (status === 429) {
@@ -103,15 +111,17 @@ export const apiCall = async (
             responseData,
             error.response.statusText,
             message,
-            status
+            status,
+            apiErrorCode
           );
         }
         
         throw new ApiError(
           responseData,
           error.response.statusText,
-          responseData?.message || 'Something went wrong',
-          status
+          apiErrorMessage,
+          status,
+          apiErrorCode
         );
       }
     }

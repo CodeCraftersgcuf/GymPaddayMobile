@@ -19,7 +19,14 @@ export const createPost = async ({
       body: data,
     });
 
-    const result = await response.json();
+    const text = await response.text();
+    let result: any;
+    try {
+      result = JSON.parse(text);
+    } catch (e) {
+      console.error('❌ Server returned non-JSON response (status ' + response.status + '):', text.substring(0, 500));
+      throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+    }
 
     if (!response.ok) {
       throw new Error(result?.message || `HTTP error! status: ${response.status}`);

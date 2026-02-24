@@ -1,6 +1,8 @@
 // const API_DOMAIN = "http://192.168.175.151:8000/api";
+// const API_DOMAIN = "http://192.168.175.151:8000/api";   // Localhost IP
 
-const API_DOMAIN = "https://gympaddy.skillverse.com.pk/api";
+const API_DOMAIN = "https://api.gympaddy.com/api";
+
 
 const API_ENDPOINTS = {
   AUTH: {
@@ -137,6 +139,8 @@ const API_ENDPOINTS = {
     },
     NOTIFICATIONS: {
       List: API_DOMAIN + "/user/notifications",
+      Unread: API_DOMAIN + "/user/notifications/unread",
+      MarkRead: (id: number) => API_DOMAIN + `/user/notifications/${id}/mark-read`,
       Create: API_DOMAIN + "/user/notifications",
       Show: (id: number) => API_DOMAIN + `/user/notifications/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/notifications/${id}`,

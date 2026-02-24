@@ -238,6 +238,30 @@ export default function LiveStreamingView({
     return () => clearInterval(interval);
   }, [livestreamId]);
 
+  // Heartbeat — tell the server the stream host is still active every 30 seconds.
+  // If the host closes the app without ending the stream, the backend cleanup
+  // command will mark the stream as inactive after 2 minutes of no heartbeat.
+  useEffect(() => {
+    if (!livestreamId) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${livestreamId}/heartbeat`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (err) {
+        console.log('Heartbeat error', err);
+      }
+    };
+
+    // Send immediately on mount, then every 30 seconds
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 30000);
+    return () => clearInterval(interval);
+  }, [livestreamId]);
+
   //adding new feature reply to user chaty
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [replyText, setReplyText] = useState('');

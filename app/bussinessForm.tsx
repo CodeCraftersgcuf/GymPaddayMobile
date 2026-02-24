@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import { getBusinessStatus } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { showApiErrorToast } from '@/utils/showApiErrorToast';
+import { API_DOMAIN } from '@/apiConfig';
 
 
 const validationSchema = Yup.object().shape({
@@ -61,6 +62,15 @@ export default function BusinessRegistrationScreen() {
     const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
     const [hasExistingBusiness, setHasExistingBusiness] = useState(false);
     const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
+    const [businessDetails, setBusinessDetails] = useState<any>(null);
+
+    const buildBusinessPhotoUrl = (photoPath?: string | null) => {
+        if (!photoPath) return null;
+        if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) return photoPath;
+
+        const base = API_DOMAIN.replace(/\/api\/?$/, '');
+        return `${base}/storage/${photoPath.replace(/^\/?storage\//, '')}`;
+    };
 
     console.log('🚀 BusinessRegistrationScreen - Component Rendered');
     console.log('📊 Current state - submissionState:', submissionState);
@@ -118,19 +128,35 @@ export default function BusinessRegistrationScreen() {
                     console.log('✅ [getBusinessStatus] Status: APPROVED');
                     setSubmissionState('approved');
                     setHasExistingBusiness(true);
+                    setBusinessDetails(business || null);
+                    if (business?.photo) {
+                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
+                    }
                 } else if (status === 'rejected' || status === 'Rejected') {
                     console.log('❌ [getBusinessStatus] Status: REJECTED');
                     setSubmissionState('rejected');
                     setHasExistingBusiness(true);
+                    setBusinessDetails(business || null);
+                    if (business?.photo) {
+                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
+                    }
                 } else if (status === 'pending' || status === 'Pending') {
                     console.log('⏳ [getBusinessStatus] Status: PENDING/REVIEWING');
                     setSubmissionState('reviewing');
                     setHasExistingBusiness(true);
+                    setBusinessDetails(business || null);
+                    if (business?.photo) {
+                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
+                    }
                 } else {
                     // Any other status means there's a business
                     console.log('⏳ [getBusinessStatus] Status: REVIEWING (default)');
                     setSubmissionState('reviewing');
                     setHasExistingBusiness(true);
+                    setBusinessDetails(business || null);
+                    if (business?.photo) {
+                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
+                    }
                 }
                 console.log('🔒 [getBusinessStatus] hasExistingBusiness set to: true');
             } else {
@@ -138,6 +164,7 @@ export default function BusinessRegistrationScreen() {
                 console.log('ℹ️ [getBusinessStatus] No business found for current user (status: not_found)');
                 setHasExistingBusiness(false);
                 setSubmissionState('idle');
+                setBusinessDetails(null);
             }
             console.log('═══════════════════════════════════════');
         },
@@ -240,6 +267,13 @@ export default function BusinessRegistrationScreen() {
     const isSubmitting = isSubmittingLocal || createBusinessMutation.isPending;
     // Allow resubmission if rejected, but disable if approved or reviewing
     const isFormDisabled = (hasExistingBusiness && submissionState !== 'rejected') || isSubmitting;
+    const initialValues = {
+        businessName: businessDetails?.business_name || '',
+        category: businessDetails?.category || '',
+        address: businessDetails?.address || '',
+        businessEmail: businessDetails?.business_email || '',
+        businessPhone: businessDetails?.business_phone || '',
+    };
 
     const getAlertStyle = () => {
         switch (submissionState) {
@@ -288,17 +322,21 @@ export default function BusinessRegistrationScreen() {
                 >
                     <Ionicons name="chevron-back" size={24} color={dark ? 'white' : "#333"} />
                 </TouchableOpacity>
-                <ThemeText style={styles.headerTitle}>Register Business</ThemeText>
+                <ThemeText style={styles.headerTitle}>
+                    {submissionState === 'approved' ? 'Business Profile' : 'Register Business'}
+                </ThemeText>
             </ThemedView>
 
+            {isLoadingStatus ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#940304" />
+                    <Text style={{ marginTop: 12, color: dark ? 'white' : '#333' }}>Loading business profile...</Text>
+                </View>
+            ) : (
+
             <Formik
-                initialValues={{
-                    businessName: '',
-                    category: '',
-                    address: '',
-                    businessEmail: '',
-                    businessPhone: '',
-                }}
+                initialValues={initialValues}
+                enableReinitialize
                 validationSchema={validationSchema}
                 onSubmit={handleSubmit}
             >
@@ -469,25 +507,37 @@ export default function BusinessRegistrationScreen() {
                                     )}
                                 </View>
 
-                                {/* Document Upload */}
+                                {/* Document Upload / View */}
                                 <ThemedView darkColor='#181818' style={styles.uploadContainer}>
-                                    <TouchableOpacity 
-                                        style={[
-                                            styles.uploadButton,
-                                            {backgroundColor:dark? "#181818":"#f8f9fa"},
-                                            isFormDisabled && { opacity: 0.6 }
-                                        ]} 
-                                        onPress={() => !isFormDisabled && pickImage()}
-                                        disabled={isFormDisabled}
-                                    >
-                                        <Ionicons name="cloud-upload-outline" size={40} color="#ccc" />
-                                        <Text style={styles.uploadText}>
-                                            Upload a clear picture of your business certificate
-                                        </Text>
-                                    </TouchableOpacity>
-
-                                    {selectedImage && (
-                                        <Image source={{ uri: selectedImage }} style={styles.uploadedImage} />
+                                    {submissionState === 'approved' ? (
+                                        <View>
+                                            <Text style={[styles.uploadText, { marginBottom: 12 }]}>Business certificate</Text>
+                                            {selectedImage ? (
+                                                <Image source={{ uri: selectedImage }} style={styles.uploadedImage} />
+                                            ) : (
+                                                <Text style={styles.uploadText}>No certificate available</Text>
+                                            )}
+                                        </View>
+                                    ) : (
+                                        <>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.uploadButton,
+                                                    { backgroundColor: dark ? "#181818" : "#f8f9fa" },
+                                                    isFormDisabled && { opacity: 0.6 }
+                                                ]}
+                                                onPress={() => !isFormDisabled && pickImage()}
+                                                disabled={isFormDisabled}
+                                            >
+                                                <Ionicons name="cloud-upload-outline" size={40} color="#ccc" />
+                                                <Text style={styles.uploadText}>
+                                                    Upload a clear picture of your business certificate
+                                                </Text>
+                                            </TouchableOpacity>
+                                            {selectedImage && (
+                                                <Image source={{ uri: selectedImage }} style={styles.uploadedImage} />
+                                            )}
+                                        </>
                                     )}
                                 </ThemedView>
 
@@ -541,6 +591,7 @@ export default function BusinessRegistrationScreen() {
                     </>
                 )}
             </Formik>
+            )}
         </SafeAreaView>
     );
 }

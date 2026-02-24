@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator, // <-- add this
+  Alert,
 } from 'react-native';
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostContainer from '@/components/Social/PostContainer';
@@ -58,6 +59,41 @@ export default function SocialFeedScreen() {
   const [posts, setPosts] = useState<any[]>([]);
   const queryClient = useQueryClient();
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
+  const logoutTriggeredRef = useRef(false);
+
+  const handleBlockedOrUnauthorized = async (incomingError: any) => {
+    if (logoutTriggeredRef.current) return;
+
+    const statusCode = incomingError?.statusCode;
+    const errorCode = incomingError?.errorCode || incomingError?.data?.error?.code;
+    const errorMessage = incomingError?.message || incomingError?.data?.error?.message;
+    const isBlockedError = errorCode === 'ACCOUNT_BANNED' || /banned/i.test(errorMessage || '');
+    const isAuthError = statusCode === 401 || statusCode === 403 || isBlockedError;
+
+    if (!isAuthError) return;
+
+    logoutTriggeredRef.current = true;
+
+    try {
+      await Promise.all([
+        SecureStore.deleteItemAsync('auth_token'),
+        SecureStore.deleteItemAsync('user_data'),
+        SecureStore.deleteItemAsync('user_id'),
+        SecureStore.deleteItemAsync('username'),
+      ]);
+    } catch (storageError) {
+      console.error('Failed to clear auth data after blocked/expired session:', storageError);
+    }
+
+    Alert.alert(
+      isBlockedError ? 'Account Blocked' : 'Session Expired',
+      isBlockedError
+        ? (errorMessage || 'Your account has been blocked. Please contact support.')
+        : 'Your session has expired. Please login again.',
+      [{ text: 'OK', onPress: () => route.replace('/login') }],
+      { cancelable: false }
+    );
+  };
 
   // const { data, isLoading, refetch } = useQuery({
   //   queryKey: ['userPosts'],
@@ -107,6 +143,12 @@ export default function SocialFeedScreen() {
     staleTime: 30 * 1000, // Consider data fresh for 30 seconds
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
+
+  useEffect(() => {
+    if (isError && error) {
+      handleBlockedOrUnauthorized(error);
+    }
+  }, [isError, error]);
 
 
   const [groupedStories, setGroupedStories] = useState<GroupedUserStories[]>([]);
@@ -518,7 +560,11 @@ export default function SocialFeedScreen() {
           {isError && posts.length === 0 && (
             <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
               <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
-                {error?.message?.includes('Network') || error?.message?.includes('timeout') 
+                {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
+                  ? (error?.message || 'Your account has been blocked. Please contact support.')
+                  : error?.statusCode === 401 || error?.statusCode === 403
+                  ? 'Your session has expired. Please login again.'
+                  : error?.message?.includes('Network') || error?.message?.includes('timeout') 
                   ? 'Network connection error. Please check your internet connection.'
                   : 'Failed to load posts. Please try again.'}
               </Text>
@@ -555,7 +601,11 @@ export default function SocialFeedScreen() {
           {isError && posts.length > 0 && (
             <View style={{ padding: 20, alignItems: 'center' }}>
               <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
-                Failed to load more posts
+                {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
+                  ? (error?.message || 'Your account has been blocked. Please contact support.')
+                  : error?.statusCode === 401 || error?.statusCode === 403
+                  ? 'Your session has expired. Please login again.'
+                  : 'Failed to load more posts'}
               </Text>
               <TouchableOpacity
                 onPress={() => fetchNextPage()}

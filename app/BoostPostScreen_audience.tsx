@@ -9,6 +9,7 @@ import {
     ViewStyle,
     TextStyle,
     FlatList,
+    Alert,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { colors } from '@/components/Social/Boost/colors';
@@ -116,8 +117,8 @@ const PostAudienceScreen: React.FC = () => {
         };
     // State hooks
     const [selectedGender, setSelectedGender] = useState<'All' | 'Male' | 'Female'>(initialAudience.gender);
-    const [minAge, setMinAge] = useState<number>(initialAudience.minAge);
-    const [maxAge, setMaxAge] = useState<number>(initialAudience.maxAge);
+    const [minAgeInput, setMinAgeInput] = useState<string>(String(initialAudience.minAge));
+    const [maxAgeInput, setMaxAgeInput] = useState<string>(String(initialAudience.maxAge));
     const [budget, setBudget] = useState<number>(initialAudience.budget);
     const [duration, setDuration] = useState<number>(initialAudience.duration);
     const [location, setLocation] = useState<string>(initialAudience.location);
@@ -127,20 +128,35 @@ const PostAudienceScreen: React.FC = () => {
     useEffect(() => {
         console.log("Audience state changed", {
             selectedGender,
-            minAge,
-            maxAge,
+            minAgeInput,
+            maxAgeInput,
             budget,
             duration,
             location,
         });
-    }, [selectedGender, minAge, maxAge, budget, duration, location]);
+    }, [selectedGender, minAgeInput, maxAgeInput, budget, duration, location]);
 
     // 6. Compose post/campaign id and isMarket flag
     const postId = post_id || (isEdit ? campaign.id : undefined);
     const isMarket = image ? true : boostType === 'listing';
 
+    const sanitizeAgeInput = (value: string) => value.replace(/[^0-9]/g, '');
+    const parseAge = (value: string, fallback: number) => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return fallback;
+        return Math.min(65, Math.max(18, parsed));
+    };
+
     // 7. Navigation
     const handleNext = () => {
+        const minAge = parseAge(minAgeInput, 18);
+        const maxAge = parseAge(maxAgeInput, 65);
+
+        if (minAge > maxAge) {
+            Alert.alert('Invalid Age Range', 'Minimum age cannot be greater than maximum age.');
+            return;
+        }
+
         route.push({
             pathname: '/BoostPostScreen_review',
             params: {
@@ -269,16 +285,18 @@ const PostAudienceScreen: React.FC = () => {
                                 style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text }]}
                                 placeholder="Min"
                                 placeholderTextColor={theme.textSecondary}
-                                value={minAge.toString()}
-                                onChangeText={(text) => setMinAge(parseInt(text) || 18)}
+                                value={minAgeInput}
+                                onChangeText={(text) => setMinAgeInput(sanitizeAgeInput(text))}
+                                onBlur={() => setMinAgeInput(String(parseAge(minAgeInput, 18)))}
                                 keyboardType="numeric"
                             />
                             <TextInput
                                 style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text }]}
                                 placeholder="Max"
                                 placeholderTextColor={theme.textSecondary}
-                                value={maxAge.toString()}
-                                onChangeText={(text) => setMaxAge(parseInt(text) || 65)}
+                                value={maxAgeInput}
+                                onChangeText={(text) => setMaxAgeInput(sanitizeAgeInput(text))}
+                                onBlur={() => setMaxAgeInput(String(parseAge(maxAgeInput, 65)))}
                                 keyboardType="numeric"
                             />
                         </View>

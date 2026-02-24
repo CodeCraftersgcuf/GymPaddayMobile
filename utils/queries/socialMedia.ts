@@ -76,6 +76,13 @@ export const getShareById = async (id: number, token: string): Promise<any> => {
   );
 };
 
+export const createShare = async (
+  data: { shareable_id: number; shareable_type: string },
+  token: string
+): Promise<any> => {
+  return await apiCall(API_ENDPOINTS.USER.SHARES.Create, "POST", data, token);
+};
+
 // Follows
 export const getUserFollows = async (token: string): Promise<any> => {
   return await apiCall(

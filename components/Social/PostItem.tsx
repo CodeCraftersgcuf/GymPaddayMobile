@@ -26,7 +26,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from "expo-router";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
 import { useQuery } from "@tanstack/react-query";
-import { getLikenDislikePost } from "@/utils/queries/socialMedia";
+import { getLikenDislikePost, createShare } from "@/utils/queries/socialMedia";
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
@@ -85,6 +85,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [isLiked, setIsLiked] = useState(false);
   // Fix: Initialize likes from post.likes array length if available, otherwise from likes_count
   const [likesCount, setLikesCount] = useState(post.likes?.length || post.likes_count || 0);
+  const [shareCount, setShareCount] = useState(post.share_count || 0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
   const videoRefs = useRef<Record<number, Video>>({});
@@ -278,16 +279,20 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       if (post.imagesUrl && post.imagesUrl.length > 0) {
         message += `\n${post.imagesUrl[0]}`;
       }
-      await Share.share({
+      const result = await Share.share({
         message,
         url: post.imagesUrl && post.imagesUrl.length > 0 ? post.imagesUrl[0] : undefined,
         title: 'Check out this post!',
       });
+      if (result.action === Share.sharedAction && token) {
+        setShareCount(prev => prev + 1);
+        createShare({ shareable_id: post.id, shareable_type: 'App\\Models\\Post' }, token).catch(console.error);
+      }
     } catch (error) {
       Alert.alert('Share Error', 'Failed to share post.');
       console.error('Share error:', error);
     }
-  }, [post.content, post.imagesUrl]);
+  }, [post.content, post.imagesUrl, post.id, token]);
 
   // Download image to device gallery
   // const handleDownload = async () => {
@@ -671,7 +676,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
           <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
             <Image source={images.Share} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
-            <ThemeText style={styles.actionText}></ThemeText>
+            <ThemeText style={styles.actionText}>{shareCount}</ThemeText>
           </TouchableOpacity>
         </ThemedView>
         <ThemedView darkColor="transparent">

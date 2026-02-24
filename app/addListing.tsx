@@ -30,6 +30,8 @@ import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
 import { updateMarketplaceListing,  } from '@/utils/mutations/boost';
+import { showApiErrorToast } from '@/utils/showApiErrorToast';
+import { getMarketplaceListingById } from '@/utils/queries/marketplace';
 
 interface ImageSlot {
     id: number;
@@ -71,16 +73,20 @@ export default function AddListingScreen() {
     const locationBottomSheetRef = useRef<BottomSheet>(null);
     const [isSending, setIsSending] = useState(false);
     const params = useLocalSearchParams();
-    const listingId = params?.listing_id;
+    const listingId = typeof params?.listing_id === 'string' ? params.listing_id : undefined;
+    // If coming from handleEdit, listing will be a JSON string param
+    const passedListing = params?.listing ? JSON.parse(params.listing as string) : null;
+    const isEditMode = !!passedListing; // True if listing param exists
+
     const { data: listingData, isLoading: isListingLoading } = useQuery({
         queryKey: ['marketplace-listing', listingId],
-        queryFn: () => getMarketplaceListingById(listingId),
-        enabled: isEditMode,
+        queryFn: async () => {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token || !listingId) throw new Error('Unable to load listing');
+            return getMarketplaceListingById(Number(listingId), token);
+        },
+        enabled: isEditMode && !!listingId,
     });
-
-    // If coming from handleEdit, listing will be a JSON string param
-    const passedListing = params?.listing ? JSON.parse(params.listing) : null;
-    const isEditMode = !!passedListing; // True if listing param exists
 
 
     const [formData, setFormData] = useState({
@@ -201,6 +207,42 @@ export default function AddListingScreen() {
         return location ? location.title : 'Location';
     };
 
+    const validateListingForm = () => {
+        if (!formData.productName.trim()) {
+            Alert.alert('Validation Error', 'Please enter a product name.');
+            return false;
+        }
+        if (!formData.category) {
+            Alert.alert('Validation Error', 'Please select a category.');
+            return false;
+        }
+        if (!formData.description.trim()) {
+            Alert.alert('Validation Error', 'Please enter a description.');
+            return false;
+        }
+        if (!formData.price.trim()) {
+            Alert.alert('Validation Error', 'Please enter a price.');
+            return false;
+        }
+        const parsedPrice = Number(formData.price);
+        if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+            Alert.alert('Validation Error', 'Price must be a valid amount greater than 0.');
+            return false;
+        }
+        if (!formData.location) {
+            Alert.alert('Validation Error', 'Please select a location.');
+            return false;
+        }
+        if (!isEditMode) {
+            const selectedImages = images.filter((img) => !!img.uri);
+            if (selectedImages.length === 0) {
+                Alert.alert('Validation Error', 'Please upload at least one product image.');
+                return false;
+            }
+        }
+        return true;
+    };
+
     // const handlePostListing = async () => {
     //     if (isSending) return;
 
@@ -291,7 +333,7 @@ export default function AddListingScreen() {
     const handlePostListing = async () => {
         if (isSending) return;
 
-        // ... validation logic remains unchanged ...
+        if (!validateListingForm()) return;
 
         try {
             setIsSending(true);
@@ -354,10 +396,7 @@ export default function AddListingScreen() {
                 router.back();
             }, 500);
         } catch (error: any) {
-            Toast.show({
-                type: 'error',
-                text1: error?.message || 'Failed to post listing',
-            });
+            showApiErrorToast(error, isEditMode ? 'Failed to update listing' : 'Failed to post listing');
         } finally {
             setIsSending(false);
         }

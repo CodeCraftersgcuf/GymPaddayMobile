@@ -10,6 +10,7 @@ import {
     SafeAreaView,
     KeyboardAvoidingView,
     Platform,
+    Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,9 @@ import { useTheme } from '@/contexts/themeContext';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { apiCall } from '@/utils/customApiCall';
+import { API_ENDPOINTS } from '@/apiConfig';
 
 interface Message {
     id: string;
@@ -41,32 +45,90 @@ export default function SupportScreen() {
     const [selectedCategory, setSelectedCategory] = useState('');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [storageKey, setStorageKey] = useState<string | null>(null);
 
 
-useEffect(() => {
-  (async () => {
-    const stored = await AsyncStorage.getItem('supportMessages');
-    if (stored) {
-      setMessages(JSON.parse(stored));
-    }
-  })();
-}, []);
-    const updateMessages = (updatedMessages: Message[]) => {
+    useEffect(() => {
+        (async () => {
+            try {
+                const storedUserId = await SecureStore.getItemAsync('user_id');
+                const storedUserData = await SecureStore.getItemAsync('user_data');
+                const parsedUserData = storedUserData ? JSON.parse(storedUserData) : null;
+                const fallbackUserId = parsedUserData?.id ? String(parsedUserData.id) : null;
+                const currentUserId = storedUserId || fallbackUserId;
+
+                if (!currentUserId) {
+                    setStorageKey(null);
+                    setMessages([]);
+                    return;
+                }
+
+                const key = `supportMessages:${currentUserId}`;
+                setStorageKey(key);
+
+                const stored = await AsyncStorage.getItem(key);
+                if (!stored) {
+                    setMessages([]);
+                    return;
+                }
+
+                try {
+                    const parsed = JSON.parse(stored);
+                    setMessages(Array.isArray(parsed) ? parsed : []);
+                } catch {
+                    setMessages([]);
+                }
+            } catch (error) {
+                console.error('Failed to load support messages:', error);
+                setMessages([]);
+            }
+        })();
+    }, []);
+
+    const updateMessages = async (updatedMessages: Message[]) => {
         setMessages(updatedMessages);
-        AsyncStorage.setItem('supportMessages', JSON.stringify(updatedMessages));
+        if (!storageKey) return;
+        await AsyncStorage.setItem(storageKey, JSON.stringify(updatedMessages));
     };
 
-    const sendMessage = () => {
+    const sendMessage = async () => {
         if (message.trim()) {
+            if (!selectedCategory) {
+                Alert.alert('Select Category', 'Please select a support category before sending your message.');
+                return;
+            }
+
             const newMessage: Message = {
                 id: Date.now().toString(),
                 text: message,
                 isUser: true,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-            updateMessages([...messages, newMessage]);
+            await updateMessages([...messages, newMessage]);
+
+            const outgoingMessage = message;
             setMessage('');
+
+            try {
+                const token = await SecureStore.getItemAsync('auth_token');
+                if (!token) {
+                    throw new Error('No auth token found');
+                }
+
+                await apiCall(
+                    API_ENDPOINTS.USER.TICKETS.Create,
+                    'POST',
+                    {
+                        subject: selectedCategory,
+                        message: outgoingMessage,
+                    },
+                    token
+                );
+            } catch (error: any) {
+                console.error('Failed to send support ticket:', error);
+                Alert.alert('Send Failed', error?.message || 'Failed to send support message. Please try again.');
+            }
         }
     };
 
@@ -99,7 +161,7 @@ useEffect(() => {
                 isUser: true,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-            updateMessages([...messages, newMessage]);
+            await updateMessages([...messages, newMessage]);
         }
     };
 
@@ -420,7 +482,7 @@ useEffect(() => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
     };
-    updateMessages([...messages, agentMsg]);
+    void updateMessages([...messages, agentMsg]);
   }
 }}
 

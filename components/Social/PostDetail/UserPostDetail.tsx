@@ -4,7 +4,6 @@ import { images } from '@/constants'
 import ThemedView from '@/components/ThemedView'
 import { useTheme } from '@/contexts/themeContext'
 import ThemeText from '@/components/ThemedText'
-import { useRouter } from 'expo-router'
 import BoostAdModal from '../Boost/BoostAdModal'
 import axios from 'axios'
 import * as SecureStore from 'expo-secure-store';
@@ -17,7 +16,6 @@ const UserPostDetail: React.FC<{
   };
   onClose?: () => void;
 }> = ({ idCan, onClose }) => {
-  const router = useRouter();
   const { dark } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
   const clientQuery = useQueryClient();
@@ -75,7 +73,6 @@ const UserPostDetail: React.FC<{
                 onClose();
               }
               Alert.alert('Success', 'Post deleted successfully');
-              router.back(); // or navigate somewhere else if needed
             } catch (error) {
               console.error('Delete Error:', error);
               Alert.alert('Error', 'Failed to delete post');

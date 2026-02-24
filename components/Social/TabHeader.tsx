@@ -11,6 +11,7 @@ import logoNew from '../../assets/images/logo-old.png';
 
 import * as SecureStore from 'expo-secure-store';
 import { Feather } from '@expo/vector-icons';
+import { API_ENDPOINTS } from '@/apiConfig';
 
 
 interface TabHeaderProps {
@@ -33,6 +34,41 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
 
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 const [userId, setUserId] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const res = await fetch(API_ENDPOINTS.USER.NOTIFICATIONS.Unread, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const json = await res.json();
+      const count = typeof json?.data === 'number'
+        ? json.data
+        : Array.isArray(json?.data)
+          ? json.data.length
+          : 0;
+      setUnreadCount(count);
+    } catch (error) {
+      console.error('Failed to fetch unread notifications:', error);
+      setUnreadCount(0);
+    }
+  };
 
   React.useEffect(() => {
     (async () => {
@@ -54,7 +90,16 @@ const [userId, setUserId] = useState<string | null>(null);
         setProfileImage(defatulImage);
       }
     })();
+    fetchUnreadCount();
   }, [refreshing]); // Add refreshing as dependency
+
+  React.useEffect(() => {
+    if (!notificationID) return;
+
+    // Keep bell indicator fresh for admin-sent notifications.
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [notificationID]);
   const themeStyles = StyleSheet.create({
     notificationView: {
       backgroundColor: dark ? '#212121' : '#e5e5e5',
@@ -100,6 +145,7 @@ router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } 
           tintColor={dark ? 'white' : 'black'}
           style={styles.notifcationIcon}
         />
+        {unreadCount > 0 && <View style={styles.unreadDot} />}
       </ThemedView>
     </Pressable>
   </View>
@@ -130,6 +176,15 @@ const styles = StyleSheet.create({
   notifcationIcon: {
     width: 25,
     height: 25,
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 6,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
   },
   logo: {
   width: 120, // ✅ Adjust as needed

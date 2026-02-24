@@ -6,6 +6,7 @@ import NotificationItem from '@/components/more/notifications/NotificationItem';
 import Header from '@/components/more/withdraw/Header';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { API_ENDPOINTS } from '@/apiConfig';
 
 export default function NotificationsScreen() {
   const { dark } = useTheme();
@@ -20,15 +21,17 @@ export default function NotificationsScreen() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/notifications', {
+      const token = await getToken();
+      const response = await fetch(API_ENDPOINTS.USER.NOTIFICATIONS.List, {
         headers: {
-          Authorization: `Bearer ${await getToken()}`, // Replace with your auth method
+          Authorization: `Bearer ${token}`, // Replace with your auth method
           Accept: 'application/json',
         },
       });
       const data = await response.json();
-      console.log("data for notification is ",data )
-      const formatted = data.map((item: any) => ({
+      const rawItems = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+
+      const formatted = rawItems.map((item: any) => ({
         id: String(item.id),
         title: item.title,
         description: item.body,
@@ -36,6 +39,22 @@ export default function NotificationsScreen() {
         created_at: item.created_at,
       }));
       setNotifications(formatted);
+
+      // Mark all unread notifications as read when user opens notifications page.
+      if (token) {
+        const unreadIds = rawItems.filter((item: any) => !item.is_read).map((item: any) => item.id);
+        await Promise.all(
+          unreadIds.map((id: number) =>
+            fetch(API_ENDPOINTS.USER.NOTIFICATIONS.MarkRead(id), {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+              },
+            }).catch(() => null)
+          )
+        );
+      }
     } catch (err) {
       console.error('Error fetching notifications:', err);
     } finally {
