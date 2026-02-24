@@ -152,6 +152,11 @@ const PostAudienceScreen: React.FC = () => {
         const minAge = parseAge(minAgeInput, 18);
         const maxAge = parseAge(maxAgeInput, 65);
 
+        // Normalize the UI values before proceeding so users see
+        // the exact values that will be submitted.
+        setMinAgeInput(String(minAge));
+        setMaxAgeInput(String(maxAge));
+
         if (minAge > maxAge) {
             Alert.alert('Invalid Age Range', 'Minimum age cannot be greater than maximum age.');
             return;
@@ -287,8 +292,10 @@ const PostAudienceScreen: React.FC = () => {
                                 placeholderTextColor={theme.textSecondary}
                                 value={minAgeInput}
                                 onChangeText={(text) => setMinAgeInput(sanitizeAgeInput(text))}
-                                onBlur={() => setMinAgeInput(String(parseAge(minAgeInput, 18)))}
                                 keyboardType="numeric"
+                                inputMode="numeric"
+                                maxLength={2}
+                                selectTextOnFocus
                             />
                             <TextInput
                                 style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text }]}
@@ -296,8 +303,10 @@ const PostAudienceScreen: React.FC = () => {
                                 placeholderTextColor={theme.textSecondary}
                                 value={maxAgeInput}
                                 onChangeText={(text) => setMaxAgeInput(sanitizeAgeInput(text))}
-                                onBlur={() => setMaxAgeInput(String(parseAge(maxAgeInput, 65)))}
                                 keyboardType="numeric"
+                                inputMode="numeric"
+                                maxLength={2}
+                                selectTextOnFocus
                             />
                         </View>
                     </View>

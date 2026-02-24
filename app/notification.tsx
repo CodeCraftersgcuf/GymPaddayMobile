@@ -35,14 +35,19 @@ export default function NotificationsScreen() {
         id: String(item.id),
         title: item.title,
         description: item.body,
-        is_read: item.is_read,
+        is_read: typeof item.is_read === 'boolean' ? item.is_read : Boolean(item.read_at),
         created_at: item.created_at,
       }));
       setNotifications(formatted);
 
       // Mark all unread notifications as read when user opens notifications page.
       if (token) {
-        const unreadIds = rawItems.filter((item: any) => !item.is_read).map((item: any) => item.id);
+        const unreadIds = rawItems
+          .filter((item: any) => {
+            if (typeof item?.is_read === 'boolean') return !item.is_read;
+            return !item?.read_at;
+          })
+          .map((item: any) => item.id);
         await Promise.all(
           unreadIds.map((id: number) =>
             fetch(API_ENDPOINTS.USER.NOTIFICATIONS.MarkRead(id), {

@@ -58,11 +58,21 @@ const [userId, setUserId] = useState<string | null>(null);
       }
 
       const json = await res.json();
-      const count = typeof json?.data === 'number'
-        ? json.data
+      const notificationsArray = Array.isArray(json)
+        ? json
         : Array.isArray(json?.data)
-          ? json.data.length
-          : 0;
+          ? json.data
+          : Array.isArray(json?.notifications)
+            ? json.notifications
+            : [];
+
+      const count = typeof json?.count === 'number'
+        ? json.count
+        : typeof json?.data?.count === 'number'
+          ? json.data.count
+          : typeof json?.data === 'number'
+        ? json.data
+        : notificationsArray.length;
       setUnreadCount(count);
     } catch (error) {
       console.error('Failed to fetch unread notifications:', error);

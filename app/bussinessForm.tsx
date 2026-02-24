@@ -54,6 +54,15 @@ const categories = [
 
 type SubmissionState = 'idle' | 'reviewing' | 'rejected' | 'approved';
 
+type NormalizedBusinessDetails = {
+    business_name: string;
+    category: string;
+    address: string;
+    business_email: string;
+    business_phone: string;
+    photo: string | null;
+};
+
 export default function BusinessRegistrationScreen() {
     const { dark } = useTheme();
     const router = useRouter();
@@ -70,6 +79,38 @@ export default function BusinessRegistrationScreen() {
 
         const base = API_DOMAIN.replace(/\/api\/?$/, '');
         return `${base}/storage/${photoPath.replace(/^\/?storage\//, '')}`;
+    };
+
+    const normalizeBusinessDetails = (business: any): NormalizedBusinessDetails | null => {
+        if (!business || typeof business !== 'object') return null;
+
+        return {
+            business_name: business.business_name ?? business.businessName ?? business.name ?? '',
+            category: business.category ?? '',
+            address: business.address ?? business.business_address ?? business.businessAddress ?? '',
+            business_email: business.business_email ?? business.businessEmail ?? business.email ?? '',
+            business_phone: business.business_phone ?? business.businessPhone ?? business.phone ?? '',
+            photo: business.photo ?? business.document ?? business.certificate ?? null,
+        };
+    };
+
+    const extractStatusAndBusiness = (response: any): { status: string | null; business: any } => {
+        const payload = response?.data ?? response ?? {};
+        const nestedPayload = payload?.data ?? {};
+
+        const rawStatus =
+            nestedPayload?.status ??
+            payload?.status ??
+            response?.status ??
+            null;
+
+        const rawBusiness =
+            nestedPayload?.business ??
+            payload?.business ??
+            response?.business ??
+            (payload?.id ? payload : null);
+
+        return { status: rawStatus, business: rawBusiness };
     };
 
     console.log('🚀 BusinessRegistrationScreen - Component Rendered');
@@ -109,73 +150,50 @@ export default function BusinessRegistrationScreen() {
                 throw err;
             }
         },
-        onSuccess: (data: any) => {
-            console.log('═══════════════════════════════════════');
-            console.log('✅ [getBusinessStatus] onSuccess Triggered');
-            console.log('📊 [getBusinessStatus] Full data:', JSON.stringify(data, null, 2));
-            console.log('📊 [getBusinessStatus] Data type:', typeof data);
-            
-            // The API returns: { status: "success", data: { status: "not_found"|"pending"|"approved"|"rejected", business: {...} } }
-            const status = data?.data?.status || data?.status;
-            const business = data?.data?.business;
-            console.log('📋 [getBusinessStatus] Extracted status:', status);
-            console.log('📋 [getBusinessStatus] data.data?.status:', data?.data?.status);
-            console.log('📋 [getBusinessStatus] Has business object:', !!business);
-            
-            // Handle different status values
-            if (status && status !== 'not_found') {
-                if (status === 'approved' || status === 'Approved') {
-                    console.log('✅ [getBusinessStatus] Status: APPROVED');
-                    setSubmissionState('approved');
-                    setHasExistingBusiness(true);
-                    setBusinessDetails(business || null);
-                    if (business?.photo) {
-                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
-                    }
-                } else if (status === 'rejected' || status === 'Rejected') {
-                    console.log('❌ [getBusinessStatus] Status: REJECTED');
-                    setSubmissionState('rejected');
-                    setHasExistingBusiness(true);
-                    setBusinessDetails(business || null);
-                    if (business?.photo) {
-                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
-                    }
-                } else if (status === 'pending' || status === 'Pending') {
-                    console.log('⏳ [getBusinessStatus] Status: PENDING/REVIEWING');
-                    setSubmissionState('reviewing');
-                    setHasExistingBusiness(true);
-                    setBusinessDetails(business || null);
-                    if (business?.photo) {
-                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
-                    }
-                } else {
-                    // Any other status means there's a business
-                    console.log('⏳ [getBusinessStatus] Status: REVIEWING (default)');
-                    setSubmissionState('reviewing');
-                    setHasExistingBusiness(true);
-                    setBusinessDetails(business || null);
-                    if (business?.photo) {
-                        setSelectedImage(buildBusinessPhotoUrl(business.photo));
-                    }
-                }
-                console.log('🔒 [getBusinessStatus] hasExistingBusiness set to: true');
-            } else {
-                // status is "not_found" or null/undefined - user has no business
-                console.log('ℹ️ [getBusinessStatus] No business found for current user (status: not_found)');
-                setHasExistingBusiness(false);
-                setSubmissionState('idle');
-                setBusinessDetails(null);
-            }
-            console.log('═══════════════════════════════════════');
-        },
-        onError: (error: any) => {
-            console.error('═══════════════════════════════════════');
-            console.error('❌ [getBusinessStatus] Query Error:', error);
-            console.error('❌ [getBusinessStatus] Error message:', error?.message);
-            console.error('❌ [getBusinessStatus] Error stack:', error?.stack);
-            console.error('═══════════════════════════════════════');
-        },
     });
+
+    useEffect(() => {
+        if (!businessStatusData) return;
+
+        console.log('═══════════════════════════════════════');
+        console.log('✅ [getBusinessStatus] Data received in effect');
+        console.log('📊 [getBusinessStatus] Full data:', JSON.stringify(businessStatusData, null, 2));
+        console.log('📊 [getBusinessStatus] Data type:', typeof businessStatusData);
+
+        const { status, business } = extractStatusAndBusiness(businessStatusData);
+        const normalizedBusiness = normalizeBusinessDetails(business);
+        console.log('📋 [getBusinessStatus] Extracted status:', status);
+        console.log('📋 [getBusinessStatus] data.data?.status:', businessStatusData?.data?.status);
+        console.log('📋 [getBusinessStatus] Has business object:', !!normalizedBusiness);
+
+        if (status && status !== 'not_found') {
+            if (status === 'approved' || status === 'Approved') {
+                setSubmissionState('approved');
+            } else if (status === 'rejected' || status === 'Rejected') {
+                setSubmissionState('rejected');
+            } else {
+                setSubmissionState('reviewing');
+            }
+
+            setHasExistingBusiness(true);
+            setBusinessDetails(normalizedBusiness || null);
+            setSelectedImage(normalizedBusiness?.photo ? buildBusinessPhotoUrl(normalizedBusiness.photo) : null);
+        } else {
+            setHasExistingBusiness(false);
+            setSubmissionState('idle');
+            setBusinessDetails(null);
+            setSelectedImage(null);
+        }
+        console.log('═══════════════════════════════════════');
+    }, [businessStatusData]);
+
+    useEffect(() => {
+        if (!businessStatusError) return;
+        console.error('═══════════════════════════════════════');
+        console.error('❌ [getBusinessStatus] Query Error:', businessStatusError);
+        console.error('❌ [getBusinessStatus] Error message:', (businessStatusError as any)?.message);
+        console.error('═══════════════════════════════════════');
+    }, [businessStatusError]);
 
 
     // --- Mutation for business creation ---
@@ -268,11 +286,11 @@ export default function BusinessRegistrationScreen() {
     // Allow resubmission if rejected, but disable if approved or reviewing
     const isFormDisabled = (hasExistingBusiness && submissionState !== 'rejected') || isSubmitting;
     const initialValues = {
-        businessName: businessDetails?.business_name || '',
-        category: businessDetails?.category || '',
-        address: businessDetails?.address || '',
-        businessEmail: businessDetails?.business_email || '',
-        businessPhone: businessDetails?.business_phone || '',
+        businessName: businessDetails?.business_name ?? '',
+        category: businessDetails?.category ?? '',
+        address: businessDetails?.address ?? '',
+        businessEmail: businessDetails?.business_email ?? '',
+        businessPhone: businessDetails?.business_phone ?? '',
     };
 
     const getAlertStyle = () => {
@@ -365,7 +383,7 @@ export default function BusinessRegistrationScreen() {
                                         editable={!isFormDisabled}
                                     />
                                     {touched.businessName && errors.businessName && (
-                                        <Text style={styles.errorText}>{errors.businessName}</Text>
+                                        <Text style={styles.errorText}>{String(errors.businessName)}</Text>
                                     )}
                                 </View>
 
@@ -422,7 +440,7 @@ export default function BusinessRegistrationScreen() {
                                     )}
 
                                     {touched.category && errors.category && (
-                                        <Text style={styles.errorText}>{errors.category}</Text>
+                                        <Text style={styles.errorText}>{String(errors.category)}</Text>
                                     )}
                                 </View>
 
@@ -450,7 +468,7 @@ export default function BusinessRegistrationScreen() {
                                         editable={!isFormDisabled}
                                     />
                                     {touched.address && errors.address && (
-                                        <Text style={styles.errorText}>{errors.address}</Text>
+                                        <Text style={styles.errorText}>{String(errors.address)}</Text>
                                     )}
                                 </View>
 
@@ -477,7 +495,7 @@ export default function BusinessRegistrationScreen() {
                                         editable={!isFormDisabled}
                                     />
                                     {touched.businessEmail && errors.businessEmail && (
-                                        <Text style={styles.errorText}>{errors.businessEmail}</Text>
+                                        <Text style={styles.errorText}>{String(errors.businessEmail)}</Text>
                                     )}
                                 </View>
 
@@ -503,7 +521,7 @@ export default function BusinessRegistrationScreen() {
                                         editable={!isFormDisabled}
                                     />
                                     {touched.businessPhone && errors.businessPhone && (
-                                        <Text style={styles.errorText}>{errors.businessPhone}</Text>
+                                        <Text style={styles.errorText}>{String(errors.businessPhone)}</Text>
                                     )}
                                 </View>
 

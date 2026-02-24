@@ -12,7 +12,7 @@ import {
     Platform,
     Alert,
 } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { router } from 'expo-router';
@@ -32,11 +32,21 @@ interface Message {
 
 }
 
+interface SupportTicket {
+    id: string | number;
+    subject?: string;
+    message?: string;
+    description?: string;
+    admin_reply?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
 const supportCategories = [
     'General',
     'Socials',
     'Connect',
-    'Marketplace',
+    'Market',
     'Gym Hub',
 ];
 
@@ -47,7 +57,109 @@ export default function SupportScreen() {
     const [message, setMessage] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [storageKey, setStorageKey] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
 
+    const extractTicketsFromResponse = (response: any): SupportTicket[] => {
+        if (Array.isArray(response)) return response;
+        if (Array.isArray(response?.tickets)) return response.tickets;
+        if (Array.isArray(response?.data)) return response.data;
+        if (Array.isArray(response?.data?.tickets)) return response.data.tickets;
+        return [];
+    };
+
+    const normalizeCategory = (category: string = '') => {
+        const lower = category.toLowerCase();
+        if (lower.includes('social')) return 'Socials';
+        if (lower.includes('connect')) return 'Connect';
+        if (lower.includes('market')) return 'Market';
+        if (lower.includes('gym')) return 'Gym Hub';
+        return 'General';
+    };
+
+    const mapTicketsToMessages = (tickets: SupportTicket[]): { messages: Message[]; latestCategory: string } => {
+        const flattened: Array<{ dateKey: number; message: Message }> = [];
+        let latestCategory = '';
+        let latestCreatedAt = 0;
+
+        tickets.forEach((ticket) => {
+            const createdAt = ticket.created_at ? new Date(ticket.created_at).getTime() : Date.now();
+            const updatedAt = ticket.updated_at ? new Date(ticket.updated_at).getTime() : createdAt;
+            const userText = ticket.message || ticket.description || '';
+            const category = normalizeCategory(ticket.subject || '');
+
+            if (!latestCategory || createdAt > latestCreatedAt) {
+                latestCategory = category;
+                latestCreatedAt = createdAt;
+            }
+
+            if (userText.trim()) {
+                // Split messages that were concatenated with \n back into individual bubbles
+                const lines = userText.split('\n').filter((l) => l.trim());
+                (lines.length ? lines : [userText]).forEach((line, idx) => {
+                    if (!line.trim()) return;
+                    flattened.push({
+                        dateKey: createdAt + idx,
+                        message: {
+                            id: `ticket_user_${ticket.id}_${idx}`,
+                            text: line.trim(),
+                            isUser: true,
+                            timestamp: new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        },
+                    });
+                });
+            }
+
+            if (ticket.admin_reply && ticket.admin_reply.trim()) {
+                flattened.push({
+                    dateKey: updatedAt,
+                    message: {
+                        id: `ticket_admin_${ticket.id}`,
+                        text: ticket.admin_reply,
+                        isUser: false,
+                        timestamp: new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
+                    },
+                });
+            }
+        });
+
+        flattened.sort((a, b) => a.dateKey - b.dateKey);
+        return {
+            messages: flattened.map((item) => item.message),
+            latestCategory,
+        };
+    };
+
+    const syncMessagesFromServer = useCallback(async () => {
+        try {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) return;
+            setIsSyncing(true);
+
+            const response = await apiCall(API_ENDPOINTS.USER.TICKETS.List, 'GET', undefined, token);
+            const tickets: SupportTicket[] = extractTicketsFromResponse(response);
+
+            const { messages: serverMessages, latestCategory } = mapTicketsToMessages(tickets);
+            if (serverMessages.length > 0) {
+                await updateMessages(serverMessages);
+            } else if (storageKey) {
+                // Keep local chat visible when server has no ticket yet.
+                const stored = await AsyncStorage.getItem(storageKey);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    setMessages(Array.isArray(parsed) ? parsed : []);
+                }
+            }
+
+            if (latestCategory) {
+                setSelectedCategory((prev) => prev || latestCategory);
+            }
+        } catch (error) {
+            console.error('Failed to sync support tickets:', error);
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [storageKey]);
 
     useEffect(() => {
         (async () => {
@@ -68,29 +180,30 @@ export default function SupportScreen() {
                 setStorageKey(key);
 
                 const stored = await AsyncStorage.getItem(key);
-                if (!stored) {
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        setMessages(Array.isArray(parsed) ? parsed : []);
+                    } catch {
+                        setMessages([]);
+                    }
+                } else {
                     setMessages([]);
-                    return;
                 }
 
-                try {
-                    const parsed = JSON.parse(stored);
-                    setMessages(Array.isArray(parsed) ? parsed : []);
-                } catch {
-                    setMessages([]);
-                }
+                await syncMessagesFromServer();
             } catch (error) {
                 console.error('Failed to load support messages:', error);
                 setMessages([]);
             }
         })();
-    }, []);
+    }, [syncMessagesFromServer]);
 
-    const updateMessages = async (updatedMessages: Message[]) => {
+    async function updateMessages(updatedMessages: Message[]) {
         setMessages(updatedMessages);
         if (!storageKey) return;
         await AsyncStorage.setItem(storageKey, JSON.stringify(updatedMessages));
-    };
+    }
 
     const sendMessage = async () => {
         if (message.trim()) {
@@ -116,15 +229,41 @@ export default function SupportScreen() {
                     throw new Error('No auth token found');
                 }
 
-                await apiCall(
-                    API_ENDPOINTS.USER.TICKETS.Create,
-                    'POST',
-                    {
-                        subject: selectedCategory,
-                        message: outgoingMessage,
-                    },
-                    token
-                );
+                // Reuse latest open/pending ticket in the same category
+                // so the same support topic stays in one thread.
+                const ticketListResponse = await apiCall(API_ENDPOINTS.USER.TICKETS.List, 'GET', undefined, token);
+                const existingTickets: SupportTicket[] = extractTicketsFromResponse(ticketListResponse);
+
+                const reusableTicket = existingTickets.find((ticket) => {
+                    const subject = normalizeCategory(ticket.subject || '');
+                    const status = String((ticket as any)?.status || '').toLowerCase();
+                    return subject === selectedCategory && (status === 'open' || status === 'pending');
+                });
+
+                if (reusableTicket?.id) {
+                    const previousText = (reusableTicket.message || reusableTicket.description || '').trim();
+                    const mergedMessage = previousText
+                        ? `${previousText}\n${outgoingMessage}`
+                        : outgoingMessage;
+
+                    await apiCall(
+                        API_ENDPOINTS.USER.TICKETS.Update(Number(reusableTicket.id)),
+                        'PUT',
+                        { message: mergedMessage },
+                        token
+                    );
+                } else {
+                    await apiCall(
+                        API_ENDPOINTS.USER.TICKETS.Create,
+                        'POST',
+                        {
+                            subject: selectedCategory,
+                            message: outgoingMessage,
+                        },
+                        token
+                    );
+                }
+                await syncMessagesFromServer();
             } catch (error: any) {
                 console.error('Failed to send support ticket:', error);
                 Alert.alert('Send Failed', error?.message || 'Failed to send support message. Please try again.');
@@ -157,6 +296,7 @@ export default function SupportScreen() {
         if (!result.canceled && result.assets?.length > 0) {
             const newMessage: Message = {
                 id: Date.now().toString(),
+                text: '',
                 imageUrl: result.assets[0].uri,
                 isUser: true,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -425,6 +565,9 @@ export default function SupportScreen() {
 
                 {/* Messages */}
                 <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+                    {isSyncing && (
+                        <Text style={[styles.timestamp, { marginTop: 8 }]}>Syncing support messages...</Text>
+                    )}
                     {messages.map(renderMessage)}
                 </ScrollView>
 
