@@ -170,6 +170,9 @@ export default function More() {
   };
 
   const handleTopup = () => {
+    if (Platform.OS === 'ios') {
+      return;
+    }
     setShowTopupModal(true);
   };
 
@@ -411,7 +414,9 @@ export default function More() {
   };
 
   const handleWithdraw = () => {
-    // Alert.alert('Withdraw', 'Withdraw functionality will be implemented here');
+    if (Platform.OS === 'ios') {
+      return;
+    }
     route.push('/withdraw');
   };
 
