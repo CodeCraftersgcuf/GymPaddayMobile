@@ -39,12 +39,15 @@ const validationSchema = Yup.object().shape({
   email: Yup.string().email("Invalid email").required("Email is required"),
   phone: Yup.string()
     .required("Phone number is required")
-    .test("phone-length", "Phone number must be 10 or 11 digits (excluding country code)", (value) => {
+    .test("phone-length", "Enter 10 or 11 digits (excluding country code)", (value) => {
       if (!value) return false;
-      // Remove country code (starts with + and 1-4 digits)
-      const phoneDigits = value.replace(/^\+\d{1,4}/, "");
-      // Check if remaining digits are 10 or 11
-      return /^\d{10,11}$/.test(phoneDigits);
+      const digitsOnly = (value || "").replace(/\D/g, "");
+      if (digitsOnly.length === 10 || digitsOnly.length === 11) return true;
+      if (digitsOnly.length >= 12) {
+        const localPart = digitsOnly.slice(-11);
+        return localPart.length >= 10;
+      }
+      return false;
     }),
   age: Yup.number()
     .typeError("Age must be a number")
@@ -55,7 +58,7 @@ const validationSchema = Yup.object().shape({
   password: Yup.string()
     .min(8, "Password must be at least 8 characters")
     .required("Password is required"),
-  profileImage: Yup.string().required("Profile image is required"),
+  profileImage: Yup.string().optional(),
 });
 
 let themedark = false;
@@ -100,38 +103,32 @@ export default function Register() {
   };
 
   const handleRegister = (values: any) => {
-    // Check if profile image is selected
-    if (!profileImage) {
-      setProfileImageError('Profile image is required');
-      return;
-    }
+    setProfileImageError('');
 
     const formData = new FormData();
 
     formData.append('username', values.username);
     formData.append('fullname', values.fullName);
     formData.append('email', values.email);
-    // Only append optional fields if they have values
     if (values.phone && values.phone.trim()) {
       formData.append('phone', values.phone);
     }
     if (values.age && values.age.toString().trim()) {
       formData.append('age', values.age.toString());
     }
-    // Gender is now required, so always append it
     formData.append('gender', values.gender.toLowerCase());
     formData.append('password', values.password);
     formData.append('password_confirmation', values.password);
 
-    // Profile image is now required
-    const uriParts = profileImage.split('.');
-    const fileType = uriParts[uriParts.length - 1];
-
-    formData.append('profile_picture', {
-      uri: profileImage,
-      name: `profile.${fileType}`,
-      type: `image/${fileType}`,
-    } as any);
+    if (profileImage) {
+      const uriParts = profileImage.split('.');
+      const fileType = uriParts[uriParts.length - 1] || 'jpg';
+      formData.append('profile_picture', {
+        uri: profileImage,
+        name: `profile.${fileType}`,
+        type: `image/${fileType}`,
+      } as any);
+    }
 
     mutation.mutate({ data: formData });
   };
@@ -357,9 +354,8 @@ export default function Register() {
                   )}
                 </TouchableOpacity>
 
-                {/* Required text and error message */}
                 <Text style={[styles.requiredText, { color: dark ? "#999" : "#666" }]}>
-                  Profile Photo Required *
+                  Profile Photo (Optional)
                 </Text>
                 {profileImageError ? (
                   <Text style={styles.errorText}>{profileImageError}</Text>
@@ -465,16 +461,27 @@ export default function Register() {
                             label="Phone Number"
                             value={values.phone}
                             onChangeText={handleChange("phone")}
-                            onBlur={handleBlur("phone")}
+                            onBlur={() => {
+                              handleBlur("phone");
+                              setFieldTouched("phone", true);
+                            }}
                             countryCode={values.countryCode}
                             onCountryCodeChange={(code) => {
                               setFieldValue("countryCode", code);
-                              // Update phone with new country code
-                              const phoneDigits = values.phone.replace(/^\+\d{1,4}/, "");
+                              const phoneDigits = (values.phone || "").replace(/^\+\d{1,4}/, "");
                               setFieldValue("phone", code + phoneDigits);
                             }}
                             error={touched.phone && errors.phone ? errors.phone : ""}
                           />
+                          {touched.phone && errors.phone ? (
+                            <Text style={[styles.errorText, { textAlign: "left", marginTop: -8, marginBottom: 8 }]}>
+                              {errors.phone}
+                            </Text>
+                          ) : (
+                            <Text style={[styles.requiredText, { color: dark ? "#666" : "#999", fontSize: 11, textAlign: "left", marginTop: -4, marginBottom: 8 }]}>
+                              Enter 10 or 11 digits
+                            </Text>
+                          )}
                           <FloatingLabelInput
                             label="Age"
                             value={values.age}
@@ -503,17 +510,20 @@ export default function Register() {
 
                           <Pressable
                             onPress={() => {
-                              if (!profileImage) {
-                                setProfileImageError('Profile image is required');
-                                setFieldTouched("profileImage", true);
-                              }
+                              setFieldTouched("phone", true);
+                              setFieldTouched("username", true);
+                              setFieldTouched("fullName", true);
+                              setFieldTouched("email", true);
+                              setFieldTouched("age", true);
+                              setFieldTouched("gender", true);
+                              setFieldTouched("password", true);
                               handleSubmit();
                             }}
                             style={[
                               styles.registerButton,
-                              (Object.keys(errors).length > 0 || mutation.isPending) && styles.disabledButton
+                              mutation.isPending && styles.disabledButton
                             ]}
-                            disabled={Object.keys(errors).length > 0 || mutation.isPending}
+                            disabled={mutation.isPending}
                           >
                             <ThemeText style={styles.registerButtonText}>
                               {mutation.isPending ? "Registering..." : "Register"}

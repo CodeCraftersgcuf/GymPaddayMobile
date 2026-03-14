@@ -64,6 +64,7 @@ export function useAdCampaignActions(adsApiData?: any[]) {
   },
   onSuccess: () => {
     queryClient.invalidateQueries(['ad-campaigns']);
+    queryClient.invalidateQueries(['userPosts']);
     route.back(); // 👈 THIS will take you back
   },
   onError: (error) => {

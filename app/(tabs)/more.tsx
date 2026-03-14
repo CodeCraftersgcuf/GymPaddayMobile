@@ -13,6 +13,9 @@ import {
   TextInput,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import WalletCard from '@/components/more/main/WalletCard';
@@ -47,6 +50,7 @@ export default function More() {
   const [showTopupModal, setShowTopupModal] = useState(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const route = useRouter();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
@@ -111,12 +115,15 @@ export default function More() {
 
         if (response.ok && result.status === 'success') {
           setBalance(Number(result.balance));
+        } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
+          // Admin-created users may not have a wallet yet; show 0 and let backend create on next request
+          setBalance(0);
         } else {
           Alert.alert('Error', result.message || 'Failed to fetch balance');
         }
       } catch (error) {
         console.error('Balance fetch error:', error);
-        Alert.alert('Error', 'Unable to fetch wallet balance.');
+        setBalance(0);
       } finally {
         setLoadingBalance(false); // stop loading
       }
@@ -141,6 +148,8 @@ export default function More() {
       const result = await response.json();
       if (response.ok && result.status === 'success') {
         setBalance(Number(result.balance));
+      } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
+        setBalance(0);
       }
 
       // Also refresh user profile data including profile image
@@ -780,90 +789,126 @@ export default function More() {
         transparent={true}
         animationType="slide"
         onRequestClose={() => setShowDeleteAccountModal(false)}
+        statusBarTranslucent
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={[styles.deleteModalContainer, { backgroundColor: dark ? '#1a1a1a' : '#fff' }]}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setShowDeleteAccountModal(false)} style={styles.modalCloseButton}>
-                <Ionicons name="close" size={24} color={dark ? 'white' : '#333'} />
-              </TouchableOpacity>
-              <ThemeText style={styles.modalTitle}>Delete Account</ThemeText>
-              <View style={styles.placeholder} />
-            </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View style={[styles.deleteModalContainer, { backgroundColor: dark ? '#1a1a1a' : '#fff' }]}>
+                  <View style={styles.modalHeader}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowDeleteAccountModal(false);
+                        setShowDeletePassword(false);
+                      }}
+                      style={styles.modalCloseButton}
+                    >
+                      <Ionicons name="close" size={24} color={dark ? 'white' : '#333'} />
+                    </TouchableOpacity>
+                    <ThemeText style={styles.modalTitle}>Delete Account</ThemeText>
+                    <View style={styles.placeholder} />
+                  </View>
 
-            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
-              <ThemeText style={{ marginBottom: 8, fontSize: 14, color: dark ? '#ccc' : '#555' }}>
-                This action cannot be undone. Enter your password to confirm.
-              </ThemeText>
-              <TextInput
-                style={[styles.textInput, {
-                  color: dark ? '#fff' : '#000',
-                  borderColor: dark ? '#444' : '#E5E5E5',
-                  backgroundColor: dark ? '#2a2a2a' : '#fafafa',
-                  marginTop: 12,
-                }]}
-                placeholder="Enter your password"
-                placeholderTextColor={dark ? '#888' : '#aaa'}
-                secureTextEntry
-                value={deletePassword}
-                onChangeText={setDeletePassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                style={[styles.deleteConfirmButton, { opacity: isDeletingAccount ? 0.6 : 1 }]}
-                disabled={isDeletingAccount}
-                onPress={async () => {
-                  if (!deletePassword) {
-                    Alert.alert('Error', 'Please enter your password.');
-                    return;
-                  }
-                  setIsDeletingAccount(true);
-                  try {
-                    const token = await SecureStore.getItemAsync('auth_token');
-                    const response = await fetch(API_ENDPOINTS.USER.PROFILE.DeleteAccount, {
-                      method: 'DELETE',
-                      headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({ password: deletePassword }),
-                    });
-                    if (!response.ok) {
-                      const errorBody = await response.text();
-                      console.error('[Delete Account] HTTP', response.status, response.statusText);
-                      console.error('[Delete Account] Response body:', errorBody);
-                      let message = 'Failed to delete account. Please try again.';
-                      try {
-                        const parsed = JSON.parse(errorBody);
-                        if (parsed?.errors?.password) {
-                          message = parsed.errors.password[0];
-                        } else if (parsed?.message) {
-                          message = parsed.message;
+                  <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
+                    <ThemeText style={{ marginBottom: 8, fontSize: 14, color: dark ? '#ccc' : '#555' }}>
+                      This action cannot be undone. Enter your password to confirm.
+                    </ThemeText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, position: 'relative' }}>
+                      <TextInput
+                        style={[styles.textInput, {
+                          color: dark ? '#fff' : '#000',
+                          borderColor: dark ? '#444' : '#E5E5E5',
+                          backgroundColor: dark ? '#2a2a2a' : '#fafafa',
+                          marginTop: 0,
+                          paddingRight: 48,
+                        }]}
+                        placeholder="Enter your password"
+                        placeholderTextColor={dark ? '#888' : '#aaa'}
+                        secureTextEntry={!showDeletePassword}
+                        value={deletePassword}
+                        onChangeText={setDeletePassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowDeletePassword((prev) => !prev)}
+                        style={{
+                          position: 'absolute',
+                          right: 12,
+                          padding: 4,
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      >
+                        <Ionicons
+                          name={showDeletePassword ? 'eye-off-outline' : 'eye-outline'}
+                          size={22}
+                          color={dark ? '#888' : '#666'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.deleteConfirmButton, { opacity: isDeletingAccount ? 0.6 : 1 }]}
+                      disabled={isDeletingAccount}
+                      onPress={async () => {
+                        if (!deletePassword) {
+                          Alert.alert('Error', 'Please enter your password.');
+                          return;
                         }
-                      } catch {}
-                      Alert.alert('Error', message);
-                      return;
-                    }
-                    await SecureStore.deleteItemAsync('auth_token');
-                    await SecureStore.deleteItemAsync('user_data');
-                    setShowDeleteAccountModal(false);
-                    route.replace('/login');
-                  } catch (e) {
-                    console.error('[Delete Account] Error:', e);
-                    Alert.alert('Error', 'Failed to delete account. Please try again.');
-                  } finally {
-                    setIsDeletingAccount(false);
-                  }
-                }}
-              >
-                {isDeletingAccount
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Delete My Account</Text>
-                }
-              </TouchableOpacity>
+                        setIsDeletingAccount(true);
+                        try {
+                          const token = await SecureStore.getItemAsync('auth_token');
+                          const response = await fetch(API_ENDPOINTS.USER.PROFILE.DeleteAccount, {
+                            method: 'DELETE',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ password: deletePassword }),
+                          });
+                          if (!response.ok) {
+                            const errorBody = await response.text();
+                            console.error('[Delete Account] HTTP', response.status, response.statusText);
+                            console.error('[Delete Account] Response body:', errorBody);
+                            let message = 'Failed to delete account. Please try again.';
+                            try {
+                              const parsed = JSON.parse(errorBody);
+                              if (parsed?.errors?.password) {
+                                message = parsed.errors.password[0];
+                              } else if (parsed?.message) {
+                                message = parsed.message;
+                              }
+                            } catch {}
+                            Alert.alert('Error', message);
+                            return;
+                          }
+                          await SecureStore.deleteItemAsync('auth_token');
+                          await SecureStore.deleteItemAsync('user_data');
+                          setShowDeleteAccountModal(false);
+                          setShowDeletePassword(false);
+                          route.replace('/login');
+                        } catch (e) {
+                          console.error('[Delete Account] Error:', e);
+                          Alert.alert('Error', 'Failed to delete account. Please try again.');
+                        } finally {
+                          setIsDeletingAccount(false);
+                        }
+                      }}
+                    >
+                      {isDeletingAccount
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Delete My Account</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

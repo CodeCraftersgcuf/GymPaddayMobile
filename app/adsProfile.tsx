@@ -215,6 +215,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['ad-campaigns']);
+      queryClient.invalidateQueries(['userPosts']);
     },
     onError: (error) => {
       Alert.alert('Error', 'Failed to delete ad campaign.');

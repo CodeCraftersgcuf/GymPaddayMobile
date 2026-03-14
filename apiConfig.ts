@@ -154,6 +154,8 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
+      MarkMessagesRead: API_DOMAIN + "/user/mark-messages-read",
+      UnreadCount: API_DOMAIN + "/user/unread-count",
     },
     TICKETS: {
       List: API_DOMAIN + "/user/tickets",

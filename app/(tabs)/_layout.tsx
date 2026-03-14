@@ -7,6 +7,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
+import { API_ENDPOINTS } from '@/apiConfig';
+import { UNREAD_MESSAGES_QUERY_KEY } from '@/utils/queries/chat';
 
 const getTabIconBg = (isFocused: boolean, dark: boolean) => {
   if (isFocused) return dark ? '#FFAAAA' : '#FFAAAA';
@@ -17,56 +20,39 @@ const getToken = async () => {
   return await SecureStore.getItemAsync('auth_token');
 };
 
+async function fetchUnreadCount(): Promise<number> {
+  const token = await getToken();
+  if (!token) return 0;
+  const res = await fetch(API_ENDPOINTS.USER.CHAT_MESSAGES.UnreadCount, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) return 0;
+  const json = await res.json();
+  return typeof json?.data === 'number' ? json.data : 0;
+}
+
 export default function TabLayout() {
   const { dark } = useTheme();
   const isDarkMode = dark;
   const tabBackgroundColor = isDarkMode ? '#252525' : '#FFFFFF';
   const tabViewBackgroundColor = 'transparent';
 
-  const [unreadCount, setUnreadCount] = React.useState<number>(0);
-  const [loadingUnread, setLoadingUnread] = React.useState<boolean>(false);
+  const { data: unreadCount = 0, refetch: refetchUnread } = useQuery({
+    queryKey: UNREAD_MESSAGES_QUERY_KEY,
+    queryFn: fetchUnreadCount,
+    placeholderData: 0,
+  });
 
-  const fetchUnread = React.useCallback(async () => {
-    try {
-      setLoadingUnread(true);
-      const token = await getToken();
-      if (!token) {
-        setUnreadCount(0);
-        return;
-      }
-      const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/unread-count', {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) {
-        // If unauthorized or any error, fail gracefully
-        setUnreadCount(0);
-        return;
-      }
-      const json = await res.json(); // expects { data: number }
-      const count = typeof json?.data === 'number' ? json.data : 0;
-      setUnreadCount(count);
-    } catch {
-      setUnreadCount(0);
-    } finally {
-      setLoadingUnread(false);
-    }
-  }, []);
-
-  // refresh when TabLayout gains focus
+  // Refresh when TabLayout gains focus (e.g. returning from message chat)
   useFocusEffect(
     React.useCallback(() => {
-      fetchUnread();
-    }, [fetchUnread])
+      refetchUnread();
+    }, [refetchUnread])
   );
-
-  // optional: refresh once on mount
-  React.useEffect(() => {
-    fetchUnread();
-  }, [fetchUnread]);
 
   return (
     <SafeAreaProvider>

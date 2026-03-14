@@ -17,10 +17,12 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme } from "@/contexts/themeContext";
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from "expo-router";
 import { fetchChatMessages } from '@/utils/queries/chat';
+import { API_ENDPOINTS } from '@/apiConfig';
+import { UNREAD_MESSAGES_QUERY_KEY } from '@/utils/queries/chat';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import { sendChatMessage } from '@/utils/mutations/chat';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -41,6 +43,7 @@ import { RtcSurfaceView } from 'react-native-agora';
 
 export default function MessageChat() {
   const { dark } = useTheme();
+  const queryClient = useQueryClient();
   const { conversation_id, user_id, user_pic, user_name } = useLocalSearchParams();
   const [newMessage, setNewMessage] = useState('');
   const [showVideoCallPopup, setShowVideoCallPopup] = useState(false);
@@ -67,6 +70,33 @@ export default function MessageChat() {
     return await SecureStore.getItemAsync('user_data');
     console.log("User data:", user_id);
   };
+  // Mark messages as read when user opens this conversation (so count resets to zero)
+  React.useEffect(() => {
+    if (!conversation_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token || cancelled) return;
+        const res = await fetch(API_ENDPOINTS.USER.CHAT_MESSAGES.MarkMessagesRead, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ conversation_id: Number(conversation_id) }),
+        });
+        if (res.ok && !cancelled) {
+          queryClient.invalidateQueries(['conversations']);
+          queryClient.invalidateQueries(UNREAD_MESSAGES_QUERY_KEY);
+        }
+      } catch (e) {
+        console.error('Failed to mark messages as read:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [conversation_id, queryClient]);
+
   const {
     data,
     isLoading,
@@ -76,23 +106,7 @@ export default function MessageChat() {
     queryFn: async () => {
       const token = await getToken();
       if (!token) throw new Error('No token found');
-      const result = await fetchChatMessages(token, conversation_id);
-      // Mark messages as read when conversation is opened
-      if (result?.messages && result.messages.length > 0) {
-        try {
-          await fetch(`https://gympaddy.skillverse.com.pk/api/user/mark-messages-read`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ conversation_id }),
-          });
-        } catch (error) {
-          console.error('Failed to mark messages as read:', error);
-        }
-      }
-      return result;
+      return fetchChatMessages(token, conversation_id);
     },
     enabled: !!conversation_id,
     refetchInterval: 3000, // Refetch every 3 seconds to get new messages

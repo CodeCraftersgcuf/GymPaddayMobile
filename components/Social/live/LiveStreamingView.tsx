@@ -330,12 +330,12 @@ export default function LiveStreamingView({
             />
           )}
 
-          {/* Chat Overlay – floats over video area only */}
+          {/* Chat Overlay – at top when keyboard closed so comments never overlap End stream / bottom controls */}
           <View style={[
             styles.chatOverlay,
-            {
-              bottom: keyboardHeight > 0 ? keyboardHeight + 60 : 16,
-            }
+            keyboardHeight > 0
+              ? { bottom: keyboardHeight + 60, top: undefined }
+              : { top: 52, bottom: undefined },
           ]}>
           <ScrollView
             ref={chatScrollRef}
@@ -474,10 +474,10 @@ export default function LiveStreamingView({
 
       </View>
 
-      {/* App controls – End Stream is only in web view; web posts "stream_ended" to trigger onEndLive */}
+      {/* App controls – End Stream button kept clear above chat; web can also post "stream_ended" to trigger onEndLive */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity
-          style={styles.viewAudienceButton}
+          style={[styles.viewAudienceButton, styles.controlButton]}
           onPress={() => setAudienceModalVisible(true)}
         >
           <Text
@@ -490,7 +490,7 @@ export default function LiveStreamingView({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.viewAudienceButton}
+          style={[styles.viewAudienceButton, styles.controlButton]}
           onPress={() => setInsightsModalVisible(true)}
         >
           <Text
@@ -501,6 +501,14 @@ export default function LiveStreamingView({
           >
             View Insights
           </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.endStreamButton]}
+          onPress={onEndLive}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="call-end" size={22} color="#FFF" />
+          <Text style={styles.endStreamButtonText}>End stream</Text>
         </TouchableOpacity>
       </View>
       <Modal
@@ -768,8 +776,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    maxHeight: 120, // Reduced to prevent overlap with controls, especially with long messages
-    zIndex: 1, // Below controls container
+    maxHeight: 180,
+    zIndex: 1,
   },
   chatContainer: {
     flex: 1,
@@ -847,24 +855,45 @@ const styles = StyleSheet.create({
   },
   controlsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 20,
-    paddingBottom: 30,
-    gap: 15,
-    marginTop: 10,
+    paddingBottom: 24,
+    paddingTop: 12,
+    gap: 12,
     zIndex: 1000,
     elevation: 1000,
-    backgroundColor: 'transparent',
-    position: 'relative',
+    backgroundColor: 'rgba(20,20,20,0.98)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.3)',
+  },
+  controlButton: {
+    flex: 1,
+    minWidth: 100,
   },
   viewAudienceButton: {
-    flex: 1,
     borderRadius: 10,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#CCCCCC',
   },
   viewAudienceButtonText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  endStreamButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#940304',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    minWidth: 140,
+  },
+  endStreamButtonText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
   },

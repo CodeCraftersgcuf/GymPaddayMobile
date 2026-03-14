@@ -1,6 +1,9 @@
 import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../apiConfig";
 
+/** Query key for unread messages count (tab badge). Invalidate this when marking messages as read. */
+export const UNREAD_MESSAGES_QUERY_KEY = ['unread-messages-count'] as const;
+
 export const fetchChatMessages = async (
   token: string,
   conversationId?: number
