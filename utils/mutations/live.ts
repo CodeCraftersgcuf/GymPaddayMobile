@@ -11,8 +11,14 @@ export async function createLiveStream(data: { title: string; agora_channel: str
   });
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.message || 'Failed to create live stream');
+    let message = 'Failed to create live stream';
+    try {
+      const err = await response.json();
+      message = err.message || message;
+    } catch (_) {}
+    const error: any = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();

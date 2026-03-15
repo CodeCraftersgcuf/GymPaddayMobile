@@ -52,9 +52,10 @@ export default function HomeScreen() {
             });
 
             setIsLive(true); // will trigger LiveStreamingView
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error creating live stream:', err);
-            alert('Failed to go live. Try again.');
+            const message = err?.message || 'Failed to go live. Try again.';
+            alert(message);
         }
     };
     const handleDurationSelect = () => setShowDurationSelector(true);
