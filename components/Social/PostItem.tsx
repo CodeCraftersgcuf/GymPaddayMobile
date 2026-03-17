@@ -1006,8 +1006,8 @@ const styles = StyleSheet.create({
   },
   fullscreenImage: {
     width,
-    height: height * 0.8,
-    resizeMode: "contain",
+    height,
+    resizeMode: "cover",
   },
   pagination: {
     marginBottom: 20,

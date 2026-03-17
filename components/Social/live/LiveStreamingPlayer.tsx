@@ -40,14 +40,31 @@ export default function LiveStreamingPlayer({ channelName, uid, role }: Props) {
   useEffect(() => {
     const init = async () => {
       if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-        ]);
-        const allGranted = Object.values(granted).every(
-          (v) => v === PermissionsAndroid.RESULTS.GRANTED
+        // Check existing permission state first so we don't spam the system prompt.
+        const hasCamera = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.CAMERA
         );
-        if (!allGranted) {
+        const hasAudio = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+        );
+
+        let cameraGranted = hasCamera;
+        let audioGranted = hasAudio;
+
+        if (!hasCamera || !hasAudio) {
+          const granted = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            PermissionsAndroid.PERMISSIONS.CAMERA,
+          ]);
+          cameraGranted =
+            granted[PermissionsAndroid.PERMISSIONS.CAMERA] ===
+            PermissionsAndroid.RESULTS.GRANTED;
+          audioGranted =
+            granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] ===
+            PermissionsAndroid.RESULTS.GRANTED;
+        }
+
+        if (!cameraGranted || !audioGranted) {
           setCameraWorking('fail');
           return;
         }

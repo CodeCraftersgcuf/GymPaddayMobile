@@ -303,19 +303,28 @@ React.useEffect(() => {
   }
 }, [data, token]);
 
-  // Add this helper component for image loading indicator
+  // Image helper: show a small loader only on the very first load for this
+  // image. Subsequent re-renders (e.g. while filtering/searching) will NOT
+  // re-show the spinner, so the UI feels stable on iOS.
   function ImageWithLoading({ source, style, ...props }) {
     const [loading, setLoading] = useState(true);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
     return (
       <View style={[style, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
         <Image
           source={source}
           style={[StyleSheet.absoluteFill, style]}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
+          onLoadStart={() => {
+            if (!hasLoadedOnce) setLoading(true);
+          }}
+          onLoadEnd={() => {
+            setLoading(false);
+            setHasLoadedOnce(true);
+          }}
           {...props}
         />
-        {loading && (
+        {loading && !hasLoadedOnce && (
           <ActivityIndicator
             size="small"
             color="#940304"

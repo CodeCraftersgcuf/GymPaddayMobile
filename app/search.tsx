@@ -60,6 +60,21 @@ const SearchScreen = () => {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }}>
+            {/* Header with back arrow so user can leave search page */}
+            <View style={styles.header}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={styles.backButton}
+                >
+                    <Ionicons name="chevron-back" size={24} color={dark ? '#fff' : '#000'} />
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: dark ? '#fff' : '#000' }]}>
+                    Search
+                </Text>
+                <View style={{ width: 24 }} />
+            </View>
+
             <View style={styles.searchRow}>
                 <TextInput
                     placeholder="Search users or posts..."
@@ -227,6 +242,21 @@ const SearchScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    backButton: {
+        paddingRight: 8,
+    },
+    headerTitle: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 18,
+        fontWeight: '600',
+    },
     searchRow: {
         position: 'relative',
         justifyContent: 'center',

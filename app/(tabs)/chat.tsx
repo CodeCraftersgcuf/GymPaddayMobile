@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedView from '@/components/ThemedView';
 
 // Integration
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchConnectedUsers } from '@/utils/queries/chat';
 import * as SecureStore from 'expo-secure-store';
 
@@ -21,6 +21,7 @@ export default function Chat() {
 
 
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { dark } = useTheme();
   const { users } = useMessages();
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -119,12 +120,33 @@ export default function Chat() {
     }
   };
 
-  // Conversation press: pass conversation_id and other_user id
+  // Conversation press: pass conversation_id and other_user id.
+  // Also optimistically clear the unreadCount for this conversation in the local cache
+  // so the badge resets immediately when user opens the chat.
   const handleConversationPress = (conversationId: string) => {
     const found = apiConversations.find(
       (conv) => conv.id === conversationId
     );
     if (found) {
+      // Optimistically zero-out unread count in conversations query cache
+      queryClient.setQueryData<any>(['conversations'], (old) => {
+        if (!old || !Array.isArray(old.conversations)) return old;
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: any) =>
+            conv.conversation_id === found.conversation_id
+              ? {
+                  ...conv,
+                  last_message: {
+                    ...(conv.last_message || {}),
+                    unread_count: 0,
+                  },
+                }
+              : conv
+          ),
+        };
+      });
+
       router.push({
         pathname: '/messageChat',
         params: {

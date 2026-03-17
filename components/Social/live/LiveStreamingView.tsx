@@ -43,6 +43,11 @@ interface ChatMessage {
   avatar: string;
   hasGift?: boolean;
   giftCount?: number;
+  reply_to?: {
+    id: string | number;
+    message: string;
+    user: { fullname: string };
+  } | null;
 }
 /** Parse duration string (e.g. "15 Min", "1 Hour", "3 Hours") to total seconds */
 function parseDurationToSeconds(durationStr: string | undefined): number | null {
@@ -86,8 +91,8 @@ export default function LiveStreamingView({
 
 
   const [audienceModalVisible, setAudienceModalVisible] = useState(false);
-  const { data: chats = [], isLoading } = useLiveStreamChats(livestreamId);
-  const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(livestreamId);
+  const { data: chats = [], isLoading } = useLiveStreamChats(livestreamId ?? '');
+  const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(livestreamId ?? '');
   // console.log("chats", chats)
   useEffect(() => {
     if (chats.length > 0) {
@@ -147,27 +152,6 @@ export default function LiveStreamingView({
     },
     enabled: audienceModalVisible, // only fetch when modal is open
   });
-  // Permissions for Android
-  useEffect(() => {
-    const requestPermissions = async () => {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        ]);
-
-        const allGranted = Object.values(granted).every(
-          (result) => result === PermissionsAndroid.RESULTS.GRANTED
-        );
-
-        if (!allGranted) {
-          alert('Camera & Microphone permissions are required.');
-        }
-      }
-    };
-
-    requestPermissions();
-  }, []);
   useEffect(() => {
     fetchLiveVideoCallToken.mutate();
   }, []);
@@ -330,70 +314,75 @@ export default function LiveStreamingView({
             />
           )}
 
-          {/* Chat Overlay – at top when keyboard closed so comments never overlap End stream / bottom controls */}
-          <View style={[
-            styles.chatOverlay,
-            keyboardHeight > 0
-              ? { bottom: keyboardHeight + 60, top: undefined }
-              : { top: 52, bottom: undefined },
-          ]}>
-          <ScrollView
-            ref={chatScrollRef}
-            style={styles.chatContainer}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
-          >
-            {chatMessages.map((chat) => (
-              <TouchableOpacity
-                key={chat.id}
-                onLongPress={() => {
-                  setReplyTo(chat);
-                  setReplyText('');
-                  setReplyModalVisible(true);
-                }}
+          {/* Chat Overlay – pinned to upper-left so it never covers the bottom bar or center camera buttons */}
+          {keyboardHeight === 0 && (
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.chatOverlay,
+                { top: 72 },
+              ]}
+            >
+              <ScrollView
+                ref={chatScrollRef}
+                style={styles.chatContainer}
+                showsVerticalScrollIndicator={false}
+                onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
               >
-                <View style={styles.chatMessage}>
-                  <Image source={{ uri: chat.avatar }} style={styles.avatar} />
-                  <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-                    <Text style={styles.username}>{chat.user}</Text>
+                {chatMessages.map((chat) => (
+                  <TouchableOpacity
+                    key={chat.id}
+                    onLongPress={() => {
+                      setReplyTo(chat);
+                      setReplyText('');
+                      setReplyModalVisible(true);
+                    }}
+                  >
+                    <View style={styles.chatMessage}>
+                      <Image source={{ uri: chat.avatar }} style={styles.avatar} />
+                      <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                        <Text style={styles.username}>{chat.user}</Text>
 
-                    {/* Reply Preview Box */}
-                    {chat.reply_to && (
-                      <View style={styles.replyPreview}>
-                        <Text style={styles.replyUserText}>
-                          Replying to {chat.reply_to.user?.fullname || 'User'}
-                        </Text>
-                        <Text style={styles.replyMessageText} numberOfLines={1}>
-                          {chat.reply_to.message}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={styles.messageRow}>
-                      <Text style={styles.messageText} numberOfLines={3} ellipsizeMode="tail">{chat.message}</Text>
-
-                      {chat.hasGift && (
-                        <View style={styles.giftContainer}>
-                          <Text style={styles.giftEmoji}>🎁</Text>
-                          <View style={styles.giftBadge}>
-                            <Text style={styles.giftCount}>x{chat.giftCount}</Text>
+                        {/* Reply Preview Box */}
+                        {chat.reply_to && (
+                          <View style={styles.replyPreview}>
+                            <Text style={styles.replyUserText}>
+                              Replying to {chat.reply_to.user?.fullname || 'User'}
+                            </Text>
+                            <Text style={styles.replyMessageText} numberOfLines={1}>
+                              {chat.reply_to.message}
+                            </Text>
                           </View>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                        )}
 
-          </ScrollView>
-          </View>
+                        <View style={styles.messageRow}>
+                          <Text style={styles.messageText} numberOfLines={3} ellipsizeMode="tail">
+                            {chat.message}
+                          </Text>
+
+                          {chat.hasGift && (
+                            <View style={styles.giftContainer}>
+                              <Text style={styles.giftEmoji}>🎁</Text>
+                              <View style={styles.giftBadge}>
+                                <Text style={styles.giftCount}>x{chat.giftCount}</Text>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {canType && (
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            // On iOS, offset the keyboard by header height + a bit of padding
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 20}
             style={styles.inputBarSection}
           >
           <View style={styles.inputBar}>
@@ -774,9 +763,9 @@ const styles = StyleSheet.create({
 
   chatOverlay: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    maxHeight: 180,
+    left: 12,
+    width: '70%',
+    maxHeight: 140,
     zIndex: 1,
   },
   chatContainer: {

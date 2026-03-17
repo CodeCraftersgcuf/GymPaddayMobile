@@ -256,7 +256,8 @@ const User_liveViewMain: React.FC = () => {
         {channelName ? (
           <WebView
             source={{
-              uri: `https://skillverse.com.pk/live.html?channel=${channelName}`,
+              // Pass role=audience so web player knows this is a viewer, not host
+              uri: `https://skillverse.com.pk/live.html?channel=${channelName}&role=audience`,
             }}
             javaScriptEnabled
             domStorageEnabled
@@ -270,11 +271,15 @@ const User_liveViewMain: React.FC = () => {
             No channel specified
           </Text>
         )}
-        {/* Chat Overlay - Position adjusts based on keyboard */}
-        <View style={[
-          styles.chatOverlay,
-          { bottom: keyboardHeight > 0 ? keyboardHeight + 80 : 100 }
-        ]}>
+        {/* Chat Overlay – pinned to upper-left so it doesn't cover bottom gift / input controls */}
+        <View
+          style={[
+            styles.chatOverlay,
+            keyboardHeight > 0
+              ? { top: 70 }
+              : { top: 90 },
+          ]}
+        >
           <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
             {chatMessages.map((chat) => (
               <View key={chat.id} style={styles.chatMessage}>
@@ -398,9 +403,9 @@ const styles = StyleSheet.create({
   },
   chatOverlay: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    maxHeight: 300,
+    left: 12,
+    width: '70%',
+    maxHeight: 220,
   },
   chatContainer: {
     flex: 1,
