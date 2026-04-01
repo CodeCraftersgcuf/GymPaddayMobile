@@ -19,8 +19,11 @@ import { createLiveStream } from '@/utils/mutations/live';
 import uuid from 'react-native-uuid';
 
 import * as SecureStore from 'expo-secure-store';
+import { useQueryClient } from '@tanstack/react-query';
+
 export default function HomeScreen() {
     const { dark } = useTheme();
+    const queryClient = useQueryClient();
     const [selectedDuration, setSelectedDuration] = useState('15 Min');
     const [showSummary, setShowSummary] = useState(false);
     const [isLive, setIsLive] = useState(false);
@@ -44,13 +47,15 @@ export default function HomeScreen() {
             };
 
             const res = await createLiveStream(payload, token);
+            const stream = (res as any)?.data ?? res;
 
             setChannelInfo({
-                title: res.title,
-                agora_channel: res.agora_channel,
-                id: res.id
+                title: stream.title,
+                agora_channel: stream.agora_channel,
+                id: stream.id != null ? String(stream.id) : undefined,
             });
 
+            queryClient.invalidateQueries({ queryKey: ['liveStreams'] });
             setIsLive(true); // will trigger LiveStreamingView
         } catch (err: any) {
             console.error('Error creating live stream:', err);

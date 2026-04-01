@@ -753,7 +753,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '500',
     textAlign: 'center',
   },

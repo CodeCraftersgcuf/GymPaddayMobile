@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 export const useLiveStreams = () => {
   return useQuery({
     queryKey: ['liveStreams'],
+    refetchInterval: 15_000,
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
@@ -18,10 +19,10 @@ export const useLiveStreams = () => {
 
       if (!response.ok) throw new Error('Failed to fetch live streams');
 
-      const data = await response.json();
-      console.log("stream data",data)
-      // console.log("stream data with laytest post object",data.data[0].latest_post)
-      return data;
+      const json = await response.json();
+      // Laravel index() returns a raw array; some gateways may wrap as { data: [...] }.
+      const streams = Array.isArray(json) ? json : json?.data ?? [];
+      return streams;
     },
   });
 };

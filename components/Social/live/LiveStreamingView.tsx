@@ -68,7 +68,6 @@ export default function LiveStreamingView({
   livestreamId,
   selectedDuration,
 }: LiveStreamingViewProps) {
-  const UID = 12345;
   const CHANNEL_NAME = channelName ?? 'live_stream';
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const chatScrollRef = useRef<ScrollView>(null);
@@ -76,8 +75,19 @@ export default function LiveStreamingView({
     mutationFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
+      let uid = 12345;
+      try {
+        const raw = await SecureStore.getItemAsync('user_data');
+        if (raw) {
+          const u = JSON.parse(raw) as { id?: number };
+          const id = Number(u?.id);
+          if (Number.isFinite(id) && id >= 1) uid = Math.floor(id) % 2147483647;
+        }
+      } catch {
+        /* keep fallback uid */
+      }
       return await getLiveVideoCallToken(
-        { channel_name: CHANNEL_NAME, uid: UID, role: 'host' },
+        { channel_name: CHANNEL_NAME, uid, role: 'host' },
         token
       );
     },
@@ -154,7 +164,7 @@ export default function LiveStreamingView({
   });
   useEffect(() => {
     fetchLiveVideoCallToken.mutate();
-  }, []);
+  }, [CHANNEL_NAME]);
   useEffect(() => {
     if (audienceQuery.data) {
       // console.log('Audience API response:', audienceQuery.data);
@@ -472,7 +482,7 @@ export default function LiveStreamingView({
           <Text
             style={[
               styles.viewAudienceButtonText,
-              { color: dark ? '#FFF' : '#000' },
+              { color: dark ? '#FFF' : '#FFF' },
             ]}
           >
             View Audience
@@ -485,7 +495,7 @@ export default function LiveStreamingView({
           <Text
             style={[
               styles.viewAudienceButtonText,
-              { color: dark ? '#FFF' : '#000' },
+              { color: dark ? '#FFF' : '#FFF' },
             ]}
           >
             View Insights

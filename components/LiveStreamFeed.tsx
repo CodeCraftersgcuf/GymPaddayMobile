@@ -16,11 +16,22 @@ const LiveStreamFeed = ({ streams }: { streams: any[] }) => {
           item?.user?.latest_image_post?.media?.[0]?.url ??
           item?.user?.profile_picture_url;
 
-        // Check if stream is actually live: is_live must be true AND ended_at must be null/undefined
-        // Handle both boolean and string values for is_live
-        const isLiveValue = item?.is_live === true || item?.is_live === 1 || item?.is_live === '1' || item?.is_live === 'true';
-        const hasNotEnded = item?.ended_at === null || item?.ended_at === undefined || item?.ended_at === '';
-        const isActuallyLive = isLiveValue && hasNotEnded;
+        // Backend (Laravel) uses is_active + status; some clients may still send is_live / ended_at.
+        const isActiveValue =
+          item?.is_active === true ||
+          item?.is_active === 1 ||
+          item?.is_active === '1' ||
+          item?.is_active === 'true';
+        const legacyIsLive =
+          item?.is_live === true ||
+          item?.is_live === 1 ||
+          item?.is_live === '1' ||
+          item?.is_live === 'true';
+        const statusEnded = item?.status === 'ended' || item?.status === 'paused';
+        const hasNotEnded =
+          item?.ended_at === null || item?.ended_at === undefined || item?.ended_at === '';
+        const isActuallyLive =
+          (isActiveValue || legacyIsLive) && !statusEnded && hasNotEnded;
 
         return (
           <View style={styles.cardWrapper}>
