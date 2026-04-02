@@ -1,5 +1,5 @@
 export const categories = [
-  { id: 'gym', title: 'Gym', icon: 'barbell', color: '#940304' },
+  { id: 'gym', title: 'Gym Equipments ', icon: 'barbell', color: '#940304' },
   { id: 'supplement', title: 'Supplement', icon: 'medical', color: '#0066FF' },
   { id: 'wears', title: 'Wears', icon: 'shirt', color: '#00AA00' },
   { id: 'others', title: 'Others', icon: 'grid', color: '#8B00FF' },

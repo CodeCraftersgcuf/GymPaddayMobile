@@ -36,9 +36,9 @@ export default function LiveStreamDiscoverScreen() {
       return <Text style={styles.errorText}>Failed to load</Text>;
     }
 
-    if (data && data.length > 0) {
-      // return <HorizontalStreamList streams={data} />;
-         return <LiveStreamFeed streams={data} />;
+    const streams = Array.isArray(data) ? data : [];
+    if (streams.length > 0) {
+      return <LiveStreamFeed streams={streams} />;
     }
 
     return <EmptyStreamPlaceholder />;

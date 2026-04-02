@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   Image
 } from 'react-native';
 import Animated, {
@@ -15,8 +14,6 @@ import Animated, {
   withTiming,
   interpolate
 } from 'react-native-reanimated';
-
-const { height } = Dimensions.get('window');
 
 interface FloatingActionButtonProps {
   onStartLive?: () => void;
@@ -45,7 +42,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
         { scale: withSpring(interpolate(animation.value, [0, 1], [0, 1])) },
         {
           translateY: withSpring(
-            interpolate(animation.value, [0, 1], [0, -140])
+            interpolate(animation.value, [0, 1], [0, 140])
           )
         }
       ],
@@ -59,7 +56,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
         { scale: withSpring(interpolate(animation.value, [0, 1], [0, 1])) },
         {
           translateY: withSpring(
-            interpolate(animation.value, [0, 1], [0, -70])
+            interpolate(animation.value, [0, 1], [0, 70])
           )
         }
       ],
@@ -77,15 +74,14 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
     };
   });
   const handleStartLive = () => {
-  toggleMenu();
-  onStartLive?.(); // call if defined
-};
+    toggleMenu();
+    onStartLive?.();
+  };
 
-const handleCreatePost = () => {
-  toggleMenu();
-  onCreatePost?.(); // call if defined
-};
-
+  const handleCreatePost = () => {
+    toggleMenu();
+    onCreatePost?.();
+  };
 
   return (
     <>
@@ -100,10 +96,9 @@ const handleCreatePost = () => {
       )}
 
       <View style={styles.container}>
-        {/* Live Button */}
-        <Animated.View style={[styles.menuButton, liveButtonStyle,{marginBottom:0},{right:15}]}>
-{/* Live Button */}
-<TouchableOpacity style={styles.button} onPress={handleStartLive}>
+        {/* Menu rows render first; FAB last so it stays on top for taps */}
+        <Animated.View style={[styles.menuButton, liveButtonStyle]}>
+          <TouchableOpacity style={styles.button} onPress={handleStartLive}>
             <Text style={styles.buttonText}>Start Live</Text>
             <View style={[styles.ImagesButton, styles.liveButton]}>
               <Image
@@ -115,10 +110,8 @@ const handleCreatePost = () => {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Post Button */}
         <Animated.View style={[styles.menuButton, postButtonStyle]}>
-{/* Post Button */}
-<TouchableOpacity style={styles.button} onPress={handleCreatePost}>
+          <TouchableOpacity style={styles.button} onPress={handleCreatePost}>
             <Text style={styles.buttonText}>Create Post</Text>
             <View style={[styles.ImagesButton, styles.postButton]}>
               <Image
@@ -130,7 +123,6 @@ const handleCreatePost = () => {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Main FAB */}
         <TouchableOpacity style={styles.fab} onPress={toggleMenu} activeOpacity={0.8}>
           <Animated.View style={rotateStyle}>
             <Image source={images.CreatePlus} style={{ width: 20, height: 20 }} />
@@ -150,10 +142,11 @@ const styles = StyleSheet.create({
   },
   container: {
     position: 'absolute',
-    bottom: 90, // Ensure it is visible
-    right: 20, // Ensure it is visible
+    top: 6,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    zIndex: 10, // Ensure it is above other components
+    zIndex: 10,
   },
   fab: {
     width: 60,
@@ -170,8 +163,10 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     position: 'absolute',
-    bottom: 0,
-    right: 30,
+    top: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   button: {
     flexDirection: 'row',
