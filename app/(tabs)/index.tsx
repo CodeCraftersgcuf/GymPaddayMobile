@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   Image,
   ScrollView,
   RefreshControl,
-  ActivityIndicator, // <-- add this
+  ActivityIndicator,
   Alert,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostContainer from '@/components/Social/PostContainer';
@@ -34,6 +36,41 @@ import { GroupedUserStories, StoryItem } from '@/utils/types/story';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+/** Trigger pagination when this many px from the bottom (load before user hits the absolute end). */
+const PAGINATION_THRESHOLD_PX = 320;
+
+function getNextPostsPageParam(lastPage: any): number | undefined {
+  if (!lastPage) return undefined;
+  const current =
+    typeof lastPage.current_page === 'number'
+      ? lastPage.current_page
+      : typeof lastPage.meta?.current_page === 'number'
+        ? lastPage.meta.current_page
+        : undefined;
+  const last =
+    typeof lastPage.last_page === 'number'
+      ? lastPage.last_page
+      : typeof lastPage.meta?.last_page === 'number'
+        ? lastPage.meta.last_page
+        : undefined;
+  if (current != null && last != null && current < last) {
+    return current + 1;
+  }
+  const nextUrl = lastPage.next_page_url;
+  if (typeof nextUrl === 'string' && nextUrl.length > 0) {
+    try {
+      const url = nextUrl.startsWith('http')
+        ? new URL(nextUrl)
+        : new URL(nextUrl, 'https://gympaddy.local');
+      const p = parseInt(url.searchParams.get('page') || '', 10);
+      if (Number.isFinite(p) && p > 0) return p;
+    } catch {
+      /* ignore bad URL */
+    }
+  }
+  return undefined;
+}
 
 // LoadingIndicator component
 function LoadingIndicator({ text = "Loading..." }) {
@@ -120,14 +157,8 @@ export default function SocialFeedScreen() {
       if (!token) throw new Error('No auth token');
       return getUserPosts(token, pageParam); // Accepts page number
     },
-    initialPageParam: 1, // ✅ Required
-    getNextPageParam: (lastPage) => {
-      if (lastPage?.next_page_url) {
-        const url = new URL(lastPage.next_page_url);
-        return parseInt(url.searchParams.get('page') || '') || undefined;
-      }
-      return undefined;
-    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => getNextPostsPageParam(lastPage),
     retry: (failureCount, error: any) => {
       // Don't retry on authentication errors (401, 403)
       if (error?.statusCode === 401 || error?.statusCode === 403) {
@@ -433,6 +464,19 @@ export default function SocialFeedScreen() {
     setRefreshing(false);
   }, [refetch]);
 
+  const tryFetchNextPage = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      if (contentSize.height <= 0) return;
+      const distanceFromEnd =
+        contentSize.height - (layoutMeasurement.height + contentOffset.y);
+      if (distanceFromEnd > PAGINATION_THRESHOLD_PX) return;
+      if (!hasNextPage || isFetchingNextPage) return;
+      fetchNextPage();
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage]
+  );
+
   // Show loading indicator while user posts are loading
   // if (isLoading) {
   //   return <LoadingIndicator text="Loading posts..." />;
@@ -536,15 +580,11 @@ export default function SocialFeedScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          onScroll={({ nativeEvent }) => {
-            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 60;
-
-            if (isBottom && hasNextPage && !isFetchingNextPage) {
-              fetchNextPage();
-            }
-          }}
-          scrollEventThrottle={400}
+          keyboardShouldPersistTaps="handled"
+          onScroll={tryFetchNextPage}
+          onMomentumScrollEnd={tryFetchNextPage}
+          onScrollEndDrag={tryFetchNextPage}
+          scrollEventThrottle={16}
 
           refreshControl={
             <RefreshControl
@@ -592,10 +632,22 @@ export default function SocialFeedScreen() {
               />
             </>
           )}
-          {isFetchingNextPage && (
-            <View style={{ paddingVertical: 20, alignItems: 'center', marginBottom: 100, zIndex: 100 }}>
-              <ActivityIndicator size="small" color="#940304" />
-              <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
+          {hasNextPage && posts.length > 0 && (
+            <View
+              style={{
+                paddingVertical: isFetchingNextPage ? 20 : 8,
+                alignItems: 'center',
+                paddingBottom: isFetchingNextPage ? 120 : 80,
+              }}
+            >
+              {isFetchingNextPage && (
+                <>
+                  <ActivityIndicator size="small" color="#940304" />
+                  <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>
+                    Loading more posts…
+                  </Text>
+                </>
+              )}
             </View>
           )}
           {isError && posts.length > 0 && (
