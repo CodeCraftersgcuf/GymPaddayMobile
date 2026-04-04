@@ -20,6 +20,7 @@ import uuid from 'react-native-uuid';
 
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
+import { LIVE_STREAM_API_BASE, LIVE_STREAM_PUBLIC_BASE } from '@/utils/liveStreamConstants';
 
 export default function HomeScreen() {
     const { dark } = useTheme();
@@ -73,7 +74,39 @@ export default function HomeScreen() {
     //     setShowSummary(false);
     //     setIsLive(true);
     // };
-    const handleEndLive = () => setIsLive(false);
+    const handleEndLive = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (token && channelInfo?.id) {
+                const res = await fetch(
+                    `${LIVE_STREAM_API_BASE}/live-streams/${channelInfo.id}/end-host`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            Accept: 'application/json',
+                        },
+                    }
+                );
+                if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}));
+                    console.warn('end-host failed:', errBody);
+                }
+            }
+            if (channelInfo?.agora_channel) {
+                const ch = encodeURIComponent(channelInfo.agora_channel);
+                await fetch(`${LIVE_STREAM_PUBLIC_BASE}/live-streams/end/${ch}`, {
+                    method: 'GET',
+                }).catch(() => {});
+            }
+            queryClient.invalidateQueries({ queryKey: ['liveStreams'] });
+        } catch (e) {
+            console.error('handleEndLive', e);
+        } finally {
+            setIsLive(false);
+            setChannelInfo(null);
+        }
+    };
     const handleBuyPress = () => {
         // buySheetRef.current?.expand();
         setShowBuyModal(true);

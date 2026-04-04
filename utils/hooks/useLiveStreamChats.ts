@@ -1,6 +1,7 @@
 // hooks/useLiveStreamChats.ts
 import { useQuery } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
+import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 
 export const useLiveStreamChats = (liveStreamId: string) => {
   console.log("live stream id",liveStreamId)
@@ -10,7 +11,7 @@ export const useLiveStreamChats = (liveStreamId: string) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
       console.log("Live Stream Id in ",liveStreamId)
-      const response = await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${liveStreamId}/chats`, {
+      const response = await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${liveStreamId}/chats`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',

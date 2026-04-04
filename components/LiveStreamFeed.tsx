@@ -44,7 +44,13 @@ const LiveStreamFeed = ({ streams }: { streams: any[] }) => {
   profilePictureUrl={item?.user?.profile_picture_url}
   title={item?.title}
   userName={item?.user?.fullname || item?.user?.username}
-  viewers={item?.audiences?.length || 0}
+  viewers={
+              typeof item?.current_viewers_count === 'number'
+                ? item.current_viewers_count
+                : Array.isArray(item?.audiences)
+                  ? item.audiences.filter((a: any) => a?.left_at == null).length
+                  : 0
+            }
   channelName={item?.agora_channel}
   timeAgo={isActuallyLive ? 'Live now' : 'Offline'}
 />

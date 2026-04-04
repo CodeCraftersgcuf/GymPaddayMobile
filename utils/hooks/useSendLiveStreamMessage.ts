@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
+import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 
 interface SendLiveStreamMessagePayload {
   message: string;
@@ -22,7 +23,7 @@ export const useSendLiveStreamMessage = (liveStreamId: string) => {
       }
 
       const response = await fetch(
-        `https://gympaddy.skillverse.com.pk/api/user/live-streams/${liveStreamId}/chats`,
+        `${LIVE_STREAM_API_BASE}/live-streams/${liveStreamId}/chats`,
         {
           method: 'POST',
           headers: {
@@ -35,9 +36,16 @@ export const useSendLiveStreamMessage = (liveStreamId: string) => {
       );
 
       const res = await response.json();
-      console.log('response for sending:', res);
 
-      if (!response.ok) throw new Error(res.message || 'Failed to send message');
+      if (!response.ok) {
+        const msg =
+          (typeof res.message === 'string' && res.message) ||
+          (res.message && String(res.message)) ||
+          (response.status === 410 ? 'This live stream has ended.' : 'Failed to send message');
+        const err = new Error(msg) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
+      }
 
       return res.data;
     },
