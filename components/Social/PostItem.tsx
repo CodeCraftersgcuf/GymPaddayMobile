@@ -71,6 +71,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
+  /** Index for fullscreen image modal only (do not mix with feed carousel `currentIndex`). */
+  const [modalImageIndex, setModalImageIndex] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalVisibleBottomSheet, setModalVisibleBottomSheet] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
@@ -225,8 +227,15 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     const isVideo = ImagesData[index] === post.videoUrl;
     if (isVideo) return; // ⛔ don't open modal for video
     setSelectedImage(index);
-    setCurrentIndex(index);
+    setModalImageIndex(index);
     setModalVisible(true);
+  };
+
+  const handleFullscreenScroll = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+    const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+    if (newIndex >= 0 && newIndex < ImagesData.length) {
+      setModalImageIndex(newIndex);
+    }
   };
 
   // const handleScroll = (event: any) => {
@@ -743,29 +752,46 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       >
         <View style={styles.modalBackground}>
           <FlatList
+            key={modalVisible ? `fs-${post.id}-${selectedImage}` : 'fs-closed'}
             data={ImagesData}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             initialScrollIndex={selectedImage}
-            getItemLayout={(data, index) => ({
+            getItemLayout={(_, index) => ({
               length: width,
               offset: width * index,
               index,
             })}
-            keyExtractor={(item, index) => index.toString()}
-            renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.fullscreenImage} />
-            )}
-            onScroll={handleScroll}
+            keyExtractor={(item, index) => `fs-${post.id}-${item}-${index}`}
+            renderItem={({ item }) => {
+              const isVideo = item === post.videoUrl;
+              if (isVideo) {
+                return (
+                  <View style={styles.fullscreenPage}>
+                    <View style={styles.fullscreenVideoPlaceholder} />
+                  </View>
+                );
+              }
+              return (
+                <View style={styles.fullscreenPage}>
+                  <Image source={{ uri: item }} style={styles.fullscreenImage} />
+                </View>
+              );
+            }}
+            onMomentumScrollEnd={handleFullscreenScroll}
+            onScroll={handleFullscreenScroll}
             scrollEventThrottle={16}
           />
 
-          {/* Pagination Dots */}
-          {imagesUrl && imagesUrl.length > 1 && (
+          {/* Pagination Dots — same indices as ImagesData (modal pages) */}
+          {ImagesData.length > 1 && (
             <View style={styles.pagination}>
-              {imagesUrl?.map((_, index) => (
-                <View key={index} style={[styles.dot, currentIndex === index && styles.activeDot]} />
+              {ImagesData.map((uri, index) => (
+                <View
+                  key={`dot-${index}-${uri}`}
+                  style={[styles.dot, modalImageIndex === index && styles.activeDot]}
+                />
               ))}
             </View>
           )}
@@ -1000,14 +1026,26 @@ const styles = StyleSheet.create({
   },
   modalBackground: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    backgroundColor: "rgba(0, 0, 0, 0.95)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  fullscreenPage: {
+    width,
+    height,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
   },
   fullscreenImage: {
     width,
     height,
-    resizeMode: "cover",
+    resizeMode: 'contain',
+  },
+  fullscreenVideoPlaceholder: {
+    width,
+    height,
+    backgroundColor: '#111',
   },
   pagination: {
     marginBottom: 20,

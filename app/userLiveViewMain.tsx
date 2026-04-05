@@ -128,7 +128,7 @@ const User_liveViewMain: React.FC = () => {
 
   const { data: streamMeta } = useQuery({
     queryKey: ['liveStreamDetail', streamId],
-    enabled: !!streamId,
+    enabled: !!streamId && !streamEnded,
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token');
@@ -158,7 +158,13 @@ const User_liveViewMain: React.FC = () => {
   }, [streamEnded, queryClient]);
 
   const { data: chats = [], isLoading } = useLiveStreamChats(streamEnded ? '' : streamId);
-  const { mutateAsync: sendChatMessageAsync, isPending } = useSendLiveStreamMessage(streamId);
+  const { mutateAsync: sendChatMessageAsync, isPending } = useSendLiveStreamMessage(
+    streamEnded ? '' : streamId
+  );
+
+  useEffect(() => {
+    if (streamEnded) setActivePanel('none');
+  }, [streamEnded]);
 
   useEffect(() => {
     const formatted = (chats || []).map((msg: any) => ({

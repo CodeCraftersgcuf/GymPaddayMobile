@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -108,9 +108,51 @@ export default function LiveStreamingView({
   const [totalGiftCoins, setTotalGiftCoins] = useState(0);
   const [textCommentCount, setTextCommentCount] = useState(0);
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
+  /** When true, chat is closed (stream ended or ending) — must flip before async `onEndLive` so users cannot send during teardown. */
+  const [liveEnded, setLiveEnded] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replyModalVisible, setReplyModalVisible] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const { data: chats = [], isLoading } = useLiveStreamChats(livestreamId ?? '');
-  const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(livestreamId ?? '');
+  const endLiveFlow = useCallback(() => {
+    setLiveEnded(true);
+    setReplyModalVisible(false);
+    setReplyTo(null);
+    setMessageText('');
+    Keyboard.dismiss();
+    onEndLive();
+  }, [onEndLive]);
+
+  const { data: hostStreamMeta } = useQuery({
+    queryKey: ['liveStreamDetail', livestreamId, 'host'],
+    enabled: !!livestreamId && !liveEnded,
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No token');
+      const res = await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${livestreamId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error('Failed to load stream');
+      return res.json();
+    },
+    refetchInterval: 4000,
+  });
+
+  useEffect(() => {
+    if (!hostStreamMeta || liveEnded) return;
+    const active =
+      hostStreamMeta.is_active === true ||
+      hostStreamMeta.is_active === 1 ||
+      hostStreamMeta.is_active === '1';
+    const ended = hostStreamMeta.status === 'ended';
+    if (!active || ended) setLiveEnded(true);
+  }, [hostStreamMeta, liveEnded]);
+
+  const chatStreamId = liveEnded ? '' : livestreamId ?? '';
+  const { data: chats = [], isLoading } = useLiveStreamChats(chatStreamId);
+  const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(chatStreamId);
 
   useEffect(() => {
     let giftEventCount = 0;
@@ -213,9 +255,9 @@ export default function LiveStreamingView({
     if (selectedDurationSeconds == null || selectedDurationSeconds <= 0 || hasAutoEndedRef.current) return;
     if (duration >= selectedDurationSeconds) {
       hasAutoEndedRef.current = true;
-      onEndLive();
+      endLiveFlow();
     }
-  }, [duration, selectedDurationSeconds, onEndLive]);
+  }, [duration, selectedDurationSeconds, endLiveFlow]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -223,6 +265,7 @@ export default function LiveStreamingView({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   useEffect(() => {
+    if (liveEnded || !livestreamId) return;
     const interval = setInterval(async () => {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
@@ -239,13 +282,13 @@ export default function LiveStreamingView({
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [livestreamId]);
+  }, [livestreamId, liveEnded]);
 
   // Heartbeat — tell the server the stream host is still active every 30 seconds.
   // If the host closes the app without ending the stream, the backend cleanup
   // command will mark the stream as inactive after 2 minutes of no heartbeat.
   useEffect(() => {
-    if (!livestreamId) return;
+    if (!livestreamId || liveEnded) return;
 
     const sendHeartbeat = async () => {
       try {
@@ -259,21 +302,19 @@ export default function LiveStreamingView({
       }
     };
 
-    // Send immediately on mount, then every 30 seconds
     sendHeartbeat();
     const interval = setInterval(sendHeartbeat, 30000);
     return () => clearInterval(interval);
-  }, [livestreamId]);
+  }, [livestreamId, liveEnded]);
 
-  //adding new feature reply to user chaty
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const [replyModalVisible, setReplyModalVisible] = useState(false);
-  const [messageText, setMessageText] = useState('');
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  // const canType = currentUserRole === 'host' || currentUserRole === 'admin';
+  const canType = !liveEnded;
 
-  const canType = true;
+  useEffect(() => {
+    if (liveEnded) {
+      setReplyModalVisible(false);
+      setReplyTo(null);
+    }
+  }, [liveEnded]);
 
   // Listen to keyboard events to adjust chat overlay position
   useEffect(() => {
@@ -300,7 +341,7 @@ export default function LiveStreamingView({
     <View style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}>
       {/* Back button only – title lives in web */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onEndLive} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity onPress={endLiveFlow} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={dark ? '#FFF' : '#000'} />
         </TouchableOpacity>
       </View>
@@ -325,7 +366,7 @@ export default function LiveStreamingView({
               onMessage={(event) => {
                 const message = event.nativeEvent.data;
                 if (message === 'stream_ended' || message === '"stream_ended"') {
-                  onEndLive();
+                  endLiveFlow();
                 }
               }}
             />
@@ -352,6 +393,7 @@ export default function LiveStreamingView({
                   <TouchableOpacity
                     key={chat.id}
                     onLongPress={() => {
+                      if (liveEnded) return;
                       setReplyTo(chat);
                       setReplyText('');
                       setReplyModalVisible(true);
@@ -421,15 +463,17 @@ export default function LiveStreamingView({
                 value={messageText}
                 onChangeText={setMessageText}
                 multiline
+                editable={canType}
+                maxLength={1000}
               />
               <TouchableOpacity
-                style={[styles.sendBtn, isPending && { opacity: 0.6 }]}
-                disabled={isPending || !messageText.trim()}
+                style={[styles.sendBtn, (isPending || liveEnded) && { opacity: 0.6 }]}
+                disabled={isPending || !messageText.trim() || liveEnded}
                 onPress={() => {
+                  if (liveEnded) return;
                   const text = messageText.trim();
                   if (!text) return;
 
-                  // optimistic UI (optional)
                   const optimisticId = `temp-${Date.now()}`;
                   setChatMessages(prev => [
                     ...prev,
@@ -440,7 +484,6 @@ export default function LiveStreamingView({
                       avatar: 'https://ui-avatars.com/api/?name=You',
                       hasGift: false,
                       giftCount: 0,
-                      // show the reply preview quickly
                       reply_to: replyTo
                         ? {
                           id: replyTo.id,
@@ -451,20 +494,17 @@ export default function LiveStreamingView({
                     } as any,
                   ]);
 
-                  // Clear message text immediately for better UX
                   setMessageText('');
-                  
+
                   sendChatMessage(
                     { message: text, reply_to: replyTo?.id },
                     {
                       onSuccess: () => {
-                        // clear the reply target
                         setReplyTo(null);
                       },
                       onError: (e: any) => {
-                        // rollback optimistic item
+                        if (e?.status === 410) setLiveEnded(true);
                         setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
-                        // Restore message text on error
                         setMessageText(text);
                         Alert.alert('Failed to send', e?.message ?? 'Please try again.');
                       },
@@ -477,6 +517,12 @@ export default function LiveStreamingView({
             </View>
           </View>
           </KeyboardAvoidingView>
+        )}
+
+        {liveEnded && (
+          <View style={styles.chatClosedBanner}>
+            <Text style={styles.chatClosedText}>Chat closed — live has ended</Text>
+          </View>
         )}
 
       </View>
@@ -511,7 +557,7 @@ export default function LiveStreamingView({
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.endStreamButton]}
-          onPress={onEndLive}
+          onPress={endLiveFlow}
           activeOpacity={0.8}
         >
           <MaterialIcons name="call-end" size={22} color="#FFF" />
@@ -691,7 +737,7 @@ export default function LiveStreamingView({
 
       {/*  chat reply mopdal */}
       <Modal
-        isVisible={replyModalVisible}
+        isVisible={replyModalVisible && !liveEnded}
         onBackdropPress={() => setReplyModalVisible(false)}
         style={{ margin: 0, justifyContent: 'flex-end' }}
       >
@@ -705,17 +751,29 @@ export default function LiveStreamingView({
               value={replyText}
               onChangeText={setReplyText}
               multiline
+              editable={!liveEnded}
               style={{ height: 80, textAlignVertical: 'top' }}
             />
           </View>
 
           <TouchableOpacity
             onPress={() => {
+              if (liveEnded) return;
               if (replyText.trim()) {
-                sendChatMessage({ message: replyText, reply_to: replyTo?.id }); // Optional: include reply ID
-                setReplyModalVisible(false);
-                setReplyTo(null);
-                setReplyText('');
+                sendChatMessage(
+                  { message: replyText, reply_to: replyTo?.id },
+                  {
+                    onSuccess: () => {
+                      setReplyModalVisible(false);
+                      setReplyTo(null);
+                      setReplyText('');
+                    },
+                    onError: (e: any) => {
+                      if (e?.status === 410) setLiveEnded(true);
+                      Alert.alert('Failed to send', e?.message ?? 'Please try again.');
+                    },
+                  }
+                );
               } else {
                 Alert.alert('Error', 'Please type a message before sending.');
               }
@@ -868,6 +926,18 @@ const styles = StyleSheet.create({
   },
   inputBarSection: {
     backgroundColor: '#0E0E0E',
+  },
+  chatClosedBanner: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  chatClosedText: {
+    color: '#ccc',
+    fontSize: 14,
+    textAlign: 'center',
   },
   controlsContainer: {
     flexDirection: 'row',
