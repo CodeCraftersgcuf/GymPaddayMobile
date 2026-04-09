@@ -5,6 +5,7 @@ import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 interface SendLiveStreamMessagePayload {
   message: string;
   type?: string; // "message", "gift", etc.
+  /** Required when type === 'gift' — GP coin total to transfer */
   amount?: string;
   reply_to?: string; // optional reply-to message ID
 }
@@ -13,11 +14,17 @@ export const useSendLiveStreamMessage = (liveStreamId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ message, type = 'message', amount = '10', reply_to }: SendLiveStreamMessagePayload) => {
+    mutationFn: async ({ message, type = 'message', amount, reply_to }: SendLiveStreamMessagePayload) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
 
-      const payload: Record<string, any> = { message, type, amount };
+      const payload: Record<string, any> = { message, type };
+      if (type === 'gift') {
+        if (amount == null || amount === '') {
+          throw new Error('Gift amount is required');
+        }
+        payload.amount = amount;
+      }
       if (reply_to) {
         payload.reply_to_id = reply_to;
       }
@@ -49,8 +56,11 @@ export const useSendLiveStreamMessage = (liveStreamId: string) => {
 
       return res.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['liveStreamChats', liveStreamId]);
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['liveStreamChats', liveStreamId] });
+      if (variables.type === 'gift') {
+        queryClient.invalidateQueries({ queryKey: ['user-gifts'] });
+      }
     },
   });
 };

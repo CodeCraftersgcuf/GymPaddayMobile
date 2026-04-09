@@ -28,7 +28,7 @@ import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { API_ENDPOINTS } from '@/apiConfig';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { topUpWallet } from '@/utils/mutations/wallets';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
@@ -38,6 +38,7 @@ import { WebView } from 'react-native-webview';
 
 
 export default function More() {
+  const queryClient = useQueryClient();
   const [fontsLoaded] = useFonts({
     Caveat_400Regular,
     Caveat_700Bold,
@@ -198,6 +199,7 @@ export default function More() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
       Toast.show({
         type: 'success',
         text1: 'Deposit successful!',

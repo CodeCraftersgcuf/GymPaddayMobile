@@ -24,6 +24,7 @@ const API_ENDPOINTS = {
       PROFILE: (userId: number) => `${API_DOMAIN}/user/userDetails/${userId}`,
       EditProfile: API_DOMAIN + "/user/edit-profile",
       DeleteAccount: API_DOMAIN + "/user/delete-account",
+      Balance: API_DOMAIN + "/user/balance",
     },
     POSTS: {
       BoostPost: (id: number) => API_DOMAIN + `/user/boost-post/${id}`,
@@ -47,7 +48,8 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
-      TopUp: API_DOMAIN + "/user/top-up",
+      /** Must match Route::post('wallet/topup') — creates a Transaction row (unlike legacy /user/top-up). */
+      TopUp: API_DOMAIN + "/user/wallet/topup",
       Withdraw: API_DOMAIN + "/user/wallet/withdraw",
     },
     GIFTS: {

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Platform, Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { API_ENDPOINTS } from '../../apiConfig';
 
 const MINIMUM_AMOUNT_IOS = 100; // Minimum 100 Naira for iOS
 
@@ -13,6 +15,7 @@ try {
 }
 
 export const useIAP = () => {
+  const queryClient = useQueryClient();
   const [isAvailable, setIsAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
@@ -136,9 +139,7 @@ export const useIAP = () => {
         return false;
       }
 
-      // Call the same topup API endpoint that Flutterwave uses
-      // Using the same endpoint format as userLiveViewMain: /api/user/top-up
-      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/top-up', {
+      const response = await fetch(API_ENDPOINTS.USER.WALLETS.TopUp, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -156,6 +157,7 @@ export const useIAP = () => {
 
       const data = await response.json();
       console.log('✅ Top-up successful:', data);
+      queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
       setIsLoading(false);
       return true;
     } catch (error: any) {

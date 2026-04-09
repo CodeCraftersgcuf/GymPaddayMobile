@@ -22,7 +22,7 @@ import ThemeText from '@/components/ThemedText';
 
 //Code Related to the integration
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { topUpWallet } from '@/utils/mutations/wallets';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
@@ -43,6 +43,7 @@ export default function TopupScreen() {
     const webViewRef = useRef<WebView>(null);
     const { dark } = useTheme();
     const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
+    const queryClient = useQueryClient();
 
     const paymentDetails = {
         bankName: process.env.EXPO_PUBLIC_PAYMENT_BANK_NAME || 'GymPaddy Bank',
@@ -89,6 +90,7 @@ export default function TopupScreen() {
             });
         },
         onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
             Toast.show({
                 type: 'success',
                 text1: 'Deposit successful!',

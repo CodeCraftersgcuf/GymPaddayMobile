@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
-import { TransactionFilter } from '@/components/more/transactions/types';
+import { TransactionFilter, type Transaction } from '@/components/more/transactions/types';
 import { useTheme } from '@/contexts/themeContext';
 import TransactionItem from '@/components/more/transactions/TransactionItem';
 import FilterButton from '@/components/more/transactions/FilterButton';
@@ -10,40 +10,69 @@ import Header from '@/components/more/withdraw/Header';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUserTransaction } from '@/utils/queries/transactions';
 import * as SecureStore from 'expo-secure-store';
-// import { ScrollView } from 'react-native-gesture-handler';
+import { useFocusEffect } from '@react-navigation/native';
+
+/** Laravel may return a bare array or a wrapped payload depending on middleware/version. */
+function normalizeTransactionsResponse(payload: unknown): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === 'object') {
+    const o = payload as Record<string, unknown>;
+    if (Array.isArray(o.data)) return o.data;
+    if (Array.isArray(o.transactions)) return o.transactions;
+  }
+  return [];
+}
 
 export default function TransactionsScreen() {
   const { dark } = useTheme();
   const [activeFilter, setActiveFilter] = useState<TransactionFilter>('all');
   const [token, setToken] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     SecureStore.getItemAsync('auth_token').then(setToken);
   }, []);
 
-  const { data: apiData, isLoading } = useQuery({
-    queryKey: ['userTransactions'],
+  const {
+    data: apiData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['userTransactions', token ?? ''],
     queryFn: async () => {
       if (!token) throw new Error('No auth token');
-      return await getUserTransaction(token);
+      const raw = await getUserTransaction(token);
+      return normalizeTransactionsResponse(raw);
     },
     enabled: !!token,
   });
-  const queryClient = useQueryClient();
+
   const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (token) {
+        queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
+      }
+    }, [token, queryClient])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
-    setRefreshing(false);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
-  // console.log("The data from API:", apiData);
-  // Convert API response to local transaction format
+
   const allTransactions = useMemo(() => {
     if (!Array.isArray(apiData)) return [];
 
-    return apiData.map((item: any) => ({
-      id: item.id.toString(), // Ensure unique string keys
+    return apiData.map((item: any): Transaction => ({
+      id: String(item.id ?? ''),
       type: item.type === 'topup' ? 'deposit' : 'withdrawal',
       amount: parseFloat(item.amount),
       date: new Date(item.created_at).toLocaleDateString('en-GB'),
@@ -69,6 +98,9 @@ export default function TransactionsScreen() {
 
     return { deposits, withdrawals };
   }, [allTransactions]);
+
+  const errMessage =
+    isError && error instanceof Error ? error.message : 'Could not load transactions. Pull to retry.';
 
   return (
     <SafeAreaView style={[styles.container, dark ? styles.containerDark : styles.containerLight]}>
@@ -103,6 +135,12 @@ export default function TransactionsScreen() {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#000" />
           <Text style={{ marginTop: 10, color: dark ? 'white' : 'black' }}>Loading transactions...</Text>
+        </View>
+      ) : isError ? (
+        <View style={styles.centered}>
+          <Text style={{ fontSize: 16, color: dark ? 'white' : 'black', textAlign: 'center', paddingHorizontal: 24 }}>
+            {errMessage}
+          </Text>
         </View>
       ) : filteredTransactions.length === 0 ? (
         <View style={styles.centered}>

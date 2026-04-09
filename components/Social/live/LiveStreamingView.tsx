@@ -173,7 +173,10 @@ export default function LiveStreamingView({
         message: msg.message,
         avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
         hasGift: msg.type === 'gift',
-        giftCount: msg.amount,
+        giftCount:
+          msg.type === 'gift' && msg.amount != null && msg.amount !== ''
+            ? Number(msg.amount) || 0
+            : 0,
 
         reply_to: msg.reply_to
           ? {
@@ -424,7 +427,9 @@ export default function LiveStreamingView({
                             <View style={styles.giftContainer}>
                               <Text style={styles.giftEmoji}>🎁</Text>
                               <View style={styles.giftBadge}>
-                                <Text style={styles.giftCount}>x{chat.giftCount}</Text>
+                                <Text style={styles.giftCount}>
+                                  x{Number(chat.giftCount) > 0 ? chat.giftCount : '?'}
+                                </Text>
                               </View>
                             </View>
                           )}

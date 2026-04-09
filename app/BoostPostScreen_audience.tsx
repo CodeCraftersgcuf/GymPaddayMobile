@@ -95,20 +95,32 @@ const PostAudienceScreen: React.FC = () => {
     const isEdit = !!isEditable && !!campaign;
     console.log("isEditable:", isEditable, "isEdit:", isEdit);
 
-    const initialAudience = isEdit
+    const campaignData =
+        isEdit && campaign && typeof campaign === 'object' && !Array.isArray(campaign)
+            ? (campaign as Record<string, unknown>)
+            : null;
+
+    const initialAudience = campaignData
         ? {
-            gender: normalizeGender(safe(campaign.gender, 'all')),
-            minAge: safe(campaign.age_min, 18),
-            maxAge: safe(campaign.age_max, 65),
+            gender: normalizeGender(String(safe(campaignData.gender, 'all'))),
+            minAge: safe(campaignData.age_min, 18),
+            maxAge: safe(campaignData.age_max, 65),
             budget: safe(
-                campaign.daily_budget && Number(campaign.daily_budget) > 0 ? campaign.daily_budget : undefined,
-                safe(campaign.budget, 2000)
+                (() => {
+                    const d = Number(campaignData.daily_budget);
+                    if (Number.isFinite(d) && d > 0) return d;
+                    const dur = Math.max(1, Number(campaignData.duration) || 1);
+                    const total = Number(campaignData.budget);
+                    if (Number.isFinite(total) && total > 0) return Math.round(total / dur);
+                    return undefined;
+                })(),
+                2000
             ),
-            duration: safe(campaign.duration, 20),
-            location: safe(campaign.location, ''),
+            duration: safe(campaignData.duration, 20),
+            location: safe(campaignData.location, ''),
         }
         : {
-            gender: 'All',
+            gender: 'All' as const,
             minAge: 18,
             maxAge: 65,
             budget: 2000,
@@ -137,7 +149,11 @@ const PostAudienceScreen: React.FC = () => {
     }, [selectedGender, minAgeInput, maxAgeInput, budget, duration, location]);
 
     // 6. Compose post/campaign id and isMarket flag
-    const postId = post_id || (isEdit ? campaign.id : undefined);
+    const postIdFromParams = Array.isArray(post_id) ? post_id[0] : post_id;
+    const postId =
+        (postIdFromParams != null && postIdFromParams !== '' ? String(postIdFromParams) : '') ||
+        (campaignData ? String(campaignData.id ?? '') : '') ||
+        undefined;
     const isMarket = image ? true : boostType === 'listing';
 
     const sanitizeAgeInput = (value: string) => value.replace(/[^0-9]/g, '');
@@ -172,12 +188,13 @@ const PostAudienceScreen: React.FC = () => {
                     budget,
                     duration,
                     location,
-                    postId,
-                    isMarket
+                    postId ?? '',
+                    isMarket ? 1 : 0,
                 ],
-                isEditable,
-                boostType,
-                campaignId: postId,
+                isEditable: String(!!isEditable),
+                boostType: String(Array.isArray(boostType) ? boostType[0] : boostType ?? ''),
+                campaignId: postId ?? '',
+                isMarket: String(isMarket),
             },
         });
     };
@@ -329,7 +346,7 @@ const PostAudienceScreen: React.FC = () => {
                     <View style={styles.section}>
                         <View style={styles.budgetHeader}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                                Set your daily spending limit
+                                Set your daily spending limit (GP)
                             </Text>
                             <TouchableOpacity onPress={handleEditBudget}>
                                 <Icon name="edit" size={24} color={theme.text} />
@@ -355,6 +372,9 @@ const PostAudienceScreen: React.FC = () => {
                             isDark={isDark}
                             formatValue={formatDuration}
                         />
+                        <Text style={[styles.totalGpHint, { color: theme.textSecondary }]}>
+                            Total charged upfront: GP {(Math.round(budget) * Math.round(duration)).toLocaleString()} (daily × days)
+                        </Text>
                     </View>
                 </ScrollView>
 
@@ -388,6 +408,9 @@ type Styles = {
     ageInputs: ViewStyle;
     ageInput: TextStyle;
     budgetHeader: ViewStyle;
+    totalGpHint: TextStyle;
+    suggestionWrapper: ViewStyle;
+    suggestionItem: ViewStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -458,6 +481,11 @@ const styles = StyleSheet.create<Styles>({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
+    },
+    totalGpHint: {
+        fontSize: 14,
+        marginTop: 12,
+        lineHeight: 20,
     },
 });
 

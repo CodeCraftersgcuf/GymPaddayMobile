@@ -8,7 +8,7 @@ import SuccessModal from '@/components/more/withdraw/SuccessModal';
 import { useTheme } from '@/contexts/themeContext';
 
 // Integration
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTransaction } from '@/utils/mutations/transactions';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
@@ -33,6 +33,7 @@ export default function WithdrawScreen() {
   });
 
   const { dark } = useTheme();
+  const queryClient = useQueryClient();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleFormSubmit = (data: WithdrawData) => {
@@ -55,6 +56,7 @@ export default function WithdrawScreen() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
       Toast.show({
         type: 'success',
         text1: 'Withdrawal successful!',

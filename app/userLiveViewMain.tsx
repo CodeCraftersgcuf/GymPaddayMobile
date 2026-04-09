@@ -29,6 +29,7 @@ import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage
 import * as SecureStore from 'expo-secure-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
+import { API_ENDPOINTS } from '@/apiConfig';
 
 const { width, height } = Dimensions.get('window');
 
@@ -61,7 +62,7 @@ const User_liveViewMain: React.FC = () => {
   const [dark, setDark] = useState<boolean>(true);
   const [streamEnded, setStreamEnded] = useState(false);
   const [message, setMessage] = useState<string>('');
-  const [balance, setBalance] = useState<number>(200000);
+  const [balance, setBalance] = useState<number>(0);
   const [activePanel, setActivePanel] = useState<PanelType>('none');
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -76,7 +77,7 @@ const User_liveViewMain: React.FC = () => {
         const token = await SecureStore.getItemAsync('auth_token');
         if (!token) throw new Error('No token founds');
 
-        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/balance', {
+        const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -204,7 +205,7 @@ const User_liveViewMain: React.FC = () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token found');
 
-      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/top-up', {
+      const response = await fetch(API_ENDPOINTS.USER.WALLETS.TopUp, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -223,6 +224,7 @@ const User_liveViewMain: React.FC = () => {
 
       const data = await response.json();
       console.log('✅ Top-up recorded:', data);
+      queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
 
       // Update local balance
       setBalance(prevBalance => prevBalance + amount);
@@ -233,8 +235,28 @@ const User_liveViewMain: React.FC = () => {
     }
   };
 
+  const refreshWalletBalance = async () => {
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) return;
+      const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        setBalance(Number(result.balance));
+      }
+    } catch (e) {
+      console.warn('refreshWalletBalance', e);
+    }
+  };
+
   const handleSendSuccess = async (amount: number) => {
-    setBalance((prevBalance) => prevBalance - amount * 10);
+    const coins = amount * 10;
     setActivePanel('none');
     const giftText = `Sent ${selectedGift?.emoji} x${amount}`;
     if (streamEnded) return;
@@ -242,10 +264,12 @@ const User_liveViewMain: React.FC = () => {
       await sendChatMessageAsync({
         message: giftText,
         type: 'gift',
-        amount: String(amount * 10),
+        amount: String(coins),
       });
+      await refreshWalletBalance();
     } catch (e: any) {
       if (e?.status === 410) setStreamEnded(true);
+      Alert.alert('Gift', e?.message || 'Failed to send gift');
     }
   };
 

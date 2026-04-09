@@ -49,7 +49,6 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
       return;
     }
     const amount = parseFloat(coinAmount);
-    Alert.alert('Success', `Your Gift has been send`);
     onSendSuccess(amount);
     setCoinAmount('');
   };

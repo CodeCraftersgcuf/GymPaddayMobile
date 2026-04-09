@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     SafeAreaView,
     ScrollView,
+    RefreshControl,
     Alert,
     Modal,
     Platform,
@@ -21,24 +22,61 @@ import ThemeText from '@/components/ThemedText';
 
 //Code Related to the integration
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTransaction } from '@/utils/mutations/transactions';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
-
+import { useFocusEffect } from '@react-navigation/native';
 
 type ViewMode = 'deposit' | 'payment';
+
+/** Match profile / API shapes (same fields as EditProfile: fullname, username, etc.). */
+function extractDepositorDisplayName(user: Record<string, unknown> | null | undefined): string {
+  if (!user || typeof user !== 'object') return '';
+  const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const fullname = s(user.fullname);
+  if (fullname) return fullname;
+  const fullName = s(user.fullName);
+  if (fullName) return fullName;
+  const name = s(user.name);
+  if (name) return name;
+  const first = s(user.first_name);
+  const last = s(user.last_name);
+  const combined = [first, last].filter(Boolean).join(' ').trim();
+  if (combined) return combined;
+  const username = s(user.username);
+  if (username) return username;
+  return '';
+}
+
+async function readDepositorNameFromSecureStore(): Promise<string> {
+  try {
+    const userDataStr = await SecureStore.getItemAsync('user_data');
+    if (!userDataStr) return '';
+    const userData = JSON.parse(userDataStr) as Record<string, unknown>;
+    return extractDepositorDisplayName(userData);
+  } catch {
+    return '';
+  }
+}
 
 export default function DepositPaymentTab() {
     const [currentView, setCurrentView] = useState<ViewMode>('deposit');
     const [amount, setAmount] = useState('');
     const [depositorName, setDepositorName] = useState('');
     const [useMyDetails, setUseMyDetails] = useState(false);
+    const useMyDetailsRef = useRef(useMyDetails);
+    useEffect(() => {
+        useMyDetailsRef.current = useMyDetails;
+    }, [useMyDetails]);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
-    const [userName, setUserName] = useState('John Doe'); // Default name for the checkbox
+    /** Cached display name from profile (kept in sync on focus + checkbox). */
+    const [userName, setUserName] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
     const { dark } = useTheme();
     const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
+    const queryClient = useQueryClient();
 
     const paymentDetails = {
         bankName: process.env.EXPO_PUBLIC_PAYMENT_BANK_NAME || 'GymPaddy Bank',
@@ -48,26 +86,35 @@ export default function DepositPaymentTab() {
         reason: 'Connect VIP subscription',
     };
     const hasPaymentDetails = !!paymentDetails.accountNumber;
-    // ✅ Load user_data from SecureStore on mount
-    React.useEffect(() => {
-        (async () => {
-            try {
-                const userDataStr = await SecureStore.getItemAsync('user_data');
-                if (userDataStr) {
-                    const userData = JSON.parse(userDataStr);
-                    const name = userData.fullname || userData.username || 'John Doe';
-                    console.log('User name from SecureStore:', name); // ✅ Debug log
-                    setUserName(name);
-                } else {
-                    console.log('No user_data found in SecureStore');
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            (async () => {
+                const name = await readDepositorNameFromSecureStore();
+                if (cancelled) return;
+                setUserName(name);
+                if (useMyDetailsRef.current) {
+                    setDepositorName(name);
                 }
-            } catch (error) {
-                console.error('Failed to load user data from SecureStore:', error);
+            })();
+            return () => {
+                cancelled = true;
+            };
+        }, [])
+    );
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            const name = await readDepositorNameFromSecureStore();
+            setUserName(name);
+            if (useMyDetailsRef.current) {
+                setDepositorName(name);
             }
-        })();
+        } finally {
+            setRefreshing(false);
+        }
     }, []);
-
-
 
     const createTransactionMutation = useMutation({
         mutationFn: async () => {
@@ -83,6 +130,7 @@ export default function DepositPaymentTab() {
             });
         },
         onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
             Toast.show({
                 type: 'success',
                 text1: 'Deposit successful!',
@@ -139,10 +187,20 @@ export default function DepositPaymentTab() {
         }
     };
 
-    const handleUseMyDetails = () => {
-        setUseMyDetails(!useMyDetails);
-        if (!useMyDetails) {
-            setDepositorName(userName);
+    const handleUseMyDetails = async () => {
+        const turningOn = !useMyDetails;
+        setUseMyDetails(turningOn);
+        if (turningOn) {
+            const fresh = await readDepositorNameFromSecureStore();
+            setUserName(fresh);
+            setDepositorName(fresh);
+            if (!fresh) {
+                Toast.show({
+                    type: 'info',
+                    text1: 'No name on profile',
+                    text2: 'Update your full name in Profile, or type it below.',
+                });
+            }
         } else {
             setDepositorName('');
         }
@@ -324,7 +382,17 @@ export default function DepositPaymentTab() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={['#940304']}
+                        tintColor="#940304"
+                    />
+                }
+            >
                 {/* Header */}
                 <ThemedView style={styles.header}>
                     <TouchableOpacity
