@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, StatusBar, ScrollView } from 'react-native';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
@@ -8,9 +8,14 @@ import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getPostComments } from '@/utils/queries/comments';
 import { createComment } from '@/utils/mutations/comments';
+import { API_ENDPOINTS } from '@/apiConfig';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function SinglePostScreen() {
-  const { postId } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ postId?: string | string[] }>();
+  const postIdRaw = params.postId;
+  const postId =
+    postIdRaw === undefined ? undefined : Array.isArray(postIdRaw) ? postIdRaw[0] : postIdRaw;
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
@@ -69,15 +74,17 @@ export default function SinglePostScreen() {
     }));
   };
 
-  const fetchPost = async () => {
-    if (!token || !postId) return;
+  const fetchPost = useCallback(async () => {
+    const t = token ?? (await SecureStore.getItemAsync('auth_token'));
+    if (!t || !postId) {
+      setLoading(false);
+      return;
+    }
     try {
-      const response = await axios.get(
-        `https://gympaddy.skillverse.com.pk/api/user/posts/${postId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const url = API_ENDPOINTS.USER.POSTS.Show(Number(postId));
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
 
       const rawPost = response.data;
 
@@ -105,11 +112,14 @@ export default function SinglePostScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPost();
   }, [token, postId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchPost();
+    }, [fetchPost])
+  );
 
   const handleCommentPress = (comments: any[], postId: number) => {
     setCommentModalVisible(true);

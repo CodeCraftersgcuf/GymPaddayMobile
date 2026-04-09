@@ -8,6 +8,7 @@ import BoostAdModal from '../Boost/BoostAdModal'
 import axios from 'axios'
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query'
+import { router } from 'expo-router'
 
 const UserPostDetail: React.FC<{
   idCan: {
@@ -34,12 +35,12 @@ const UserPostDetail: React.FC<{
   const handleProceed = () => {
     setModalVisible(false);
   };
-  const handleClick = () => {
-    console.log('clicked!!')
-  }
-  const hanldeEditPost = () => {
-    // router.push({ pathname: '/createpost', params: { postId: idCan.postId } })
-    router.push("/createpost");
+  const handleEditPost = () => {
+    onClose?.()
+    router.push({
+      pathname: '/createpost',
+      params: { postId: String(idCan.postId) },
+    })
   }
   const handleDeletePost = async () => {
     Alert.alert(
@@ -67,7 +68,7 @@ const UserPostDetail: React.FC<{
                 },
               });
 
-              await clientQuery.invalidateQueries(['userPosts']); // ✅ fixed typo from invalidateQuerie → invalidateQueries
+              await clientQuery.invalidateQueries({ queryKey: ['userPosts'] });
               // Close the bottom sheet after successful deletion
               if (onClose) {
                 onClose();
@@ -87,8 +88,8 @@ const UserPostDetail: React.FC<{
   const Options = [
     {
       icon: images.EditIcon,
-      title: 'Edit Profile',
-      handleFunction: hanldeEditPost,
+      title: 'Edit Post',
+      handleFunction: handleEditPost,
     },
     {
       icon: images.BoostIcon,

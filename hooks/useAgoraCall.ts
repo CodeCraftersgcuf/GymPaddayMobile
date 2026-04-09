@@ -24,15 +24,13 @@ export function useAgoraCall({
   receiverId,
   callType = 'video',
   onCallEnded,
-    channelName: providedChannelName,
+  channelName: providedChannelName,
 
 }: {
   receiverId: number;
   callType?: 'video' | 'voice';
   onCallEnded?: () => void;
-    channelName?: string; // <-- added here
-
-
+  channelName?: string;
 }) {
   const [joined, setJoined] = useState(false);
   const [callId, setCallId] = useState<number | null>(null);
@@ -57,7 +55,6 @@ export function useAgoraCall({
       }, token);
     },
     onSuccess: (res) => {
-      // console.log('✅ Call started:', res);
       setCallId(res?.id ?? null);
     },
     onError: (err) => {
@@ -73,7 +70,6 @@ export function useAgoraCall({
       }
     },
     onSettled: () => {
-      // console.log('📞 Call ended cleanup');
       onCallEnded?.();
     },
   });
@@ -90,7 +86,7 @@ export function useAgoraCall({
       }
 
       const uid = Math.floor(Math.random() * 100000);
-const channel = providedChannelName || `call_${receiverId}`;
+      const channel = providedChannelName || `call_${receiverId}`;
       setChannelName(channel);
       setLocalUid(uid);
 
@@ -104,7 +100,6 @@ const channel = providedChannelName || `call_${receiverId}`;
       });
       engineRef.current = engine;
 
-      // ✅ Set role and audio/video config
       engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
       engine.enableAudio();
       engine.enableLocalAudio(true);
@@ -118,21 +113,17 @@ const channel = providedChannelName || `call_${receiverId}`;
 
       engine.registerEventHandler({
         onJoinChannelSuccess: (channel, uid, elapsed) => {
-          // console.log(`✅ Local user joined: ${uid} in channel: ${channel} (${elapsed}ms)`);
           setJoined(true);
         },
         onUserJoined: (uid, elapsed) => {
-          // console.log(`👤 Remote user joined: ${uid} after ${elapsed}ms`);
           setRemoteUid(uid);
           engine.subscribeRemoteVideoStream(uid, true);
           engine.subscribeRemoteAudioStream(uid, true);
         },
         onUserOffline: (uid, reason) => {
-          // console.log(`❌ Remote user left: ${uid}, reason: ${reason}`);
           setRemoteUid(null);
         },
         onLeaveChannel: (stats) => {
-          // console.log('🔚 Left channel. Stats:', stats);
           setJoined(false);
           setRemoteUid(null);
         },

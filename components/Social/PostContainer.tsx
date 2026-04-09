@@ -15,6 +15,7 @@ const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,han
   return (
     <FlatList
       data={posts}
+      extraData={posts}
       keyExtractor={(item) => item.id.toString()}
       renderItem={({ item }) => (
         <PostItem

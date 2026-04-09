@@ -6,6 +6,7 @@ import {
   StatusBar,
   Alert,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
@@ -20,9 +21,9 @@ import { useTheme } from '@/contexts/themeContext';
 import { useLocalSearchParams } from 'expo-router';
 
 //Code related to integration
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPost, updatePost } from '@/utils/mutations/posts';
-import { getPostById } from '@/utils/queries/posts';
+import { getPostById, patchPostInUserPostsInfiniteCache } from '@/utils/queries/posts';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -37,9 +38,12 @@ export interface GalleryMedia {
 }
 
 export default function CreatePostScreen() {
-  const { postId } = useLocalSearchParams<{ postId?: string }>();
-  const isEditMode = Boolean(postId);
-  console.log("is Edit mode ", isEditMode);
+  const params = useLocalSearchParams<{ postId?: string | string[] }>();
+  const postIdRaw = params.postId;
+  const postId =
+    postIdRaw === undefined ? undefined : Array.isArray(postIdRaw) ? postIdRaw[0] : postIdRaw;
+  const postIdNumeric = postId ? parseInt(String(postId), 10) : NaN;
+  const isEditMode = Boolean(postId && Number.isFinite(postIdNumeric));
 
   const [galleryMedia, setGalleryMedia] = useState<GalleryMedia[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<GalleryMedia[]>([]);
@@ -53,15 +57,23 @@ export default function CreatePostScreen() {
   const theme = useTheme();
   const dark = theme?.dark ?? false; // Safety check in case theme context isn't initialized
   const router = useRouter();
-  const  tokenn = async ()=>{
-    const token = await SecureStore.getItemAsync('auth_token');
-    return token;
-  }
-  // Fetch existing post data if in edit mode
-  const { data: existingPost, isLoading: isLoadingPost } = useQuery({
+  const queryClient = useQueryClient();
+
+  // Fetch existing post data if in edit mode (must await token — passing tokenn() was a Promise → Bearer [object Object])
+  const {
+    data: existingPost,
+    isLoading: isLoadingPost,
+    isError: isPostLoadError,
+    error: postLoadError,
+    refetch: refetchPost,
+  } = useQuery({
     queryKey: ['post', postId],
-    queryFn: () => getPostById(parseInt(postId), tokenn()),
-    enabled: isEditMode && !!postId,
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('Not authenticated');
+      return getPostById(postIdNumeric, token);
+    },
+    enabled: isEditMode && !!postId && Number.isFinite(postIdNumeric),
   });
 
   // Populate form with existing post data
@@ -90,8 +102,8 @@ export default function CreatePostScreen() {
   // Create post mutation
   const createPostMutation = useMutation({
     mutationFn: createPost,
-    onSuccess: (data) => {
-      console.log('🎉 Post Created Successfully:', data);
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
       Toast.show({
         type: 'success',
         text1: 'Post Created!',
@@ -113,14 +125,25 @@ export default function CreatePostScreen() {
   // }
   const updatePostMutation = useMutation({
     mutationFn: updatePost,
-    onSuccess: (data) => {
-      console.log('🎉 Post Updated Successfully:', data);
+    onSuccess: async (updatedPost: unknown) => {
+      if (postId) {
+        patchPostInUserPostsInfiniteCache(
+          queryClient,
+          postId,
+          updatedPost as Record<string, unknown>
+        );
+        await queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+      await queryClient.refetchQueries({ queryKey: ['userPosts'] });
+      await queryClient.invalidateQueries({ queryKey: ['postComments'] });
       Toast.show({
         type: 'success',
         text1: 'Post Updated!',
         text2: 'Your post has been updated successfully',
         visibilityTime: 500,
       });
+      setIsSubmittingLocal(false);
       setTimeout(() => router.back(), 600);
     },
     onError: (error: any) => {
@@ -556,13 +579,36 @@ export default function CreatePostScreen() {
   };
 
   // Show loading state while fetching post data in edit mode
-  if ((isEditMode && isLoadingPost)) {
+  if (isEditMode && isLoadingPost) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>
             {isEditMode ? 'Loading post data...' : 'Loading gallery...'}
           </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isEditMode && isPostLoadError && !isLoadingPost) {
+    const errMsg =
+      postLoadError instanceof Error && postLoadError.message === 'Not authenticated'
+        ? 'Please sign in again to edit this post.'
+        : 'Could not load this post. Check your connection or try again.';
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
+        <View style={[styles.loadingContainer, { paddingHorizontal: 24 }]}>
+          <Text style={[styles.loadingText, { textAlign: 'center', marginBottom: 20 }]}>{errMsg}</Text>
+          <TouchableOpacity
+            style={styles.errorActionBtn}
+            onPress={() => refetchPost()}
+          >
+            <Text style={styles.errorActionBtnText}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.errorActionBtn, styles.errorActionBtnSecondary]} onPress={() => router.back()}>
+            <Text style={[styles.errorActionBtnText, { color: dark ? '#fff' : '#333' }]}>Go back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -626,6 +672,25 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#666',
+  },
+  errorActionBtn: {
+    backgroundColor: '#940304',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    marginBottom: 12,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  errorActionBtnSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  errorActionBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   permissionContainer: {
     flex: 1,

@@ -171,7 +171,7 @@ export default function SocialFeedScreen() {
       // Exponential backoff: 1s, 2s, 4s
       return Math.min(1000 * 2 ** attemptIndex, 4000);
     },
-    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
+    staleTime: 0, // Always treat as stale so invalidation/refetch after edit updates the feed
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 

@@ -1,6 +1,41 @@
 import { API_ENDPOINTS } from "../../apiConfig";
 import { apiCall } from "../customApiCall";
 
+/** RN + axios PUT + FormData sets wrong Content-Type (urlencoded); use fetch like create. */
+async function fetchPostMultipart(
+  url: string,
+  method: 'POST' | 'PUT',
+  data: FormData,
+  token: string
+): Promise<any> {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+    body: data,
+  });
+
+  const text = await response.text();
+  let result: any;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    console.error(
+      '❌ Server returned non-JSON response (status ' + response.status + '):',
+      text.substring(0, 500)
+    );
+    throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(result?.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return result;
+}
+
 export const createPost = async ({
   data,
   token,
@@ -9,30 +44,7 @@ export const createPost = async ({
   token: string;
 }) => {
   try {
-    const response = await fetch(API_ENDPOINTS.USER.POSTS.Create, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-        // Don't set Content-Type for FormData - let the browser/React Native set it automatically with boundary
-      },
-      body: data,
-    });
-
-    const text = await response.text();
-    let result: any;
-    try {
-      result = JSON.parse(text);
-    } catch (e) {
-      console.error('❌ Server returned non-JSON response (status ' + response.status + '):', text.substring(0, 500));
-      throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
-    }
-
-    if (!response.ok) {
-      throw new Error(result?.message || `HTTP error! status: ${response.status}`);
-    }
-
-    return result;
+    return await fetchPostMultipart(API_ENDPOINTS.USER.POSTS.Create, 'POST', data, token);
   } catch (error: any) {
     console.error('❌ Create Post Error:', error);
     throw error;
@@ -138,7 +150,16 @@ export const updatePost = async ({
   };
   token: string;
 }) => {
-  return await apiCall(API_ENDPOINTS.USER.POSTS.Update(Number(postId)), "PUT", data, token);
+  const url = API_ENDPOINTS.USER.POSTS.Update(Number(postId));
+  if (data instanceof FormData) {
+    try {
+      return await fetchPostMultipart(url, 'PUT', data, token);
+    } catch (error: any) {
+      console.error('❌ Update Post Error:', error);
+      throw error;
+    }
+  }
+  return await apiCall(url, 'PUT', data, token);
 };
 
 export const deletePost = async ({
