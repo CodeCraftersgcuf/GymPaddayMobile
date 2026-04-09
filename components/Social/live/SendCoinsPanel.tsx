@@ -6,6 +6,9 @@ import {
   StyleSheet,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 
 interface GiftItem {
@@ -54,7 +57,11 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
   };
 
   return (
-    <View style={[styles.sendPanel, { backgroundColor: themeStyles.panelBackground }]}>
+    <KeyboardAvoidingView
+      style={[styles.sendPanel, { backgroundColor: themeStyles.panelBackground }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+    >
       <View style={styles.sendHeader}>
         <Text style={[styles.giftsTitle, { color: themeStyles.textColor }]}>Gifts</Text>
         <View style={styles.balanceContainer}>
@@ -68,7 +75,12 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
         </View>
       </View>
 
-      <View style={styles.sendContent}>
+      <ScrollView
+        style={styles.sendScroll}
+        contentContainerStyle={styles.sendScrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.giftPreview}>
           <Text style={styles.selectedGiftEmoji}>{selectedGift.emoji}</Text>
           <Text style={[styles.selectedGiftName, { color: themeStyles.textColor }]}>
@@ -79,17 +91,20 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
         <Text style={[styles.sendTitle, { color: themeStyles.textColor }]}>
           Send GP Coins to this <Text style={[styles.streamerText, { color: themeStyles.textColorSecondary }]}>streamer</Text>
         </Text>
-        
+
         <Text style={[styles.sendDescription, { color: themeStyles.textColorSecondary }]}>
-        Enter Coing Quanity
+          Enter coin quantity
         </Text>
 
         <TextInput
-          style={[styles.amountInput, { 
-            backgroundColor: themeStyles.backgroundColor,
-            color: themeStyles.textColor,
-            borderColor: themeStyles.textColorSecondary 
-          }]}
+          style={[
+            styles.amountInput,
+            {
+              backgroundColor: themeStyles.backgroundColor,
+              color: themeStyles.textColor,
+              borderColor: themeStyles.textColorSecondary,
+            },
+          ]}
           placeholder="Enter amount"
           placeholderTextColor={themeStyles.textColorSecondary}
           value={coinAmount}
@@ -100,17 +115,26 @@ const SendCoinsPanel: React.FC<SendCoinsPanelProps> = ({
         <TouchableOpacity style={styles.sendButton} onPress={handleSendCoins}>
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   sendPanel: {
     flex: 1,
+    maxHeight: '100%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 20,
+  },
+  sendScroll: {
+    flexGrow: 1,
+  },
+  sendScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   sendHeader: {
     flexDirection: 'row',
@@ -138,10 +162,6 @@ const styles = StyleSheet.create({
   },
   coinEmoji: {
     fontSize: 16,
-  },
-  sendContent: {
-    paddingHorizontal: 20,
-    flex: 1,
   },
   giftPreview: {
     alignItems: 'center',

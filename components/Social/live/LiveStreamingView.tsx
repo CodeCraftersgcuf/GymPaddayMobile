@@ -26,6 +26,7 @@ import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage
 import { Alert } from 'react-native';
 import { TextInput } from 'react-native-gesture-handler';
 import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
+import { buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
 
 interface LiveStreamingViewProps {
   dark: boolean;
@@ -357,8 +358,10 @@ export default function LiveStreamingView({
 
           {fetchLiveVideoCallToken.data && (
             <WebView
+              originWhitelist={['*']}
               source={{
-                uri: `https://skillverse.com.pk/live.html?channel=${CHANNEL_NAME}&role=host`,
+                html: buildLiveStreamWebHtml(CHANNEL_NAME, 'host'),
+                baseUrl: 'https://skillverse.com.pk/',
               }}
               javaScriptEnabled
               domStorageEnabled

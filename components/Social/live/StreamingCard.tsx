@@ -76,16 +76,16 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
     <View style={styles.container}>
       {/* Camera Preview */}
       <View style={styles.cameraContainer}>
-        <CameraView style={styles.cameraPreview} facing={facing}>
-          <TouchableOpacity
-            style={styles.flipCamera}
-            onPress={() =>
-              setFacing((prev) => (prev === 'back' ? 'front' : 'back'))
-            }
-          >
-            <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </CameraView>
+        <CameraView style={styles.cameraPreview} facing={facing} />
+        <TouchableOpacity
+          style={styles.flipCamera}
+          activeOpacity={0.85}
+          onPress={() =>
+            setFacing((prev) => (prev === 'back' ? 'front' : 'back'))
+          }
+        >
+          <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {/* Streaming Info Card */}
@@ -194,6 +194,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 15,
     right: 15,
+    zIndex: 10,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
     padding: 8,

@@ -1,60 +1,52 @@
 // components/LiveStreamFeed.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FlatList, View, StyleSheet } from 'react-native';
 import LiveCard from './LiveCard';
+import { isLiveStreamDiscoverable, liveStreamListKey } from '@/utils/liveStreamStatus';
 
 const LiveStreamFeed = ({ streams }: { streams: any[] }) => {
-  if (!streams?.length) return null;
+  const activeStreams = useMemo(
+    () =>
+      (Array.isArray(streams) ? streams : []).filter((item) =>
+        isLiveStreamDiscoverable(item as Record<string, unknown>)
+      ),
+    [streams]
+  );
+
+  if (!activeStreams.length) return null;
 
   return (
     <FlatList
-      data={streams}
-      keyExtractor={(item) => item.id.toString()}
+      data={activeStreams}
+      extraData={activeStreams}
+      keyExtractor={(item) => liveStreamListKey(item as Record<string, unknown>)}
       contentContainerStyle={styles.container}
+      removeClippedSubviews={false}
       renderItem={({ item }) => {
-        const latestImage =
-          item?.user?.latest_image_post?.media?.[0]?.url ??
-          item?.user?.profile_picture_url;
-
-        // Backend (Laravel) uses is_active + status; some clients may still send is_live / ended_at.
-        const isActiveValue =
-          item?.is_active === true ||
-          item?.is_active === 1 ||
-          item?.is_active === '1' ||
-          item?.is_active === 'true';
-        const legacyIsLive =
-          item?.is_live === true ||
-          item?.is_live === 1 ||
-          item?.is_live === '1' ||
-          item?.is_live === 'true';
-        const statusEnded = item?.status === 'ended' || item?.status === 'paused';
-        const hasNotEnded =
-          item?.ended_at === null || item?.ended_at === undefined || item?.ended_at === '';
-        const isActuallyLive =
-          (isActiveValue || legacyIsLive) && !statusEnded && hasNotEnded;
+        const postImageUrl =
+          item?.user?.latest_image_post?.media?.[0]?.url ||
+          item?.user?.profile_picture_url ||
+          '';
+        const profilePictureUrl = item?.user?.profile_picture_url || '';
 
         return (
           <View style={styles.cardWrapper}>
-           <LiveCard
-  id={item?.id}
-  postImageUrl={
-    item?.user?.latest_image_post?.media?.[0]?.url ||
-    item?.user?.profile_picture_url
-  }
-  profilePictureUrl={item?.user?.profile_picture_url}
-  title={item?.title}
-  userName={item?.user?.fullname || item?.user?.username}
-  viewers={
-              typeof item?.current_viewers_count === 'number'
-                ? item.current_viewers_count
-                : Array.isArray(item?.audiences)
-                  ? item.audiences.filter((a: any) => a?.left_at == null).length
-                  : 0
-            }
-  channelName={item?.agora_channel}
-  timeAgo={isActuallyLive ? 'Live now' : 'Offline'}
-/>
-
+            <LiveCard
+              id={item?.id}
+              postImageUrl={postImageUrl}
+              profilePictureUrl={profilePictureUrl}
+              title={item?.title}
+              userName={item?.user?.fullname || item?.user?.username}
+              viewers={
+                typeof item?.current_viewers_count === 'number'
+                  ? item.current_viewers_count
+                  : Array.isArray(item?.audiences)
+                    ? item.audiences.filter((a: any) => a?.left_at == null).length
+                    : 0
+              }
+              channelName={item?.agora_channel}
+              timeAgo="Live now"
+            />
           </View>
         );
       }}

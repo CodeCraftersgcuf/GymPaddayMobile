@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,11 @@ import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 import ThemeText from '@/components/ThemedText';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import {
+  resolveLatestUserSnapshot,
+  type LatestUserSnapshot,
+} from '@/utils/resolveLatestUserProfile';
 import * as SecureStore from 'expo-secure-store';
 import { API_ENDPOINTS } from '@/apiConfig';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
@@ -64,6 +69,10 @@ export default function More() {
   const [topupAmount, setTopupAmount] = useState('');
   const [depositorName, setDepositorName] = useState('');
   const [useMyDetails, setUseMyDetails] = useState(false);
+  const useMyDetailsRef = useRef(useMyDetails);
+  useEffect(() => {
+    useMyDetailsRef.current = useMyDetails;
+  }, [useMyDetails]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [userName, setUserName] = useState('John Doe');
   const [userEmail, setUserEmail] = useState('test@example.com');
@@ -72,30 +81,39 @@ export default function More() {
   const webViewRef = React.useRef<WebView>(null);
   const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
 
-  React.useEffect(() => {
-    (async () => {
+  /** Prefer live API profile (matches Edit Profile), persist to SecureStore, refresh UI. */
+  const applyUserSnapshot = useCallback(
+    async (options?: { depositorIfChecked?: boolean }): Promise<LatestUserSnapshot | null> => {
       try {
-        const userDataStr = await SecureStore.getItemAsync('user_data');
-        if (userDataStr) {
-          const userData = JSON.parse(userDataStr);
-          if (userData.profile_picture_url) {
-            setProfileImage(userData.profile_picture_url);
-          } else {
-            setProfileImage(defatulImage); // fallback to prop
-          }
-          const name = userData.fullname || userData.username || 'John Doe';
-          const email = userData.email || 'test@example.com';
-          setUserName(name);
-          setUserEmail(email);
-        } else {
-          setProfileImage(defatulImage); // fallback to prop
+        const snap = await resolveLatestUserSnapshot();
+        setUserName(snap.displayName);
+        setUserEmail(snap.email);
+        setProfileImage(snap.profilePictureUrl || defatulImage);
+        if (options?.depositorIfChecked && useMyDetailsRef.current && Platform.OS !== 'ios') {
+          setDepositorName(snap.depositorName);
         }
+        return snap;
       } catch (error) {
-        console.error('Error loading user data:', error);
-        setProfileImage(defatulImage); // fallback to prop
+        console.error('Error loading user profile:', error);
+        setProfileImage(defatulImage);
+        return null;
       }
-    })();
-  }, []);
+    },
+    [defatulImage]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        await applyUserSnapshot({ depositorIfChecked: true });
+        if (cancelled) return;
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [applyUserSnapshot])
+  );
   React.useEffect(() => {
     (async () => {
       try {
@@ -153,21 +171,14 @@ export default function More() {
         setBalance(0);
       }
 
-      // Also refresh user profile data including profile image
-      const userDataStr = await SecureStore.getItemAsync('user_data');
-      if (userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        if (userData.profile_picture_url) {
-          setProfileImage(userData.profile_picture_url);
-        }
-      }
+      await applyUserSnapshot({ depositorIfChecked: true });
     } catch (error) {
       console.error('Refresh balance error:', error);
     } finally {
       setLoadingBalance(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [applyUserSnapshot]);
 
 
   const userProfile = {
@@ -179,10 +190,13 @@ export default function More() {
     setIsBalanceHidden(!isBalanceHidden);
   };
 
-  const handleTopup = () => {
+  const handleTopup = async () => {
     if (Platform.OS === 'ios') {
       return;
     }
+    await applyUserSnapshot({
+      depositorIfChecked: useMyDetailsRef.current,
+    });
     setShowTopupModal(true);
   };
 
@@ -247,11 +261,12 @@ export default function More() {
         setUseMyDetails(false);
       }
     } else {
-      // For Android, use Flutterwave payment gateway
-      // Use email from user data, or fallback to a default for testing
-      const paymentEmail = userEmail && userEmail !== 'test@example.com' 
-        ? userEmail 
-        : 'user@gympaddy.com'; // Fallback email for payment
+      // For Android, use Flutterwave payment gateway (use fresh API snapshot — state may lag)
+      const snap = await applyUserSnapshot();
+      const paymentEmail =
+        snap?.email && snap.email !== 'test@example.com'
+          ? snap.email
+          : 'user@gympaddy.com';
       
       console.log('💳 Opening Flutterwave payment gateway...', {
         amount: amountValue,
@@ -326,10 +341,19 @@ export default function More() {
     }
   };
 
-  const handleUseMyDetails = () => {
-    setUseMyDetails(!useMyDetails);
-    if (!useMyDetails) {
-      setDepositorName(userName);
+  const handleUseMyDetails = async () => {
+    const turningOn = !useMyDetails;
+    setUseMyDetails(turningOn);
+    if (turningOn) {
+      try {
+        const snap = await resolveLatestUserSnapshot();
+        setUserName(snap.displayName);
+        setUserEmail(snap.email);
+        setProfileImage(snap.profilePictureUrl || defatulImage);
+        setDepositorName(snap.depositorName);
+      } catch {
+        setDepositorName(userName);
+      }
     } else {
       setDepositorName('');
     }

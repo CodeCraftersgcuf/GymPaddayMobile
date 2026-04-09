@@ -384,13 +384,13 @@ const PostAudienceScreen: React.FC = () => {
                     isDark={isDark}
                 />
 
-                {/* <EditBudgetBottomSheet
+                <EditBudgetBottomSheet
                     ref={bottomSheetRef}
                     isDark={isDark}
                     budget={budget}
                     duration={duration}
                     onSave={handleSaveBudget}
-                /> */}
+                />
             </View>
         </GestureHandlerRootView>
     );

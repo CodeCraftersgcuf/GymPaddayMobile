@@ -9,20 +9,19 @@ import {
   TextInput,
   ScrollView,
   Dimensions,
-  Modal,
-  Pressable,
   Alert,
   Keyboard,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
+import Modal from 'react-native-modal';
 import { useRouter } from 'expo-router';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import GiftsPanel from '@/components/Social/live/GiftsPanel';
 import TopupPanel from '@/components/Social/live/TopupPanel';
 import SendCoinsPanel from '@/components/Social/live/SendCoinsPanel';
 import { useLocalSearchParams } from 'expo-router';
-import LiveStreamingPlayer from '@/components/Social/live/LiveStreamingPlayer';
+import { buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
 import WebView from 'react-native-webview';
 import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
 import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
@@ -370,8 +369,10 @@ const User_liveViewMain: React.FC = () => {
           </View>
         ) : channelName ? (
           <WebView
+            originWhitelist={['*']}
             source={{
-              uri: `https://skillverse.com.pk/live.html?channel=${channelName}&role=audience`,
+              html: buildLiveStreamWebHtml(String(channelName), 'audience'),
+              baseUrl: 'https://skillverse.com.pk/',
             }}
             javaScriptEnabled
             domStorageEnabled
@@ -432,21 +433,25 @@ const User_liveViewMain: React.FC = () => {
         </View>
       </View>
 
-      {activePanel !== 'none' && (
-        <Modal
-          visible={activePanel !== 'none'}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={closePanel}
-        >
-          {/* <View style={{flex:1}}> */}
-          <Pressable style={styles.modalBackdrop} onPress={closePanel} />
-          <View style={styles.bottomPanelContainer}>
-            {renderPanel()}
-          </View>
-          {/* </View> */}
-        </Modal>
-      )}
+      <Modal
+        isVisible={activePanel !== 'none'}
+        onBackdropPress={closePanel}
+        onBackButtonPress={closePanel}
+        onSwipeComplete={closePanel}
+        swipeDirection="down"
+        propagateSwipe
+        avoidKeyboard
+        style={styles.giftSheetModal}
+        backdropOpacity={0.45}
+        useNativeDriverForBackdrop
+        animationIn="slideInUp"
+        animationOut="slideOutDown"
+      >
+        <View style={styles.bottomPanelContainer}>
+          <View style={styles.giftSheetHandle} />
+          {renderPanel()}
+        </View>
+      </Modal>
 
       {/* Bottom Input - Only show when no panel is active */}
       {activePanel === 'none' && !streamEnded && (
@@ -506,17 +511,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  // Add to your StyleSheet.create
-  modalBackdrop: {
-    height: 300,
-    // backgroundColor:"red",
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    // position: 'absolute',
-    // top: 0,
-    // left: 0,
-    // right: 0,
-    // bottom: 0,
-    zIndex: 1,
+  giftSheetModal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+  giftSheetHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(120, 120, 120, 0.55)',
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 4,
   },
   headerTitle: {
     position: 'absolute',
@@ -678,13 +684,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     padding: 8,
   },
+  /** Must set a real height budget: maxHeight alone + flex children collapses to 0 on RN. */
   bottomPanelContainer: {
-    flex: 1,
+    width: '100%',
+    minHeight: height * 0.52,
+    maxHeight: height * 0.88,
     backgroundColor: 'rgba(0, 0, 0, 0)',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    // padding: 16,
-    // paddingBottom: 32,
+    overflow: 'hidden',
   },
 });
 

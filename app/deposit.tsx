@@ -28,38 +28,9 @@ import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
 import { useFocusEffect } from '@react-navigation/native';
+import { resolveLatestDepositorName } from '@/utils/resolveLatestUserProfile';
 
 type ViewMode = 'deposit' | 'payment';
-
-/** Match profile / API shapes (same fields as EditProfile: fullname, username, etc.). */
-function extractDepositorDisplayName(user: Record<string, unknown> | null | undefined): string {
-  if (!user || typeof user !== 'object') return '';
-  const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-  const fullname = s(user.fullname);
-  if (fullname) return fullname;
-  const fullName = s(user.fullName);
-  if (fullName) return fullName;
-  const name = s(user.name);
-  if (name) return name;
-  const first = s(user.first_name);
-  const last = s(user.last_name);
-  const combined = [first, last].filter(Boolean).join(' ').trim();
-  if (combined) return combined;
-  const username = s(user.username);
-  if (username) return username;
-  return '';
-}
-
-async function readDepositorNameFromSecureStore(): Promise<string> {
-  try {
-    const userDataStr = await SecureStore.getItemAsync('user_data');
-    if (!userDataStr) return '';
-    const userData = JSON.parse(userDataStr) as Record<string, unknown>;
-    return extractDepositorDisplayName(userData);
-  } catch {
-    return '';
-  }
-}
 
 export default function DepositPaymentTab() {
     const [currentView, setCurrentView] = useState<ViewMode>('deposit');
@@ -90,7 +61,7 @@ export default function DepositPaymentTab() {
         useCallback(() => {
             let cancelled = false;
             (async () => {
-                const name = await readDepositorNameFromSecureStore();
+                const name = await resolveLatestDepositorName();
                 if (cancelled) return;
                 setUserName(name);
                 if (useMyDetailsRef.current) {
@@ -106,7 +77,7 @@ export default function DepositPaymentTab() {
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         try {
-            const name = await readDepositorNameFromSecureStore();
+            const name = await resolveLatestDepositorName();
             setUserName(name);
             if (useMyDetailsRef.current) {
                 setDepositorName(name);
@@ -191,7 +162,7 @@ export default function DepositPaymentTab() {
         const turningOn = !useMyDetails;
         setUseMyDetails(turningOn);
         if (turningOn) {
-            const fresh = await readDepositorNameFromSecureStore();
+            const fresh = await resolveLatestDepositorName();
             setUserName(fresh);
             setDepositorName(fresh);
             if (!fresh) {
