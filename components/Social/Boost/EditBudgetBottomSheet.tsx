@@ -58,9 +58,23 @@ const EditBudgetBottomSheet = forwardRef<BottomSheet, EditBudgetBottomSheetProps
         Alert.alert('Invalid input', 'Please enter whole numbers for daily budget (GP) and duration (days).');
         return;
       }
-      const clampedB = Math.min(MAX_DAILY_GP, Math.max(MIN_DAILY_GP, b));
-      const clampedD = Math.min(MAX_DAYS, Math.max(MIN_DAYS, d));
-      onSave(clampedB, clampedD);
+
+      if (b < MIN_DAILY_GP) {
+        Alert.alert('Invalid budget', `Minimum daily budget is GP ${MIN_DAILY_GP.toLocaleString()}.`);
+        return;
+      }
+
+      if (b > MAX_DAILY_GP) {
+        Alert.alert('Invalid budget', `Maximum daily budget is GP ${MAX_DAILY_GP.toLocaleString()}.`);
+        return;
+      }
+
+      if (d < MIN_DAYS || d > MAX_DAYS) {
+        Alert.alert('Invalid duration', `Duration must be between ${MIN_DAYS} and ${MAX_DAYS} days.`);
+        return;
+      }
+
+      onSave(b, d);
       close();
     }, [budgetStr, durationStr, onSave, close]);
 
