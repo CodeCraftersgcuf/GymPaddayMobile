@@ -126,6 +126,9 @@ const ReviewAdScreen: React.FC = () => {
     const durationDays = Math.max(1, Math.round(Number(audience.duration) || 1));
     const totalGpCharge = isEditableBool ? 0 : dailyBudgetGp * durationDays;
     const canAffordBoost = isEditableBool || balance >= totalGpCharge;
+    const estimatedReachMin = Math.max(0, dailyBudgetGp * 10);
+    const estimatedReachMax = Math.max(0, dailyBudgetGp * 20);
+    const estimatedReachText = `${estimatedReachMin.toLocaleString()} - ${estimatedReachMax.toLocaleString()} Accounts`;
 
     const boostMutation = useMutation({
         mutationFn: async () => {
@@ -311,7 +314,7 @@ const ReviewAdScreen: React.FC = () => {
 
                 <View style={[styles.reachContainer, { backgroundColor: theme.reachCard }]}>
                     <Text style={[styles.reachLabel, { color: theme.background }]}>Estimated Reach</Text>
-                    <Text style={[styles.reachValue, { color: theme.background }]}>1k - 2k Accounts</Text>
+                    <Text style={[styles.reachValue, { color: theme.background }]}>{estimatedReachText}</Text>
                 </View>
             </ScrollView>
 
