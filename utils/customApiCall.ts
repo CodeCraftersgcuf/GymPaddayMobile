@@ -124,18 +124,32 @@ export const apiCall = async (
           apiErrorCode
         );
       }
+
+      // Axios error with no HTTP response (offline, DNS, TLS, timeout)
+      const code = error.code;
+      let networkMessage =
+        'Unable to reach the server. Check your internet connection and try again.';
+      if (code === 'ECONNABORTED' || /timeout/i.test(error.message || '')) {
+        networkMessage = 'The request timed out. Please try again.';
+      } else if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+        networkMessage = 'Could not connect. Check your network or try again shortly.';
+      } else if (error.message === 'Network Error') {
+        networkMessage =
+          'Network error. Check Wi‑Fi or mobile data, then try again.';
+      }
+      throw new ApiError(undefined, 'Network Error', networkMessage);
     }
 
     console.error('Generic error details:', {
-      message: error.message,
-      stack: error.stack,
-      ...error
+      message: (error as Error).message,
+      stack: (error as Error).stack,
     });
 
     throw new ApiError(
       undefined,
       'Network Error',
-      'Something went wrong. Please check your connection or API URL.'
+      (error as Error)?.message ||
+        'Something went wrong. Please try again.'
     );
   }
 };

@@ -104,12 +104,9 @@ const [userId, setUserId] = useState<string | null>(null);
   }, [refreshing]); // Add refreshing as dependency
 
   React.useEffect(() => {
-    if (!notificationID) return;
-
-    // Keep bell indicator fresh for admin-sent notifications.
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, [notificationID]);
+  }, []);
   const themeStyles = StyleSheet.create({
     notificationView: {
       backgroundColor: dark ? '#212121' : '#e5e5e5',
@@ -133,34 +130,38 @@ router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } 
 
   return (
     <ThemedView darkColor="black" style={styles.header}>
-<Image source={logoNew} style={styles.logo} resizeMode="contain" />
+      <Pressable
+        onPress={() => router.push('/(tabs)')}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Home"
+      >
+        <Image source={logoNew} style={styles.logo} resizeMode="contain" />
+      </Pressable>
       <ThemedView style={styles.alignCenter}>
-        {admin?.profile && (
+        {userId ? (
           <Pressable onPress={() => hanldeViewProfile()}>
-            <Image source={{ uri: profileImage }} style={styles.UserImage} />
+            <Image source={{ uri: profileImage || defatulImage }} style={styles.UserImage} />
           </Pressable>
-        )}
+        ) : null}
         {children}
-       {notificationID && (
-  <View style={{ flexDirection: 'row', gap: 10 }}>
-    <Pressable onPress={() => router.push('/search')}>
-      <ThemedView style={themeStyles.notificationView}>
-        <Feather name="search" size={20} color={dark ? '#fff' : '#000'} />
-      </ThemedView>
-    </Pressable>
-    <Pressable onPress={() => router.push('/notification')}>
-      <ThemedView style={themeStyles.notificationView}>
-        <Image
-          source={images.bellIcon}
-          tintColor={dark ? 'white' : 'black'}
-          style={styles.notifcationIcon}
-        />
-        {unreadCount > 0 && <View style={styles.unreadDot} />}
-      </ThemedView>
-    </Pressable>
-  </View>
-)}
-
+        <View style={{ flexDirection: 'row', gap: 10 }} pointerEvents="box-none">
+          <Pressable onPress={() => router.push('/search')} hitSlop={8}>
+            <ThemedView style={themeStyles.notificationView}>
+              <Feather name="search" size={20} color={dark ? '#fff' : '#000'} />
+            </ThemedView>
+          </Pressable>
+          <Pressable onPress={() => router.push('/notification')} hitSlop={8}>
+            <ThemedView style={themeStyles.notificationView}>
+              <Image
+                source={images.bellIcon}
+                tintColor={dark ? 'white' : 'black'}
+                style={styles.notifcationIcon}
+              />
+              {unreadCount > 0 && <View style={styles.unreadDot} />}
+            </ThemedView>
+          </Pressable>
+        </View>
       </ThemedView>
     </ThemedView>
   );
@@ -197,12 +198,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30',
   },
   logo: {
-  width: 120, // ✅ Adjust as needed
-  height: 60,
-  textAlign:'left',
-  marginLeft:-20
-  
-},
+    width: 120,
+    height: 60,
+    marginLeft: -12,
+  },
 
 });
 

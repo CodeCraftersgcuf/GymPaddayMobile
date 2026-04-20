@@ -99,9 +99,15 @@ export default function Chat() {
       conv.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .filter((conv) => {
-      if (!selectedType) return true; // no filter applied
-      return conv.type === selectedType;
+      if (!selectedType) return true;
+      const t = String(conv.type ?? '').toLowerCase();
+      return t === String(selectedType).toLowerCase();
     });
+
+  const headerFilter =
+    selectedType === 'marketplace' || selectedType === 'social'
+      ? selectedType
+      : 'all';
 
   // AvatarList: use users from context (not API)
   const handleAvatarPress = (userId: string) => {
@@ -169,7 +175,11 @@ export default function Chat() {
   return (
     <SafeAreaView style={styles.container}>
       <ThemedView style={styles.content} darkColor={dark ? '#000' : '#FAFAFA'}>
-        <Header onBack={() => router.back()} onOpenSocials={() => setShowSocialModal(true)} />
+        <Header
+          onBack={() => router.back()}
+          onOpenSocials={() => setShowSocialModal(true)}
+          selectedFilter={headerFilter}
+        />
         <SearchBar query={searchQuery} onChange={setSearchQuery} />
         {/* Show loading indicator while users are loading */}
         {isLoading ? (

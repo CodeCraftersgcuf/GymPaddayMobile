@@ -17,9 +17,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Video, Audio } from 'expo-av';
+import { Video, Audio, ResizeMode } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
+import { useQueryClient } from '@tanstack/react-query';
 import { STORY_MUSIC_LIBRARY, MUSIC_CATEGORIES, getMusicByGenre, StoryMusic } from '@/constants/storyMusic';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -33,7 +34,9 @@ export const screenOptions = {
 export default function StoryPreview() {
   const { selected } = useLocalSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedMusicMap, setSelectedMusicMap] = useState<Record<number, StoryMusic>>({});
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -96,16 +99,12 @@ export default function StoryPreview() {
   const handleNext = () => {
     if (currentIndex < mediaList.length - 1) {
       setCurrentIndex(currentIndex + 1);
-    } else {
-      router.replace('/(tabs)');
     }
   };
 
   const handleBack = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
-    } else {
-      router.back();
     }
   };
 
@@ -247,55 +246,78 @@ export default function StoryPreview() {
     };
   }, [sound]);
 
+  const uploadOneStory = async (
+    media: { id: string | number; uri: string; mediaType: string },
+    index: number,
+    token: string
+  ) => {
+    const formData = new FormData();
+    formData.append('media', {
+      uri: media.uri,
+      name: `story_${media.id}.${media.mediaType === 'video' ? 'mp4' : 'jpg'}`,
+      type: media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+    } as any);
+    formData.append('media_type', media.mediaType);
+    formData.append('caption', '');
+
+    if (selectedMusicMap[index]?.title && selectedMusicMap[index]?.preview) {
+      formData.append('music_title', selectedMusicMap[index].title);
+      formData.append('music_url', selectedMusicMap[index].preview);
+      if (selectedMusicMap[index].artist) {
+        formData.append('music_artist', selectedMusicMap[index].artist!);
+      }
+    }
+
+    const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      body: formData,
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result?.message || 'Upload failed');
+    }
+    return result;
+  };
+
   const handleUpload = async () => {
     try {
       setIsUploading(true);
+      setUploadProgress({ done: 0, total: Math.max(1, mediaList.length) });
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('User not authenticated.');
 
-      for (let i = 0; i < mediaList.length; i++) {
-        const media = mediaList[i];
-        const formData = new FormData();
-        formData.append('media', {
-          uri: media.uri,
-          name: `story_${media.id}.${media.mediaType === 'video' ? 'mp4' : 'jpg'}`,
-          type: media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-        } as any);
-        formData.append('media_type', media.mediaType);
-        formData.append('caption', '');
+      Toast.show({
+        type: 'info',
+        text1: 'Uploading',
+        text2: `Starting upload of ${mediaList.length} item(s)…`,
+        visibilityTime: 2000,
+      });
 
-        if (selectedMusicMap[i] && selectedMusicMap[i].title && selectedMusicMap[i].preview) {
-          console.log(selectedMusicMap[i], "selected music");
-          formData.append('music_title', selectedMusicMap[i].title);
-          formData.append('music_url', selectedMusicMap[i].preview);
-          if (selectedMusicMap[i].artist) {
-            formData.append('music_artist', selectedMusicMap[i].artist);
-          }
-        }
+      let completed = 0;
+      await Promise.all(
+        mediaList.map(async (media: any, i: number) => {
+          await uploadOneStory(media, i, token);
+          completed += 1;
+          setUploadProgress({ done: completed, total: mediaList.length });
+        })
+      );
 
-        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-          body: formData,
-        });
-
-        const result = await response.json();
-        if (!response.ok) {
-          Toast.show({ type: 'error', text1: 'Upload failed', text2: result?.message || 'Unknown error' });
-          setIsUploading(false);
-          return;
-        }
-      }
-
+      queryClient.invalidateQueries({ queryKey: ['userPosts'] });
       Toast.show({ type: 'success', text1: 'Stories uploaded!' });
       setIsUploading(false);
       router.replace('/(tabs)');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      Toast.show({ type: 'error', text1: 'Upload failed', text2: 'Please try again.' });
+      Toast.show({
+        type: 'error',
+        text1: 'Upload failed',
+        text2: error?.message || 'Please try again.',
+      });
       setIsUploading(false);
     }
   };
@@ -341,30 +363,30 @@ export default function StoryPreview() {
         </View>
       </View>
 
-      {/* Media Display */}
+      {/* Media Display — letterboxed so full frame is visible */}
       <View style={styles.mediaContainer}>
         {isVideo ? (
           <Video
             ref={videoRef}
             source={{ uri: currentMedia.uri }}
             style={styles.video}
-            resizeMode={"cover" as any}
+            resizeMode={ResizeMode.CONTAIN}
             isMuted={false}
             shouldPlay={true}
             useNativeControls={false}
           />
         ) : (
-          <Image source={{ uri: currentMedia.uri }} style={styles.image} resizeMode="cover" />
+          <Image source={{ uri: currentMedia.uri }} style={styles.image} resizeMode="contain" />
         )}
         
-        {/* Tap Zones for Navigation */}
-        <TouchableOpacity 
-          style={styles.leftTapZone} 
+        {/* Narrow edge zones only — back/close uses header X; avoids taps on media dismissing */}
+        <TouchableOpacity
+          style={styles.leftTapZone}
           onPress={handleBack}
           activeOpacity={1}
         />
-        <TouchableOpacity 
-          style={styles.rightTapZone} 
+        <TouchableOpacity
+          style={styles.rightTapZone}
           onPress={handleNext}
           activeOpacity={1}
         />
@@ -387,7 +409,9 @@ export default function StoryPreview() {
       {isUploading ? (
         <View style={styles.loaderWrapper}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.uploadingText}>Uploading your story...</Text>
+          <Text style={styles.uploadingText}>
+            Uploading… {uploadProgress.done}/{uploadProgress.total || mediaList.length}
+          </Text>
         </View>
       ) : (
         <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>
@@ -578,37 +602,39 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
   },
   image: {
     width: SCREEN_WIDTH,
-    height: '100%',
-    resizeMode: 'cover',
+    height: SCREEN_HEIGHT * 0.82,
   },
   video: {
     width: SCREEN_WIDTH,
-    height: '100%',
+    height: SCREEN_HEIGHT * 0.82,
+    backgroundColor: '#000',
   },
   leftTapZone: {
     position: 'absolute',
-    top: 0,
+    top: 120,
     left: 0,
-    bottom: 0,
-    width: '35%',
-    zIndex: 10,
+    bottom: 160,
+    width: '18%',
+    zIndex: 8,
   },
   rightTapZone: {
     position: 'absolute',
-    top: 0,
+    top: 120,
     right: 0,
-    bottom: 0,
-    width: '35%',
-    zIndex: 10,
+    bottom: 160,
+    width: '18%',
+    zIndex: 8,
   },
   musicIndicator: {
     position: 'absolute',
     bottom: 100,
     left: 16,
     right: 16,
+    zIndex: 102,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -636,7 +662,8 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 5,
+    zIndex: 90,
+    elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,

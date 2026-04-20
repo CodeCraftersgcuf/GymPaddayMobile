@@ -25,7 +25,7 @@ import ThemedView from '@/components/ThemedView';
 import { formatNaira } from '@/utils/formatters';
 
 //Code Related to the integration
-import { QueryClient, useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getBusinessStatus, getMarketplaceListingById, getMarketplaceListings } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
@@ -56,7 +56,7 @@ export default function MarketplaceScreen() {
   const [showCategorySheet, setShowCategorySheet] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
- const queryClient = new QueryClient();
+  const queryClient = useQueryClient();
 
   const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
   const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
@@ -267,10 +267,31 @@ export default function MarketplaceScreen() {
     const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
-      selectedCategory === 'all' || item.category === categoryIdToApiName[selectedCategory];
+      selectedCategory === 'all' ||
+      (() => {
+        const want = categoryIdToApiName[selectedCategory];
+        const label = categories.find((c) => c.id === selectedCategory)?.title || '';
+        const needle = (label.split(/\s+/)[0] || want || '').toLowerCase();
+        const raw = String(item.category || '').toLowerCase();
+        if (want && raw.includes(want.toLowerCase())) return true;
+        if (needle.length >= 2 && raw.includes(needle)) return true;
+        if (selectedCategory === 'gym') return /gym|equipment|weight|dumbbell|cardio/i.test(raw);
+        if (selectedCategory === 'supplement') return /supplement|vitamin|protein/i.test(raw);
+        if (selectedCategory === 'wears') return /wear|shirt|shoe|cloth|apparel|shorts/i.test(raw);
+        if (selectedCategory === 'others') return /other|misc|accessory/i.test(raw);
+        return false;
+      })();
 
     const matchesLocation =
-      selectedLocation === 'all' || (item.location?.toLowerCase?.() === selectedLocation);
+      selectedLocation === 'all' ||
+      (() => {
+        const loc = String(item.location || '').toLowerCase();
+        const selected = nigeriaLocations.find((l) => l.id === selectedLocation);
+        const name = selected?.name?.toLowerCase() || '';
+        if (!name) return false;
+        const parts = name.split(/[,\s]+/).filter((p) => p.length > 2);
+        return parts.some((p) => loc.includes(p)) || loc.includes(selectedLocation.replace(/-/g, ' '));
+      })();
 
     return matchesSearch && matchesCategory && matchesLocation;
   });

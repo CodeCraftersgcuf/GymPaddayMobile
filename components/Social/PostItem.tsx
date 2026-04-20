@@ -30,7 +30,9 @@ import { getLikenDislikePost, createShare } from "@/utils/queries/socialMedia";
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import { Video } from "expo-av";
+import { Video, ResizeMode } from "expo-av";
+import Toast from 'react-native-toast-message';
+import { useFeedVideo } from '@/contexts/FeedVideoContext';
 
 
 
@@ -59,13 +61,20 @@ interface PostItemProps {
   showComment?: boolean
   onCommentPress: (value: any[], postId: number) => void;
   handleMenu: (userId: number | string, postId: number) => void;
+  /** When false, all videos in this post are paused (e.g. scrolled off-screen in feed). */
+  isFeedVideoActive?: boolean;
 }
 
-const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, showComment }) => {
+const PostItem: React.FC<PostItemProps> = ({
+  post,
+  onCommentPress,
+  handleMenu,
+  showComment,
+  isFeedVideoActive = true,
+}) => {
   const { dark } = useTheme();
   const router = useRouter();
-  const [isMuted, setIsMuted] = useState(true);
-  const toggleMute = React.useCallback(() => setIsMuted(prev => !prev), []);
+  const { isMuted, toggleMuted } = useFeedVideo();
 
   const [token, setToken] = useState<string | null>(null);
 
@@ -166,8 +175,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
     setImagesData(mediaArray);
     
-    // Auto-play video if it's the first item
-    if (post.videoUrl && mediaArray[0] === post.videoUrl) {
+    // Auto-play video if it's the first item (only when this post is the active feed row)
+    if (isFeedVideoActive && post.videoUrl && mediaArray[0] === post.videoUrl) {
       setTimeout(() => {
         const videoRef = videoRefs.current[0];
         if (videoRef) {
@@ -177,7 +186,28 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
         }
       }, 100);
     }
-  }, [post]);
+  }, [post, isFeedVideoActive]);
+
+  // Pause every slide when this post scrolls off-screen; resume current slide when back
+  useEffect(() => {
+    if (isFeedVideoActive) return;
+    Object.keys(videoRefs.current).forEach((key) => {
+      const ref = videoRefs.current[Number(key)];
+      ref?.pauseAsync?.().catch(() => {});
+    });
+  }, [isFeedVideoActive]);
+
+  useEffect(() => {
+    if (!isFeedVideoActive || !post.videoUrl) return;
+    const t = setTimeout(() => {
+      const idx = currentIndex;
+      const ref = videoRefs.current[idx];
+      if (!ref || !videoLoaded[idx]) return;
+      ref.playAsync().catch(() => {});
+      setIsPlaying((prev) => ({ ...prev, [idx]: true }));
+    }, 120);
+    return () => clearTimeout(t);
+  }, [isFeedVideoActive]);
 
 
   const handleLike = React.useCallback(async () => {
@@ -338,6 +368,13 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
         return;
       }
 
+      Toast.show({
+        type: 'info',
+        text1: 'Downloading',
+        text2: 'Saving to your gallery…',
+        visibilityTime: 2000,
+      });
+
       const fileExtension = currentMedia.split('.').pop()?.toLowerCase();
       const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'mkv';
       
@@ -408,9 +445,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
         console.log('Cleanup error (non-critical):', cleanupError);
       }
 
-      Alert.alert('Downloaded', `${isVideo ? 'Video' : 'Image'} saved to your gallery.`);
+      Toast.show({
+        type: 'success',
+        text1: 'Saved',
+        text2: `${isVideo ? 'Video' : 'Image'} saved to your gallery.`,
+        visibilityTime: 2500,
+      });
     } catch (error: any) {
-      Alert.alert('Download Error', error?.message || 'Failed to download media. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Download failed',
+        text2: error?.message || 'Could not save media. Please try again.',
+        visibilityTime: 3500,
+      });
       console.error('Download error:', error);
     }
   };
@@ -504,10 +551,15 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       }}
                       source={{ uri: item }}
                       style={styles.videoPlayer}
-                      resizeMode="cover"
+                      resizeMode={ResizeMode.CONTAIN}
                       isLooping
                       isMuted={isMuted}
-                      shouldPlay={index === currentIndex && isPlaying[index] && videoLoaded[index]}
+                      shouldPlay={
+                        isFeedVideoActive &&
+                        index === currentIndex &&
+                        !!isPlaying[index] &&
+                        !!videoLoaded[index]
+                      }
                       useNativeControls={false}
                       onLoadStart={() => {
                         setIsBuffering(prev => ({ ...prev, [index]: true }));
@@ -521,12 +573,11 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                           const ratio = data.naturalSize.width / data.naturalSize.height;
                           setVideoAspectRatio(ratio);
                         }
-                        // Auto-play if this is the current video
-                        if (index === currentIndex) {
+                        // Auto-play if this is the current video and post is visible in feed
+                        if (index === currentIndex && isFeedVideoActive) {
                           const ref = videoRefs.current[index];
                           if (ref) {
                             try {
-                              // Don't set state here - let onPlaybackStatusUpdate handle it
                               await ref.playAsync();
                             } catch (error) {
                               console.error('Error playing video:', error);
@@ -624,7 +675,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
 
                   {/* Mute Button */}
-                  <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
+                  <TouchableOpacity onPress={toggleMuted} style={styles.muteButton}>
                     <Image
                       source={isMuted ? images.mute : images.unmute}
                       style={styles.muteIcon}
@@ -634,7 +685,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
               ) : (
                 <TouchableOpacity onPress={() => openImageSlider(index)}>
-                  <Image source={{ uri: item }} style={styles.carouselImage} />
+                  <Image source={{ uri: item }} style={styles.carouselImage} resizeMode="contain" />
                 </TouchableOpacity>
               );
 
@@ -1090,15 +1141,15 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   carouselImage: {
-    width: width - 20,  // to account for padding
-    height: width - 20, // keep it square
+    width: width - 20,
+    height: (width - 20) * 1.12,
     borderRadius: 18,
     overflow: 'hidden',
-    resizeMode: 'cover',
+    backgroundColor: '#0a0a0a',
   },
   carouselVideoWrapper: {
     width: width - 20,
-    height: width - 20, // Make it square like images for consistency
+    height: (width - 20) * 1.12,
     borderRadius: 18,
     backgroundColor: '#000',
     alignSelf: 'center',

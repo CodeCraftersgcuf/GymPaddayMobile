@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { ThemeProvider, useTheme } from "@/contexts/themeContext";
+import { FeedVideoProvider } from "@/contexts/FeedVideoContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { MessageProvider } from "@/components/messages/MessageContext";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -93,6 +94,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        <FeedVideoProvider>
         <MessageProvider>
           <SafeAreaProvider>
 
@@ -145,6 +147,7 @@ export default function RootLayout() {
           </SafeAreaProvider>
 
         </MessageProvider>
+        </FeedVideoProvider>
       </ThemeProvider>
     </QueryClientProvider>
     </GestureHandlerRootView>

@@ -21,7 +21,6 @@ import {
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -45,12 +44,6 @@ export default function AddToStoryScreen() {
     })();
   }, []);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      setSelected([]);
-    }, [])
-  );
-
   const loadMoreAssets = async () => {
     if (!hasNextPage) return;
     const media = await MediaLibrary.getAssetsAsync({
@@ -68,9 +61,40 @@ export default function AddToStoryScreen() {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 1,
+      allowsEditing: true,
+      videoMaxDuration: 120,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setSelected((prev) => [...prev, result.assets[0]]);
+      const a = result.assets[0];
+      setSelected((prev) => [
+        ...prev,
+        {
+          id: `cam_${Date.now()}`,
+          uri: a.uri,
+          mediaType: a.type === 'video' ? 'video' : 'photo',
+        },
+      ]);
+    }
+  };
+
+  /** Picker trim / crop (supported mainly on iOS; Android may vary). */
+  const openLibraryWithTrim = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      quality: 1,
+      allowsEditing: true,
+      videoMaxDuration: 120,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      const a = result.assets[0];
+      setSelected((prev) => [
+        ...prev,
+        {
+          id: `lib_${Date.now()}`,
+          uri: a.uri,
+          mediaType: a.type === 'video' ? 'video' : 'photo',
+        },
+      ]);
     }
   };
 
@@ -107,9 +131,14 @@ export default function AddToStoryScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Add to Story</Text>
-        <TouchableOpacity onPress={openCamera} style={styles.cameraButton}>
-          <Text style={styles.cameraButtonText}>📷 Open Camera</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={openCamera} style={styles.cameraButton}>
+            <Text style={styles.cameraButtonText}>Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openLibraryWithTrim} style={styles.cameraButton}>
+            <Text style={styles.cameraButtonText}>Library (trim)</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -155,6 +184,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
     backgroundColor: '#fff',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
   },
   headerTitle: {
     fontSize: 18,

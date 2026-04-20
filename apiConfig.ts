@@ -1,7 +1,6 @@
-// const API_DOMAIN = "http://192.168.175.151:8000/api";
-// const API_DOMAIN = "http://192.168.175.151:8000/api";   // Localhost IP
-
-const API_DOMAIN = "https://api.gympaddy.com/api";
+// Single production API host — must match the backend used for auth, posts, and uploads.
+// (Previously api.gympaddy.com caused login/post failures while media URLs pointed at skillverse.)
+const API_DOMAIN = "https://gympaddy.skillverse.com.pk/api";
 
 
 const API_ENDPOINTS = {
@@ -154,7 +153,7 @@ const API_ENDPOINTS = {
       ConnectedUsers: API_DOMAIN + "/user/chat-conversations",
       List: API_DOMAIN + "/user/chat-messages",
       Create: API_DOMAIN + "/user/chat-messages",
-      MarketPlace: API_DOMAIN + "/user/chat-messages-marketp[ace",
+      MarketPlace: API_DOMAIN + "/user/chat-messages-marketplace",
       Show: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/chat-messages/${id}`,

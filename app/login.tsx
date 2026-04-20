@@ -26,6 +26,7 @@ import ThemedView from "@/components/ThemedView";
 import Toast from "react-native-toast-message";
 import { useMutation } from "@tanstack/react-query";
 import { loginUser } from "@/utils/mutations/auth";
+import { ApiError } from "@/utils/customApiCall";
 
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -106,12 +107,16 @@ useEffect(() => {
         });
       }
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error("❌ Login Error:", error);
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : (error as { message?: string })?.message || "Something went wrong";
       Toast.show({
         type: "error",
         text1: "Login Failed",
-        text2: error?.message || "Something went wrong",
+        text2: message,
       });
     },
   });

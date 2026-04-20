@@ -5,12 +5,22 @@ import { Entypo } from '@expo/vector-icons';
 import ThemeText from '@/components/ThemedText';
 import { useTheme } from '@/contexts/themeContext';
 
+export type MessagesFilter = 'all' | 'social' | 'marketplace';
+
 type Props = {
   onBack: () => void;
   onOpenSocials: () => void;
+  /** Reflects the active conversation filter (from Socials modal). */
+  selectedFilter?: MessagesFilter;
 };
 
-export default function Header({ onBack, onOpenSocials }: Props) {
+function filterLabel(f?: MessagesFilter): string {
+  if (f === 'marketplace') return 'Marketplace';
+  if (f === 'social') return 'Social';
+  return 'All chats';
+}
+
+export default function Header({ onBack, onOpenSocials, selectedFilter = 'all' }: Props) {
   const { dark } = useTheme();
 
   return (
@@ -23,7 +33,7 @@ export default function Header({ onBack, onOpenSocials }: Props) {
         style={[styles.socialsButton, { backgroundColor: dark ? '#212121' : '#fff' }]}
         onPress={onOpenSocials}
       >
-        <ThemeText style={styles.socialsButtonText}>Socials</ThemeText>
+        <ThemeText style={styles.socialsButtonText}>{filterLabel(selectedFilter)}</ThemeText>
         <Entypo name="chevron-small-down" size={16} color={dark ? 'white' : 'black'} />
       </TouchableOpacity>
     </View>

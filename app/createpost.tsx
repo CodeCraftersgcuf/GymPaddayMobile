@@ -636,6 +636,15 @@ export default function CreatePostScreen() {
         isEditMode={isEditMode}
       />
       <UserSection postText={postText} onTextChange={setPostText} disabled={isSubmitting} />
+      <Text
+        style={[
+          styles.mediaHint,
+          { color: theme.dark ? '#aaa' : '#666' },
+        ]}
+      >
+        Tip: Photos and videos are shown in full in the feed (letterboxed if needed). Use tall or wide shots
+        without important details at the very edges.
+      </Text>
       <SelectedMedia
         selectedMedia={selectedMedia}
         onRemoveMedia={handleMediaRemove}
@@ -661,6 +670,13 @@ export default function CreatePostScreen() {
 }
 
 const styles = StyleSheet.create({
+  mediaHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    marginTop: 4,
+  },
   container: {
     flex: 1,
   },

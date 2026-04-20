@@ -6,15 +6,16 @@ import {
   StatusBar,
   TouchableOpacity,
   Image,
-  ScrollView,
+  FlatList,
   RefreshControl,
   ActivityIndicator,
   Alert,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  ViewToken,
 } from 'react-native';
 import StoryContainer from '@/components/Social/StoryContainer';
-import PostContainer from '@/components/Social/PostContainer';
+import PostItem from '@/components/Social/PostItem';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
 import { mockStories, mockPosts } from '@/components/Social/mockData';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -97,6 +98,19 @@ export default function SocialFeedScreen() {
   const queryClient = useQueryClient();
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
   const logoutTriggeredRef = useRef(false);
+  const [activePostId, setActivePostId] = useState<number | null>(null);
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 65,
+    minimumViewTime: 120,
+  }).current;
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const tok = viewableItems.find((v) => v.isViewable && v.item);
+      const raw = tok?.item?.id;
+      const id = raw != null ? Number(raw) : null;
+      setActivePostId(Number.isFinite(id) ? id : null);
+    }
+  ).current;
 
   const handleBlockedOrUnauthorized = async (incomingError: any) => {
     if (logoutTriggeredRef.current) return;
@@ -577,15 +591,19 @@ export default function SocialFeedScreen() {
           refreshing={refreshing} // Pass refreshing state to TabHeader
         />
 
-        <ScrollView
+        <FlatList
           style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
+          data={posts}
+          extraData={{ activePostId, posts }}
+          keyExtractor={(item) => item.id.toString()}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           onScroll={tryFetchNextPage}
           onMomentumScrollEnd={tryFetchNextPage}
           onScrollEndDrag={tryFetchNextPage}
           scrollEventThrottle={16}
-
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -596,84 +614,107 @@ export default function SocialFeedScreen() {
               titleColor={dark ? '#ffffff' : '#000000'}
             />
           }
-        >
-          {isError && posts.length === 0 && (
-            <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
-              <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
-                {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
-                  ? (error?.message || 'Your account has been blocked. Please contact support.')
-                  : error?.statusCode === 401 || error?.statusCode === 403
-                  ? 'Your session has expired. Please login again.'
-                  : error?.message?.includes('Network') || error?.message?.includes('timeout') 
-                  ? 'Network connection error. Please check your internet connection.'
-                  : 'Failed to load posts. Please try again.'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => refetch()}
-                style={{
-                  backgroundColor: '#940304',
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                  borderRadius: 8,
-                  marginTop: 10,
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
-              </TouchableOpacity>
+          ListHeaderComponent={
+            <View>
+              {isError && posts.length === 0 && (
+                <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                  <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
+                    {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
+                      ? (error?.message || 'Your account has been blocked. Please contact support.')
+                      : error?.statusCode === 401 || error?.statusCode === 403
+                      ? 'Your session has expired. Please login again.'
+                      : error?.message?.includes('Network') || error?.message?.includes('timeout')
+                      ? 'Network connection error. Please check your internet connection.'
+                      : 'Failed to load posts. Please try again.'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => refetch()}
+                    style={{
+                      backgroundColor: '#940304',
+                      paddingHorizontal: 20,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      marginTop: 10,
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {!isError && (
+                <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />
+              )}
             </View>
-          )}
-          {!isError && (
-            <>
-              <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />
-              <PostContainer
-                posts={posts}
+          }
+          ListEmptyComponent={
+            !isError && posts.length === 0 && !isLoading ? (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ color: dark ? '#fff' : '#000' }}>No posts yet.</Text>
+              </View>
+            ) : !isError && posts.length === 0 && isLoading ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#940304" />
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) => {
+            const primaryId = activePostId ?? posts[0]?.id ?? null;
+            const pid = Number(item.id);
+            return (
+              <PostItem
+                post={item}
+                isFeedVideoActive={primaryId != null && pid === primaryId}
                 onCommentPress={handleCommentPress}
                 handleMenu={handleMenu}
               />
-            </>
-          )}
-          {hasNextPage && posts.length > 0 && (
-            <View
-              style={{
-                paddingVertical: isFetchingNextPage ? 20 : 8,
-                alignItems: 'center',
-                paddingBottom: isFetchingNextPage ? 120 : 80,
-              }}
-            >
-              {isFetchingNextPage && (
-                <>
-                  <ActivityIndicator size="small" color="#940304" />
-                  <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>
-                    Loading more posts…
+            );
+          }}
+          ListFooterComponent={
+            <View>
+              {hasNextPage && posts.length > 0 && (
+                <View
+                  style={{
+                    paddingVertical: isFetchingNextPage ? 20 : 8,
+                    alignItems: 'center',
+                    paddingBottom: isFetchingNextPage ? 120 : 80,
+                  }}
+                >
+                  {isFetchingNextPage && (
+                    <>
+                      <ActivityIndicator size="small" color="#940304" />
+                      <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>
+                        Loading more posts…
+                      </Text>
+                    </>
+                  )}
+                </View>
+              )}
+              {isError && posts.length > 0 && (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
+                    {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
+                      ? (error?.message || 'Your account has been blocked. Please contact support.')
+                      : error?.statusCode === 401 || error?.statusCode === 403
+                      ? 'Your session has expired. Please login again.'
+                      : 'Failed to load more posts'}
                   </Text>
-                </>
+                  <TouchableOpacity
+                    onPress={() => fetchNextPage()}
+                    style={{
+                      backgroundColor: '#940304',
+                      paddingHorizontal: 15,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
-          )}
-          {isError && posts.length > 0 && (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
-                {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
-                  ? (error?.message || 'Your account has been blocked. Please contact support.')
-                  : error?.statusCode === 401 || error?.statusCode === 403
-                  ? 'Your session has expired. Please login again.'
-                  : 'Failed to load more posts'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => fetchNextPage()}
-                style={{
-                  backgroundColor: '#940304',
-                  paddingHorizontal: 15,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-        </ScrollView>
+          }
+          contentContainerStyle={{ paddingBottom: 100 }}
+        />
         <CommentsBottomSheet
           visible={commentModalVisible}
           comments={[...mapApiCommentsToInternal(commentData), ...optimisticComments]}

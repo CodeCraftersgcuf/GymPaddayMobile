@@ -19,7 +19,7 @@ import { formatNaira } from '@/utils/formatters';
 
 
 //Code Related to the integration
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMarketplaceListingById } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { useMutation } from '@tanstack/react-query';
@@ -58,6 +58,7 @@ export default function ItemDetailsScreen() {
     const { dark } = useTheme();
     const isDark = dark;
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { id } = useLocalSearchParams();
     const [message, setMessage] = useState('');
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -161,28 +162,62 @@ export default function ItemDetailsScreen() {
     };
 
     const handleSendMessage = async () => {
-        if (message.trim() && listing?.sender_id && listing?.receiver_id && token) {
-            try {
-                await sendMarketPlaceMessage({
-                    sender_id: listing.sender_id,
-                    receiver_id: listing.receiver_id,
-                    message,
-                }, token);
-                console.log("Message sent successfully");
-                Toast.show({
-                    type: 'success',
-                    text1: 'Message Sent',
-                    text2: 'Your message has been sent successfully.',
-                });
-                setMessage('');
-            } catch (err) {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Message Failed',
-                    text2: 'Failed to send your message. Please try again.',
-                });
-                console.error("Failed to send message:", err);
-            }
+        const text = message.trim();
+        if (!text) {
+            Toast.show({ type: 'info', text1: 'Empty message', text2: 'Type a message first.' });
+            return;
+        }
+        if (!token) {
+            Toast.show({ type: 'error', text1: 'Not signed in', text2: 'Please log in to message the seller.' });
+            return;
+        }
+        const receiverId = listing?.user_id ?? listing?.user?.id;
+        if (receiverId == null || Number.isNaN(Number(receiverId))) {
+            Toast.show({ type: 'error', text1: 'Cannot message', text2: 'Seller information is missing.' });
+            return;
+        }
+        let senderId: number;
+        try {
+            const userStr = await SecureStore.getItemAsync('user_data');
+            if (!userStr) throw new Error('no user');
+            const me = JSON.parse(userStr);
+            senderId = Number(me.id);
+        } catch {
+            Toast.show({ type: 'error', text1: 'Not signed in', text2: 'Please log in again.' });
+            return;
+        }
+        if (!senderId || senderId === Number(receiverId)) {
+            Toast.show({ type: 'error', text1: 'Invalid chat', text2: 'You cannot message yourself.' });
+            return;
+        }
+        try {
+            await sendMarketPlaceMessage(
+                {
+                    sender_id: senderId,
+                    receiver_id: Number(receiverId),
+                    message: text,
+                },
+                token
+            );
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            Toast.show({
+                type: 'success',
+                text1: 'Message Sent',
+                text2: 'Your message has been sent successfully.',
+            });
+            setMessage('');
+        } catch (err: any) {
+            const detail =
+                err?.data?.message ||
+                err?.response?.data?.message ||
+                err?.message ||
+                'Failed to send your message. Please try again.';
+            Toast.show({
+                type: 'error',
+                text1: 'Message Failed',
+                text2: String(detail),
+            });
+            console.error('Failed to send message:', err);
         }
     };
 

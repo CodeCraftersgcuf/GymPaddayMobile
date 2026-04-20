@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as SecureStore from 'expo-secure-store';
+import { apiCall } from '@/utils/customApiCall';
+import { API_ENDPOINTS } from '@/apiConfig';
 
 interface StreamingCardProps {
   dark: boolean;
@@ -25,13 +27,47 @@ export default function StreamingCard({
   const [facing, setFacing] = useState<CameraType>('front');
   const [permission, requestPermission] = useCameraPermissions();
   const [liveMinutes, setLiveMinutes] = useState<number | null>(null);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [authUserId, setAuthUserId] = useState<number | null>(null);
   const MAX_MINUTES = 720;
-  const hasMinFollowers = true;
+  const MIN_FOLLOWERS = 500;
+  const hasMinFollowers =
+    followerCount !== null && followerCount >= MIN_FOLLOWERS;
 
   useEffect(() => {
     if (!permission?.granted) {
       requestPermission();
     }
+  }, []);
+
+  useEffect(() => {
+    const loadProfileFollowers = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) return;
+
+        const cached = await SecureStore.getItemAsync('user_data');
+        if (cached) {
+          const u = JSON.parse(cached) as { id?: number; followers_count?: number };
+          if (typeof u.id === 'number') setAuthUserId(u.id);
+          if (typeof u.followers_count === 'number') setFollowerCount(u.followers_count);
+        }
+
+        const data = (await apiCall(API_ENDPOINTS.USER.PROFILE.Me, 'GET', undefined, token)) as {
+          user?: { id?: number };
+          followers_count?: number;
+        };
+        const user = data?.user;
+        if (user && typeof user.id === 'number') setAuthUserId(user.id);
+        if (typeof data?.followers_count === 'number') {
+          setFollowerCount(data.followers_count);
+        }
+      } catch (err) {
+        console.error('Error loading profile for live gate:', err);
+      }
+    };
+
+    loadProfileFollowers();
   }, []);
 
   useEffect(() => {
@@ -115,7 +151,13 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
         </View> */}
 
         <Text style={styles.purchaseText}>
-          You must have 500 users to go live
+          {followerCount === null
+            ? 'Loading follower count…'
+            : `You need ${MIN_FOLLOWERS} followers to go live (${followerCount} / ${MIN_FOLLOWERS}).`}
+        </Text>
+        <Text style={styles.hintText}>
+          Grow faster: invite friends, share your profile from the menu, post regularly, and engage with others
+          so people follow you back.
         </Text>
 
         {/* <View style={styles.priceContainer}>
@@ -127,11 +169,22 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
       </LinearGradient>
 
       {/* Error Message */}
-      {!hasMinFollowers && (
+      {!hasMinFollowers && followerCount !== null && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
-            You need a minimum of 500 followers to start going live
+            You need at least {MIN_FOLLOWERS} followers to go live. Open your profile to share your link and invite
+            friends.
           </Text>
+          {authUserId != null && (
+            <TouchableOpacity
+              style={styles.profileLink}
+              onPress={() =>
+                router.push({ pathname: '/UserProfile', params: { user_id: String(authUserId) } })
+              }
+            >
+              <Text style={styles.profileLinkText}>Open my profile</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -160,18 +213,18 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
 
       {/* Go Live Button */}
       <TouchableOpacity
-  style={[
-    styles.goLiveButton,
-    {
-      backgroundColor: canGoLive ? '#940304' : '#CCCCCC',
-      opacity: canGoLive ? 1 : 0.6,
-    },
-  ]}
-  onPress={onGoLive}
-  // disabled={!canGoLive}
->
-  <Text style={styles.goLiveButtonText}>Go Live</Text>
-</TouchableOpacity>
+        style={[
+          styles.goLiveButton,
+          {
+            backgroundColor: canGoLive ? '#940304' : '#CCCCCC',
+            opacity: canGoLive ? 1 : 0.6,
+          },
+        ]}
+        onPress={onGoLive}
+        disabled={!canGoLive}
+      >
+        <Text style={styles.goLiveButtonText}>Go Live</Text>
+      </TouchableOpacity>
 
     </View>
   );
@@ -231,7 +284,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     opacity: 0.9,
-    marginBottom: 15,
+    marginBottom: 8,
+  },
+  hintText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    opacity: 0.85,
+    lineHeight: 19,
+    marginBottom: 4,
   },
   priceContainer: {
     flexDirection: 'row',
@@ -265,6 +325,17 @@ const styles = StyleSheet.create({
     color: '#CC0000',
     textAlign: 'center',
     fontSize: 14,
+    marginBottom: 10,
+  },
+  profileLink: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  profileLinkText: {
+    color: '#940304',
+    fontWeight: '600',
+    fontSize: 15,
   },
   durationSelector: {
     flexDirection: 'row',
