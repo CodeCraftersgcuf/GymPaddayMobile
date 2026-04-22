@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Header from '@/components/more/withdraw/Header';
 import WithdrawForm from '@/components/more/withdraw/WithdrawForm';
 import WithdrawSummary from '@/components/more/withdraw/WithdrawSummary';
@@ -22,8 +23,8 @@ export interface WithdrawData {
 }
 
 export default function WithdrawScreen() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState<'form' | 'summary'>('form');
-
   const [withdrawData, setWithdrawData] = useState<WithdrawData>({
     amount: '',
     bankName: '',
@@ -31,10 +32,15 @@ export default function WithdrawScreen() {
     accountName: '',
     saveDetails: false,
   });
-
   const { dark } = useTheme();
   const queryClient = useQueryClient();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      router.replace('/(tabs)/more');
+    }
+  }, [router]);
 
   const handleFormSubmit = (data: WithdrawData) => {
     setWithdrawData(data);
@@ -92,6 +98,10 @@ export default function WithdrawScreen() {
       setCurrentStep('form');
     }
   };
+
+  if (Platform.OS === 'ios') {
+    return null;
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>

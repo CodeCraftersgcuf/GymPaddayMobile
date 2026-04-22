@@ -46,7 +46,20 @@ export default function DepositPaymentTab() {
     const [userName, setUserName] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const { dark } = useTheme();
-    const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
+    const {
+        purchaseProduct,
+        isLoading: isIAPLoading,
+        isAvailable,
+        iosWalletProductId,
+        iosIapInitializing,
+        iosWalletProductReady,
+        iosWalletGpCredit,
+        iosLocalizedPrice,
+        iosWalletTitle,
+        iosWalletDescription,
+        iosPriceCurrencyCode,
+        refreshIosWalletProduct,
+    } = useIAP();
     const queryClient = useQueryClient();
 
     const paymentDetails = {
@@ -82,10 +95,13 @@ export default function DepositPaymentTab() {
             if (useMyDetailsRef.current) {
                 setDepositorName(name);
             }
+            if (Platform.OS === 'ios') {
+                await refreshIosWalletProduct();
+            }
         } finally {
             setRefreshing(false);
         }
-    }, []);
+    }, [refreshIosWalletProduct]);
 
     const createTransactionMutation = useMutation({
         mutationFn: async () => {
@@ -117,6 +133,30 @@ export default function DepositPaymentTab() {
     });
 
     const handleProceed = async () => {
+        if (Platform.OS === 'ios') {
+            if (!isAvailable) {
+                Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
+                return;
+            }
+
+            if (!iosWalletProductReady) {
+                Alert.alert(
+                    'Error',
+                    'Could not load this product from the App Store. Pull to refresh or try again shortly.'
+                );
+                return;
+            }
+
+            const success = await purchaseProduct();
+            if (success) {
+                setShowSuccessModal(true);
+                setAmount('');
+                setDepositorName('');
+                setUseMyDetails(false);
+            }
+            return;
+        }
+
         if (!amount) {
             Alert.alert('Error', 'Please enter an amount');
             return;
@@ -128,34 +168,12 @@ export default function DepositPaymentTab() {
             return;
         }
 
-        // For iOS, use Apple In-App Purchase
-        if (Platform.OS === 'ios') {
-            if (amountValue < MINIMUM_AMOUNT_IOS) {
-                Alert.alert('Error', `Minimum deposit amount is ${MINIMUM_AMOUNT_IOS} Naira`);
-                return;
-            }
-
-            if (!isAvailable) {
-                Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-                return;
-            }
-
-            const success = await purchaseProduct(amountValue);
-            if (success) {
-                setShowSuccessModal(true);
-                // Reset form
-                setAmount('');
-                setDepositorName('');
-                setUseMyDetails(false);
-            }
-        } else {
-            // For Android, use the existing Flutterwave flow
-            if (!depositorName) {
-                Alert.alert('Error', 'Please fill in all fields');
-                return;
-            }
-            setCurrentView('payment');
+        // For Android, use the existing Flutterwave flow
+        if (!depositorName) {
+            Alert.alert('Error', 'Please fill in all fields');
+            return;
         }
+        setCurrentView('payment');
     };
 
     const handleUseMyDetails = async () => {
@@ -216,21 +234,57 @@ export default function DepositPaymentTab() {
         <>
             {/* Form */}
             <ThemedView style={styles.form}>
-                {/* Amount Input */}
+                {/* Amount: Android manual entry; iOS = single pack from App Store */}
                 <View style={styles.inputContainer}>
-                    <TextInput
-                        style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? 'black' : 'white' }]}
-                        placeholder={Platform.OS === 'ios' ? `Amount (min ${MINIMUM_AMOUNT_IOS} Naira)` : "Amount"}
-                        placeholderTextColor="#999"
-                        value={amount}
-                        onChangeText={setAmount}
-                        keyboardType="numeric"
-                        editable={!isIAPLoading}
-                    />
-                    {Platform.OS === 'ios' && (
-                        <Text style={[styles.minAmountHint, { color: dark ? '#999' : '#666' }]}>
-                            Minimum deposit: {MINIMUM_AMOUNT_IOS} Naira
-                        </Text>
+                    {Platform.OS === 'ios' ? (
+                        iosIapInitializing ? (
+                            <View style={styles.iosStoreLoading}>
+                                <ActivityIndicator color="#940304" />
+                                <Text style={[styles.iosIapHint, { color: dark ? '#999' : '#666', marginTop: 12 }]}>
+                                    Loading product from App Store…
+                                </Text>
+                            </View>
+                        ) : (
+                            <>
+                                {iosWalletTitle ? (
+                                    <Text style={[styles.iosProductTitle, { color: dark ? '#fff' : '#111' }]}>
+                                        {iosWalletTitle}
+                                    </Text>
+                                ) : null}
+                                {iosLocalizedPrice ? (
+                                    <Text style={[styles.iosProductPrice, { color: dark ? '#fff' : '#111' }]}>
+                                        {iosLocalizedPrice}
+                                        {iosPriceCurrencyCode ? ` · ${iosPriceCurrencyCode}` : ''}
+                                    </Text>
+                                ) : null}
+                                {iosWalletProductReady ? (
+                                    <Text style={[styles.iosGpCreditLine, { color: dark ? '#ccc' : '#333' }]}>
+                                        Wallet credit after purchase:{' '}
+                                        <Text style={{ fontWeight: '700' }}>{iosWalletGpCredit} GP</Text>
+                                        {' '}(from App Store price; 1 GP ≈ 1 unit of local currency in-app)
+                                    </Text>
+                                ) : (
+                                    <Text style={[styles.iosIapHint, { color: dark ? '#f66' : '#a00' }]}>
+                                        Product &quot;{iosWalletProductId}&quot; not returned by the store. Check App Store Connect and sandbox account.
+                                    </Text>
+                                )}
+                                {iosWalletDescription ? (
+                                    <Text style={[styles.iosIapHint, { color: dark ? '#888' : '#555', marginTop: 10 }]} numberOfLines={4}>
+                                        {iosWalletDescription}
+                                    </Text>
+                                ) : null}
+                            </>
+                        )
+                    ) : (
+                        <TextInput
+                            style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? 'black' : 'white' }]}
+                            placeholder="Amount"
+                            placeholderTextColor="#999"
+                            value={amount}
+                            onChangeText={setAmount}
+                            keyboardType="numeric"
+                            editable={!isIAPLoading}
+                        />
                     )}
                 </View>
 
@@ -268,15 +322,19 @@ export default function DepositPaymentTab() {
                     <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
                 </View>
                 <TouchableOpacity 
-                    style={[styles.proceedButton, isIAPLoading && styles.proceedButtonDisabled]} 
+                    style={[
+                        styles.proceedButton,
+                        (isIAPLoading || (Platform.OS === 'ios' && (iosIapInitializing || !iosWalletProductReady))) &&
+                            styles.proceedButtonDisabled,
+                    ]}
                     onPress={handleProceed}
-                    disabled={isIAPLoading}
+                    disabled={isIAPLoading || (Platform.OS === 'ios' && (iosIapInitializing || !iosWalletProductReady))}
                 >
                     {isIAPLoading ? (
                         <ActivityIndicator color="#FFFFFF" />
                     ) : (
                         <Text style={styles.proceedButtonText}>
-                            {Platform.OS === 'ios' ? 'Purchase GP Coins' : 'Proceed'}
+                            {Platform.OS === 'ios' ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Proceed'}
                         </Text>
                     )}
                 </TouchableOpacity>
@@ -522,6 +580,30 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 8,
         marginLeft: 4,
+    },
+    iosIapHint: {
+        fontSize: 12,
+        marginTop: 10,
+        marginLeft: 4,
+        lineHeight: 18,
+    },
+    iosStoreLoading: {
+        paddingVertical: 24,
+        alignItems: 'center',
+    },
+    iosProductTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 6,
+    },
+    iosProductPrice: {
+        fontSize: 22,
+        fontWeight: '600',
+        marginBottom: 12,
+    },
+    iosGpCreditLine: {
+        fontSize: 14,
+        lineHeight: 20,
     },
     detailsContainer: {
         // backgroundColor: '#FFFFFF',

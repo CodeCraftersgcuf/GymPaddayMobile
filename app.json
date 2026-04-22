@@ -3,7 +3,7 @@
     "jsEngine": "hermes",
     "name": "GymPaddy",
     "slug": "gym",
-    "version": "1.4",
+    "version": "1.6",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "scheme": "myapp",
