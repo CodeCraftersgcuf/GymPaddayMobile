@@ -22,7 +22,7 @@ const { width, height } = Dimensions.get('window');
 const STORY_DURATION = 4000; // Reduced from 5000ms to 4000ms for faster transitions
 
 const fixUrl = (url: string) =>
-  url?.replace('https://gympaddy.skillverse.com.pk/storage//', 'https://gympaddy.skillverse.com.pk/storage/');
+  url?.replace('https://api.gympaddy.com/storage//', 'https://api.gympaddy.com/storage/');
 
 type StoryWithMusic = StoryItem & {
   music_url?: string | null;

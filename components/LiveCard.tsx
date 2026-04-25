@@ -44,7 +44,7 @@ const LiveCard: React.FC<Props> = ({
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
 
-      const res = await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${id}/join`, {
+      const res = await fetch(`https://api.gympaddy.com/api/user/live-streams/${id}/join`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

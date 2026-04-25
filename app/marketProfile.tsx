@@ -181,7 +181,7 @@ const ProfileScreen: React.FC = () => {
                         item.status === 'closed' ? 'Closed' : 'Pending',
             time: timeAgo(item.created_at),
             image: item.media_urls && item.media_urls.length > 0
-                ? `https://gympaddy.skillverse.com.pk/storage/${item.media_urls[0]}`
+                ? `https://api.gympaddy.com/storage/${item.media_urls[0]}`
                 : 'https://placehold.co/200x200?text=No+Image',
         }))
         : [];

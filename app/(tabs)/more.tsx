@@ -133,7 +133,7 @@ export default function More() {
         const token = await SecureStore.getItemAsync('auth_token');
         if (!token) throw new Error('No token founds');
 
-        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/balance', {
+        const response = await fetch('https://api.gympaddy.com/api/user/balance', {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -168,7 +168,7 @@ export default function More() {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token found');
 
-      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/balance', {
+      const response = await fetch('https://api.gympaddy.com/api/user/balance', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,

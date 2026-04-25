@@ -14,7 +14,7 @@ import { Audio } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
 // import { StreamAudioVideo } from '@stream-io/video-react-native-sdk';
 
-const API_URL = 'https://gympaddy.skillverse.com.pk/api/user';
+const API_URL = 'https://api.gympaddy.com/api/user';
 
 export default function StreamIncomingCall() {
     const router = useRouter();

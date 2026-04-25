@@ -273,7 +273,7 @@ if (selectedMusicMap[index]) {
 }
 
 // Upload to API
-await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
+await fetch('https://api.gympaddy.com/api/user/stories', {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${token}`,

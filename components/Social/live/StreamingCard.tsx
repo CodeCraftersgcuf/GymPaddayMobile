@@ -8,6 +8,12 @@ import * as SecureStore from 'expo-secure-store';
 import { apiCall } from '@/utils/customApiCall';
 import { API_ENDPOINTS } from '@/apiConfig';
 
+/** When true, Go Live requires at least MIN_FOLLOWERS. */
+const REQUIRE_FOLLOWERS_FOR_LIVE = false;
+const MIN_FOLLOWERS = 500;
+/** When true, Go Live stays disabled until live minutes > 0. Set false to always allow (after camera OK). */
+const REQUIRE_LIVE_MINUTES_FOR_GO_LIVE = false;
+
 interface StreamingCardProps {
   dark: boolean;
   selectedDuration: string;
@@ -30,9 +36,9 @@ export default function StreamingCard({
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [authUserId, setAuthUserId] = useState<number | null>(null);
   const MAX_MINUTES = 720;
-  const MIN_FOLLOWERS = 500;
   const hasMinFollowers =
-    followerCount !== null && followerCount >= MIN_FOLLOWERS;
+    !REQUIRE_FOLLOWERS_FOR_LIVE ||
+    (followerCount !== null && followerCount >= MIN_FOLLOWERS);
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -41,6 +47,8 @@ export default function StreamingCard({
   }, []);
 
   useEffect(() => {
+    if (!REQUIRE_FOLLOWERS_FOR_LIVE) return;
+
     const loadProfileFollowers = async () => {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
@@ -76,7 +84,7 @@ export default function StreamingCard({
         const token = await SecureStore.getItemAsync('auth_token');
         if (!token) return;
 
-        const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/minutes', {
+        const res = await fetch('https://api.gympaddy.com/api/user/minutes', {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: 'application/json',
@@ -106,7 +114,9 @@ export default function StreamingCard({
       </View>
     );
   }
-const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
+  const canGoLive =
+    hasMinFollowers &&
+    (!REQUIRE_LIVE_MINUTES_FOR_GO_LIVE || (liveMinutes !== null && liveMinutes > 0));
 
   return (
     <View style={styles.container}>
@@ -151,13 +161,24 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
         </View> */}
 
         <Text style={styles.purchaseText}>
-          {followerCount === null
-            ? 'Loading follower count…'
-            : `You need ${MIN_FOLLOWERS} followers to go live (${followerCount} / ${MIN_FOLLOWERS}).`}
+          {REQUIRE_FOLLOWERS_FOR_LIVE
+            ? followerCount === null
+              ? 'Loading follower count…'
+              : `You need ${MIN_FOLLOWERS} followers to go live (${followerCount} / ${MIN_FOLLOWERS}).`
+            : REQUIRE_LIVE_MINUTES_FOR_GO_LIVE
+              ? liveMinutes === null
+                ? 'Loading your live minutes…'
+                : liveMinutes > 0
+                  ? `You have ${liveMinutes} live minute(s). Pick a duration, then tap Go Live.`
+                  : 'You need live minutes to start. Purchase minutes from the app when available.'
+              : liveMinutes !== null && liveMinutes > 0
+                ? `You have ${liveMinutes} live minute(s). Pick a duration, then tap Go Live.`
+                : 'Pick a duration, then tap Go Live to start your stream.'}
         </Text>
         <Text style={styles.hintText}>
-          Grow faster: invite friends, share your profile from the menu, post regularly, and engage with others
-          so people follow you back.
+          {REQUIRE_FOLLOWERS_FOR_LIVE
+            ? 'Grow faster: invite friends, share your profile from the menu, post regularly, and engage with others so people follow you back.'
+            : 'Use a stable connection and good lighting so viewers get the best experience.'}
         </Text>
 
         {/* <View style={styles.priceContainer}>
@@ -169,7 +190,7 @@ const canGoLive = hasMinFollowers && liveMinutes !== null && liveMinutes > 0;
       </LinearGradient>
 
       {/* Error Message */}
-      {!hasMinFollowers && followerCount !== null && (
+      {REQUIRE_FOLLOWERS_FOR_LIVE && !hasMinFollowers && followerCount !== null && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
             You need at least {MIN_FOLLOWERS} followers to go live. Open your profile to share your link and invite

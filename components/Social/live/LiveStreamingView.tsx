@@ -547,7 +547,7 @@ export default function LiveStreamingView({
               { color: dark ? '#FFF' : '#FFF' },
             ]}
           >
-            View Audience
+             Audience
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -560,15 +560,15 @@ export default function LiveStreamingView({
               { color: dark ? '#FFF' : '#FFF' },
             ]}
           >
-            View Insights
+             Insights
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.endStreamButton]}
+          style={[styles.endStreamButton, styles.controlButton]}
           onPress={endLiveFlow}
           activeOpacity={0.8}
         >
-          <MaterialIcons name="call-end" size={22} color="#FFF" />
+          <MaterialIcons name="call-end" size={18} color="#FFF" />
           <Text style={styles.endStreamButtonText}>End stream</Text>
         </TouchableOpacity>
       </View>
@@ -949,11 +949,11 @@ const styles = StyleSheet.create({
   },
   controlsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 12,
-    gap: 12,
+    paddingBottom: 18,
+    paddingTop: 10,
+    gap: 8,
     zIndex: 1000,
     elevation: 1000,
     backgroundColor: 'rgba(20,20,20,0.98)',
@@ -962,33 +962,34 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     flex: 1,
-    minWidth: 100,
+    minWidth: 0,
   },
   viewAudienceButton: {
     borderRadius: 10,
-    paddingVertical: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#CCCCCC',
   },
   viewAudienceButtonText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 'bold',
   },
   endStreamButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 5,
     backgroundColor: '#940304',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 10,
-    minWidth: 140,
+    minWidth: 0,
   },
   endStreamButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
   },
   giftContainer: {

@@ -11,7 +11,7 @@ export function buildLiveStreamWebHtml(channel: string, role: 'host' | 'audience
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Agora Live Streaming</title>
+  <title>GymPaddy Live Streaming</title>
   <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <style>
@@ -245,7 +245,7 @@ async function handleConfirmEnd() {
 
 async function endLiveStream() {
   try {
-    await fetch("https://gympaddy.skillverse.com.pk/api/live-streams/end/" + encodeURIComponent(CHANNEL));
+    await fetch("https://api.gympaddy.com/api/live-streams/end/" + encodeURIComponent(CHANNEL));
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage("stream_ended");
     }

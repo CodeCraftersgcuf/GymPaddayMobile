@@ -14,7 +14,7 @@ export const useLiveStreams = () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
 
-      const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/live-streams', {
+      const response = await fetch('https://api.gympaddy.com/api/user/live-streams', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',

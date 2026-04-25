@@ -218,7 +218,7 @@ export default function MarketplaceScreen() {
   };
 
   // const BASE_STORAGE_URL = 'http://192.168.175.151:8000/storage/';
-  const BASE_STORAGE_URL = 'https://gympaddy.skillverse.com.pk/storage/';
+  const BASE_STORAGE_URL = 'https://api.gympaddy.com/storage/';
 
 
   const apiListings = Array.isArray(data?.data)

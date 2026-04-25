@@ -268,7 +268,7 @@ export default function StoryPreview() {
       }
     }
 
-    const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
+    const response = await fetch('https://api.gympaddy.com/api/user/stories', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

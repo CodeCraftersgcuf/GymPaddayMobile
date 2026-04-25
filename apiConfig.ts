@@ -1,6 +1,6 @@
 // Single production API host — must match the backend used for auth, posts, and uploads.
 // (Previously api.gympaddy.com caused login/post failures while media URLs pointed at skillverse.)
-const API_DOMAIN = "https://gympaddy.skillverse.com.pk/api";
+const API_DOMAIN = "https://api.gympaddy.com/api";
 
 
 const API_ENDPOINTS = {

@@ -560,7 +560,7 @@ export default function CreatePostScreen() {
         });
       } else {
         console.log('✨ Creating new post');
-        console.log('🌐 API Endpoint:', 'https://gympaddy.skillverse.com.pk/api/user/posts');
+        console.log('🌐 API Endpoint:', 'https://api.gympaddy.com/api/user/posts');
         createPostMutation.mutate({
           data: formData,
           token,

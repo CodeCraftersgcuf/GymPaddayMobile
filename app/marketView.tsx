@@ -99,7 +99,7 @@ export default function ItemDetailsScreen() {
 
     // Base API URL
     // const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
-    const API_BASE_URL = 'https://gympaddy.skillverse.com.pk/storage/';
+    const API_BASE_URL = 'https://api.gympaddy.com/storage/';
     // Extract the actual data from the API response
     const listing = listingData?.data;
 

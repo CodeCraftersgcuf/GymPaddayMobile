@@ -133,7 +133,7 @@ export default function MessageChat() {
   const serverMessages = (data?.messages?.map((msg: any) => {
     let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
     if (imageUrl && !imageUrl.startsWith('http')) {
-      imageUrl = `https://gympaddy.skillverse.com.pk/storage/${imageUrl}`;
+      imageUrl = `https://api.gympaddy.com/storage/${imageUrl}`;
     }
     return {
       id: String(msg.id),
@@ -183,7 +183,7 @@ export default function MessageChat() {
           });
         }
         console.log('Sending message with image:', payload.text, payload.imageUri);
-        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/chat-messages', {
+        const response = await fetch('https://api.gympaddy.com/api/user/chat-messages', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -270,7 +270,7 @@ export default function MessageChat() {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
 
-        const res = await fetch('https://gympaddy.skillverse.com.pk/api/user/user/incoming-daily-call', {
+        const res = await fetch('https://api.gympaddy.com/api/user/user/incoming-daily-call', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

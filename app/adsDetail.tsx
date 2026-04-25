@@ -66,7 +66,7 @@ const AdDetailsScreen: React.FC = () => {
     const url = ad.listing.media[0].url;
     imageUrl = url.startsWith('http')
       ? url
-      : `https://gympaddy.skillverse.com.pk/storage/${url}`;
+      : `https://api.gympaddy.com/storage/${url}`;
   }
 
 

@@ -483,7 +483,7 @@ GymPaddy is a comprehensive fitness social platform that combines social network
 - **Storage:** Expo SecureStore, AsyncStorage
 
 ### API Integration
-- **Base URL:** https://gympaddy.skillverse.com.pk/api
+- **Base URL:** https://api.gympaddy.com/api
 - **Authentication:** Bearer token (JWT)
 - **Data Format:** JSON
 - **Error Handling:** Comprehensive error messages

@@ -62,7 +62,7 @@ const UserPostDetail: React.FC<{
                 return;
               }
 
-              await axios.delete(`https://gympaddy.skillverse.com.pk/api/user/posts/${idCan.postId}`, {
+              await axios.delete(`https://api.gympaddy.com/api/user/posts/${idCan.postId}`, {
                 headers: {
                   Authorization: `Bearer ${token}`,
                 },
