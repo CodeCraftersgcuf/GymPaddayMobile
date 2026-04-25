@@ -1201,5 +1201,7 @@ const styles = StyleSheet.create({
 export default React.memo(PostItem, (prevProps, nextProps) => {
   return prevProps.post.id === nextProps.post.id && 
          prevProps.post.likes_count === nextProps.post.likes_count &&
-         prevProps.post.comments_count === nextProps.post.comments_count;
+         prevProps.post.comments_count === nextProps.post.comments_count &&
+         prevProps.isFeedVideoActive === nextProps.isFeedVideoActive &&
+         prevProps.showComment === nextProps.showComment;
 });

@@ -14,6 +14,7 @@ import {
   NativeScrollEvent,
   ViewToken,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostItem from '@/components/Social/PostItem';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
@@ -99,6 +100,7 @@ export default function SocialFeedScreen() {
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
   const logoutTriggeredRef = useRef(false);
   const [activePostId, setActivePostId] = useState<number | null>(null);
+  const isFocused = useIsFocused();
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 65,
     minimumViewTime: 120,
@@ -111,6 +113,14 @@ export default function SocialFeedScreen() {
       setActivePostId(Number.isFinite(id) ? id : null);
     }
   ).current;
+
+  useEffect(() => {
+    // If user leaves Social tab, force all feed videos to inactive.
+    // This ensures audio/video cannot continue in the background.
+    if (!isFocused) {
+      setActivePostId(null);
+    }
+  }, [isFocused]);
 
   const handleBlockedOrUnauthorized = async (incomingError: any) => {
     if (logoutTriggeredRef.current) return;
@@ -658,7 +668,7 @@ export default function SocialFeedScreen() {
             ) : null
           }
           renderItem={({ item }) => {
-            const primaryId = activePostId ?? posts[0]?.id ?? null;
+            const primaryId = isFocused ? (activePostId ?? posts[0]?.id ?? null) : null;
             const pid = Number(item.id);
             return (
               <PostItem
