@@ -31,6 +31,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Video, ResizeMode } from "expo-av";
+import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 import { useFeedVideo } from '@/contexts/FeedVideoContext';
 
@@ -100,6 +101,12 @@ const PostItem: React.FC<PostItemProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
   const videoRefs = useRef<Record<number, Video>>({});
+  const fullscreenVideoRef = useRef<Video | null>(null);
+  const [fullscreenIsPlaying, setFullscreenIsPlaying] = useState(true);
+  const [fullscreenPlaybackRate, setFullscreenPlaybackRate] = useState(1.0);
+  const [fullscreenDurationMs, setFullscreenDurationMs] = useState(0);
+  const [fullscreenPositionMs, setFullscreenPositionMs] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   // console.log("post data we are getting", post);
   useEffect(() => {
@@ -254,10 +261,16 @@ const PostItem: React.FC<PostItemProps> = ({
   }, [post.recent_comments, post.id, onCommentPress]);
 
   const openImageSlider = (index: number) => {
-    const isVideo = ImagesData[index] === post.videoUrl;
-    if (isVideo) return; // ⛔ don't open modal for video
+    Object.keys(videoRefs.current).forEach((key) => {
+      videoRefs.current[Number(key)]?.pauseAsync?.().catch(() => {});
+    });
     setSelectedImage(index);
     setModalImageIndex(index);
+    setFullscreenIsPlaying(true);
+    setFullscreenPlaybackRate(1.0);
+    setFullscreenPositionMs(0);
+    setFullscreenDurationMs(0);
+    setIsScrubbing(false);
     setModalVisible(true);
   };
 
@@ -265,6 +278,13 @@ const PostItem: React.FC<PostItemProps> = ({
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
     if (newIndex >= 0 && newIndex < ImagesData.length) {
       setModalImageIndex(newIndex);
+      setFullscreenIsPlaying(true);
+      setFullscreenPositionMs(0);
+      setFullscreenDurationMs(0);
+      setIsScrubbing(false);
+      if (ImagesData[newIndex] !== post.videoUrl) {
+        fullscreenVideoRef.current?.pauseAsync?.().catch(() => {});
+      }
     }
   };
 
@@ -305,22 +325,33 @@ const PostItem: React.FC<PostItemProps> = ({
     });
   };
 
+  const formatPlaybackTime = (ms: number) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
 
   const formatTimestamp = (timestamp) => {
     const postDate = new Date(timestamp);
     return `${formatDistanceToNow(postDate)} ago`; // "20 minutes ago"
   };
 
-  // Share post content and first image
+  // Share post content/media with app-drive message
   const handleShare = React.useCallback(async () => {
     try {
-      let message = post.content || '';
-      if (post.imagesUrl && post.imagesUrl.length > 0) {
-        message += `\n${post.imagesUrl[0]}`;
-      }
+      const activeMedia = ImagesData[currentIndex] || post.imagesUrl?.[0] || post.videoUrl;
+      let message = (post.content || 'Check out this post on GymPaddy!').trim();
+      message += '\n\nDownload GymPaddy and join me 🚀';
+      if (activeMedia) message += `\n${activeMedia}`;
       const result = await Share.share({
         message,
-        url: post.imagesUrl && post.imagesUrl.length > 0 ? post.imagesUrl[0] : undefined,
+        url: activeMedia || undefined,
         title: 'Check out this post!',
       });
       if (result.action === Share.sharedAction && token) {
@@ -331,7 +362,8 @@ const PostItem: React.FC<PostItemProps> = ({
       Alert.alert('Share Error', 'Failed to share post.');
       console.error('Share error:', error);
     }
-  }, [post.content, post.imagesUrl, post.id, token]);
+  }, [post.content, post.imagesUrl, post.videoUrl, post.id, token, ImagesData, currentIndex]);
+
 
   // Download image to device gallery
   // const handleDownload = async () => {
@@ -461,6 +493,15 @@ const PostItem: React.FC<PostItemProps> = ({
       console.error('Download error:', error);
     }
   };
+
+  const handleMediaOptions = React.useCallback(() => {
+    Alert.alert('Media options', 'Choose what you want to do', [
+      { text: 'Download', onPress: () => void handleDownload() },
+      { text: 'Share', onPress: () => void handleShare() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [handleShare]);
+
   const WORD_LIMIT = 25;
   const words = post?.content?.trim().split(' ');
   const shouldTruncate = words?.length > WORD_LIMIT;
@@ -526,23 +567,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
               return isVideo ? (
                 <View style={styles.carouselVideoWrapper}>
-                  <Pressable
-                    onPress={() => {
-                      // Toggle controls visibility on tap
-                      setShowVideoControls(prev => ({ ...prev, [index]: true }));
-                      // Clear existing timeout
-                      if (controlsTimeoutRef.current[index]) {
-                        clearTimeout(controlsTimeoutRef.current[index]!);
-                      }
-                      // Hide controls again after 3 seconds if video is playing
-                      if (isPlaying[index]) {
-                        controlsTimeoutRef.current[index] = setTimeout(() => {
-                          setShowVideoControls(prev => ({ ...prev, [index]: false }));
-                        }, 3000);
-                      }
-                    }}
-                    style={styles.videoPressable}
-                  >
+                  <Pressable onPress={() => openImageSlider(index)} style={styles.videoPressable}>
                     <Video
                       ref={(ref) => {
                         if (ref) {
@@ -634,46 +659,6 @@ const PostItem: React.FC<PostItemProps> = ({
                     />
                   )}
 
-                  {/* Play Button */}
-                  {!isBuffering[index] && showVideoControls[index] && (
-                    <TouchableOpacity
-                      style={styles.playButton}
-                      onPress={async () => {
-                        const ref = videoRefs.current[index];
-                        if (ref && videoLoaded[index]) {
-                          try {
-                            if (isPlaying[index]) {
-                              await ref.pauseAsync();
-                              // State will be updated by onPlaybackStatusUpdate
-                            } else {
-                              await ref.playAsync();
-                              // State will be updated by onPlaybackStatusUpdate
-                              // Show controls temporarily, then hide after 3 seconds
-                              setShowVideoControls(prev => ({ ...prev, [index]: false }));
-                              if (controlsTimeoutRef.current[index]) {
-                                clearTimeout(controlsTimeoutRef.current[index]!);
-                              }
-                              controlsTimeoutRef.current[index] = setTimeout(() => {
-                                setShowVideoControls(prev => {
-                                  if (prev[index] === false) return prev;
-                                  return { ...prev, [index]: false };
-                                });
-                              }, 3000);
-                            }
-                          } catch (error) {
-                            console.error('Error toggling playback:', error);
-                          }
-                        }
-                      }}
-                    >
-                      <Image
-                        source={isPlaying[index] ? images.pauseIcon : images.playIcon}
-                        style={styles.playIcon}
-                      />
-                    </TouchableOpacity>
-                  )}
-
-
                   {/* Mute Button */}
                   <TouchableOpacity onPress={toggleMuted} style={styles.muteButton}>
                     <Image
@@ -734,14 +719,11 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>}
 
 
-          <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
-            <Image source={images.Share} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
-            <ThemeText style={styles.actionText}>{shareCount}</ThemeText>
-          </TouchableOpacity>
         </ThemedView>
         <ThemedView darkColor="transparent">
-          <TouchableOpacity style={styles.actionItem} onPress={handleDownload}>
+          <TouchableOpacity style={styles.actionItem} onPress={handleMediaOptions}>
             <Image source={images.downloadIcon} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
+            <ThemeText style={styles.actionText}>{shareCount}</ThemeText>
           </TouchableOpacity>
         </ThemedView>
       </View>
@@ -794,12 +776,15 @@ const PostItem: React.FC<PostItemProps> = ({
 
 
 
-      {/* Full-Screen Image Slider Modal */}
+      {/* Full-Screen Media Slider Modal */}
       <Modal 
         visible={modalVisible} 
         transparent={true} 
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => {
+          fullscreenVideoRef.current?.pauseAsync?.().catch(() => {});
+          setModalVisible(false);
+        }}
       >
         <View style={styles.modalBackground}>
           <FlatList
@@ -815,13 +800,54 @@ const PostItem: React.FC<PostItemProps> = ({
               index,
             })}
             keyExtractor={(item, index) => `fs-${post.id}-${item}-${index}`}
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
               const isVideo = item === post.videoUrl;
               if (isVideo) {
                 return (
-                  <View style={styles.fullscreenPage}>
-                    <View style={styles.fullscreenVideoPlaceholder} />
-                  </View>
+                  <Pressable
+                    style={styles.fullscreenPage}
+                    onPress={async () => {
+                      const ref = fullscreenVideoRef.current;
+                      if (!ref) return;
+                      try {
+                        if (fullscreenIsPlaying) {
+                          await ref.pauseAsync();
+                          setFullscreenIsPlaying(false);
+                        } else {
+                          await ref.playAsync();
+                          setFullscreenIsPlaying(true);
+                        }
+                      } catch {
+                        // ignore transient playback errors
+                      }
+                    }}
+                  >
+                    <Video
+                      ref={(ref) => {
+                        if (isVideo && modalImageIndex === index) {
+                          fullscreenVideoRef.current = ref;
+                        }
+                      }}
+                      source={{ uri: item }}
+                      style={styles.fullscreenVideo}
+                      resizeMode={ResizeMode.CONTAIN}
+                      isMuted={false}
+                      isLooping
+                      shouldPlay={modalImageIndex === index && fullscreenIsPlaying}
+                      rate={fullscreenPlaybackRate}
+                      useNativeControls={false}
+                      onPlaybackStatusUpdate={(status) => {
+                        if (!status.isLoaded) return;
+                        setFullscreenIsPlaying(status.isPlaying);
+                        if (typeof status.durationMillis === 'number') {
+                          setFullscreenDurationMs(status.durationMillis);
+                        }
+                        if (!isScrubbing && typeof status.positionMillis === 'number') {
+                          setFullscreenPositionMs(status.positionMillis);
+                        }
+                      }}
+                    />
+                  </Pressable>
                 );
               }
               return (
@@ -834,6 +860,73 @@ const PostItem: React.FC<PostItemProps> = ({
             onScroll={handleFullscreenScroll}
             scrollEventThrottle={16}
           />
+
+          {ImagesData[modalImageIndex] === post.videoUrl && (
+            <View style={styles.fullscreenControls}>
+              <View style={styles.speedControls}>
+                {[0.5, 1.0, 1.5, 2.0].map((rate) => (
+                  <TouchableOpacity
+                    key={rate}
+                    style={[
+                      styles.speedChip,
+                      fullscreenPlaybackRate === rate && styles.speedChipActive,
+                    ]}
+                    onPress={async () => {
+                      setFullscreenPlaybackRate(rate);
+                      try {
+                        await fullscreenVideoRef.current?.setRateAsync(rate, true);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                  >
+                    <Text style={styles.speedChipText}>{rate}x</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.timelineRow}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (!fullscreenVideoRef.current) return;
+                    if (fullscreenIsPlaying) {
+                      await fullscreenVideoRef.current.pauseAsync();
+                      setFullscreenIsPlaying(false);
+                    } else {
+                      await fullscreenVideoRef.current.playAsync();
+                      setFullscreenIsPlaying(true);
+                    }
+                  }}
+                  style={styles.timelinePlayPause}
+                >
+                  <Text style={styles.timelinePlayPauseText}>
+                    {fullscreenIsPlaying ? 'Pause' : 'Play'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.timelineTimeText}>{formatPlaybackTime(fullscreenPositionMs)}</Text>
+                <Slider
+                  style={styles.timelineSlider}
+                  minimumValue={0}
+                  maximumValue={Math.max(fullscreenDurationMs, 1)}
+                  value={fullscreenPositionMs}
+                  minimumTrackTintColor="#ffffff"
+                  maximumTrackTintColor="rgba(255,255,255,0.35)"
+                  thumbTintColor="#ffffff"
+                  onSlidingStart={() => setIsScrubbing(true)}
+                  onValueChange={(value) => setFullscreenPositionMs(value)}
+                  onSlidingComplete={async (value) => {
+                    setIsScrubbing(false);
+                    setFullscreenPositionMs(value);
+                    try {
+                      await fullscreenVideoRef.current?.setPositionAsync(value);
+                    } catch {
+                      // ignore seek errors
+                    }
+                  }}
+                />
+                <Text style={styles.timelineTimeText}>{formatPlaybackTime(fullscreenDurationMs)}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Pagination Dots — same indices as ImagesData (modal pages) */}
           {ImagesData.length > 1 && (
@@ -848,7 +941,13 @@ const PostItem: React.FC<PostItemProps> = ({
           )}
 
           {/* Close Button */}
-          <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => {
+              fullscreenVideoRef.current?.pauseAsync?.().catch(() => {});
+              setModalVisible(false);
+            }}
+          >
             <View style={styles.closeButtonCircle}>
               <Image source={images.CreatePlus} style={styles.closeButtonImage} />
             </View>
@@ -1093,10 +1192,76 @@ const styles = StyleSheet.create({
     height,
     resizeMode: 'contain',
   },
+  fullscreenVideo: {
+    width,
+    height,
+    backgroundColor: '#000',
+  },
   fullscreenVideoPlaceholder: {
     width,
     height,
     backgroundColor: '#111',
+  },
+  fullscreenControls: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 90,
+    gap: 10,
+  },
+  speedControls: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  speedChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  speedChipActive: {
+    backgroundColor: '#940304',
+  },
+  speedChipText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  timelinePlayPause: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  timelinePlayPauseText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  timelineSlider: {
+    flex: 1,
+    height: 24,
+  },
+  timelineTimeText: {
+    color: '#fff',
+    fontSize: 11,
+    minWidth: 34,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   pagination: {
     marginBottom: 20,
