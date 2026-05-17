@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from 'react-native';
 import ThemeText from '@/components/ThemedText';
 import ThemedView from '@/components/ThemedView';
@@ -13,6 +14,7 @@ import { useTheme } from '@/contexts/themeContext';
 
 type Conversation = {
   id: string;
+  conversation_id?: number | string;
   user: {
     id: string;
     username: string;
@@ -22,7 +24,9 @@ type Conversation = {
   lastMessage: {
     text: string;
     timestamp: Date;
+    unreadCount?: number;
   };
+  other_user?: { profile_picture_url?: string };
 };
 
 type Props = {
@@ -44,21 +48,12 @@ export default function ConversationList({
   const formatMessageTime = (date: Date) =>
     isToday(date) ? format(date, 'h:mm a') : format(date, 'MMM d');
 
-  const flatListRef = React.useRef<FlatList>(null);
-
-  React.useEffect(() => {
-    if (conversations.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 0);
-    }
-  }, [conversations]);
-
   return (
     <FlatList
-      ref={flatListRef}
       data={conversations}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item, index) =>
+        `c-${item.conversation_id ?? item.id}-${index}`
+      }
       style={styles.list}
       contentContainerStyle={styles.listContent}
       ListEmptyComponent={() => (
@@ -108,14 +103,19 @@ export default function ConversationList({
   </View>
 </View>
 
-            <ThemeText style={styles.message} numberOfLines={1}>
-              {item.lastMessage.text}
+            <ThemeText style={styles.message} numberOfLines={2}>
+              {item.lastMessage.text?.trim()
+                ? item.lastMessage.text
+                : 'Tap to open chat'}
             </ThemeText>
           </View>
         </TouchableOpacity>
       )}
-      refreshing={!!refreshing}
-      onRefresh={onRefresh}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} />
+        ) : undefined
+      }
     />
   );
 }

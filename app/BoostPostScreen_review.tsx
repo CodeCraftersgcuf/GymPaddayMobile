@@ -28,6 +28,7 @@ import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { updateBoostedMarketplace, updateBoostedPost } from '@/utils/mutations/boost';
 import { API_ENDPOINTS } from '@/apiConfig';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 // If you have a type for your navigation stack, use that instead of `any`
 type RootStackParamList = {
@@ -49,6 +50,12 @@ const ReviewAdScreen: React.FC = () => {
     const theme = isDark ? colors.dark : colors.light;
     const route = useRouter();
     const params = useLocalSearchParams();
+    const { hidden, loading: iosStatusLoading } = useIosMonetizationHidden();
+
+    useEffect(() => {
+        if (!iosStatusLoading && hidden) route.replace('/(tabs)/more');
+    }, [route, iosStatusLoading, hidden]);
+
     const [loadingBalance, setLoadingBalance] = useState(true);
     const [balance, setBalance] = useState<number>(0);
     let audienceArray: (string | number)[] = [];

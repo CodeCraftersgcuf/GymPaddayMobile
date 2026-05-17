@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/themeContext';
 import { useMessages } from '@/components/messages/MessageContext';
@@ -16,6 +16,231 @@ import ThemedView from '@/components/ThemedView';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchConnectedUsers } from '@/utils/queries/chat';
 import * as SecureStore from 'expo-secure-store';
+
+function pickString(v: unknown): string {
+  return typeof v === 'string' && v.trim() ? v.trim() : '';
+}
+
+const SKIP_DEEP_STRING_KEYS = new Set([
+  'id',
+  'sender_id',
+  'receiver_id',
+  'conversation_id',
+  'user_id',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'profile_picture_url',
+  'profile_picture',
+  'email',
+  'username',
+  'fullname',
+  'name',
+  'first_name',
+  'last_name',
+  'phone',
+  'token',
+  'direction',
+  'status',
+  'mime_type',
+  'image_url',
+  'media_url',
+  'url',
+  'uuid',
+]);
+
+/** Don’t treat nested user blobs as the message preview. */
+const SKIP_DEEP_SUBTREE_KEYS = new Set([
+  'sender',
+  'receiver',
+  'user',
+  'other_user',
+  'from',
+  'to',
+]);
+
+/** Pull human-readable text from nested API objects (avoids missing previews when shape varies). */
+function stringifyMessageContent(v: unknown, depth = 0): string {
+  if (v == null || depth > 5) return '';
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (!t) return '';
+    try {
+      const parsed = JSON.parse(t);
+      if (parsed && typeof parsed === 'object') {
+        const inner = stringifyMessageContent(parsed, depth + 1);
+        if (inner) return inner;
+      }
+    } catch {
+      /* not JSON */
+    }
+    return t;
+  }
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v !== 'object') return '';
+  const o = v as Record<string, unknown>;
+  const keys = [
+    'message',
+    'text',
+    'body',
+    'content',
+    'caption',
+    'preview',
+    'snippet',
+    'label',
+    'title',
+    'chat_message',
+    'message_text',
+    'plain_text',
+    'description',
+    'note',
+    'msg',
+  ];
+  for (const k of keys) {
+    const s = stringifyMessageContent(o[k], depth + 1);
+    if (s) return s;
+  }
+  return '';
+}
+
+/** First non-empty string under `obj`, skipping obvious non-message fields. */
+function deepFirstMessageString(obj: unknown, depth = 0): string {
+  if (obj == null || depth > 8) return '';
+  if (typeof obj === 'string') {
+    const t = obj.trim();
+    if (t.length < 1) return '';
+    if (/^https?:\/\//i.test(t)) return '';
+    if (/^\d{4}-\d{2}-\d{2}T/.test(t)) return '';
+    return t;
+  }
+  if (typeof obj !== 'object') return '';
+  const record = obj as Record<string, unknown>;
+  for (const [k, v] of Object.entries(record)) {
+    if (SKIP_DEEP_STRING_KEYS.has(k) || SKIP_DEEP_SUBTREE_KEYS.has(k)) continue;
+    const s = deepFirstMessageString(v, depth + 1);
+    if (s) return s;
+  }
+  return '';
+}
+
+/** Resolve the payload object that represents the latest chat line (API shapes differ). */
+function getLastMessageRecord(conv: any): any {
+  const direct = [
+    conv?.last_message,
+    conv?.latest_message,
+    conv?.lastMessage,
+    conv?.recent_message,
+    conv?.last_chat_message,
+    conv?.lastChatMessage,
+    conv?.data?.last_message,
+    conv?.data?.latest_message,
+  ];
+  for (const d of direct) {
+    if (d == null) continue;
+    if (typeof d === 'string' && d.trim()) return { message: d };
+    if (typeof d === 'object' && !Array.isArray(d) && Object.keys(d).length > 0) {
+      return d;
+    }
+  }
+
+  const lists = [
+    conv?.messages,
+    conv?.chat_messages,
+    conv?.recent_messages,
+    conv?.data?.messages,
+  ];
+  for (const list of lists) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const sorted = [...list].sort((a, b) => {
+      const ta = new Date(a?.created_at || a?.updated_at || 0).getTime();
+      const tb = new Date(b?.created_at || b?.updated_at || 0).getTime();
+      return tb - ta;
+    });
+    if (sorted[0]) return sorted[0];
+  }
+  return null;
+}
+
+/** Normalize API conversation row to a single preview line. */
+function getConversationLastMessagePreview(conv: any): string {
+  const rootPreview =
+    pickString(conv?.last_message_preview) ||
+    pickString(conv?.last_message_text) ||
+    pickString(conv?.preview) ||
+    pickString(conv?.snippet);
+  if (rootPreview) return rootPreview;
+
+  const last = getLastMessageRecord(conv);
+
+  if (!last) {
+    return String(conv?.type ?? '').toLowerCase() === 'marketplace'
+      ? 'Marketplace conversation'
+      : '';
+  }
+
+  let text = stringifyMessageContent(last);
+  if (text) return text;
+
+  text =
+    pickString(last.message) ||
+    pickString(last.body) ||
+    pickString(last.content) ||
+    pickString(last.text) ||
+    pickString(last.chat_message) ||
+    pickString(last.message_text);
+  if (text) return text;
+
+  if (last.message != null && typeof last.message === 'object') {
+    const m = last.message as Record<string, unknown>;
+    text =
+      pickString(m.text as string) ||
+      pickString(m.body as string) ||
+      pickString(m.content as string) ||
+      stringifyMessageContent(m.message, 0);
+    if (text) return text;
+  }
+
+  text = deepFirstMessageString(last);
+  if (text) return text;
+
+  const listing =
+    last.listing ??
+    last.product ??
+    last.metadata?.listing ??
+    last.attachments?.[0]?.listing;
+  if (listing && typeof listing === 'object' && listing !== null && 'title' in listing) {
+    const title = (listing as { title?: string }).title;
+    if (title) return `📦 ${title}`;
+  }
+  if (
+    (Array.isArray(last.attachments) && last.attachments.length > 0) ||
+    last.has_attachment ||
+    pickString(last.image_url) ||
+    pickString(last.media_url)
+  ) {
+    return '📷 Media message';
+  }
+  const mt = String(last.message_type || last.type || '').toLowerCase();
+  if (mt.includes('image') || mt.includes('photo')) return '📷 Photo';
+  if (String(conv?.type ?? '').toLowerCase() === 'marketplace') {
+    return 'New marketplace message';
+  }
+  return '';
+}
+
+function extractConversationRows(data: any): any[] {
+  if (!data) return [];
+  if (Array.isArray(data.conversations)) return data.conversations;
+  if (Array.isArray(data.data?.conversations)) return data.data.conversations;
+  if (
+    Array.isArray(data.data) &&
+    data.data.length > 0 &&
+    (data.data[0]?.other_user != null || data.data[0]?.conversation_id != null)
+  ) {
+    return data.data;
+  }
+  return [];
+}
 
 export default function Chat() {
 
@@ -47,31 +272,34 @@ export default function Chat() {
       return fetchConnectedUsers(token);
     },
   });
-  // console.log("The data from API:", data?.conversations);
+  const conversationRows = extractConversationRows(data);
 
   // Transform API data to ConversationList format
-  const apiConversations = data?.conversations?.map((conv: any) => {
-  console.log("conv", conv.last_message);
-  return {
-    id: String(conv.conversation_id),
-    user: {
-      id: String(conv.other_user.id),
-      username: conv.other_user.username,
-      profile_img: conv.other_user.profile_picture_url,
-      online: !!conv.other_user?.is_online,
-    },
-    lastMessage: {
-      text: conv.last_message?.message || '',
-      timestamp: conv.last_message?.created_at
-        ? new Date(conv.last_message.created_at)
-        : new Date(conv.updated_at || conv.created_at),
-      unreadCount: conv.last_message.unread_count,
-    },
-    other_user: conv.other_user,
-    conversation_id: conv.conversation_id,
-    type: conv.type,
-  };
-}) || [];
+  const apiConversations =
+    conversationRows.map((conv: any, index: number) => {
+      const last = getLastMessageRecord(conv);
+      const cid = conv.conversation_id ?? conv.id;
+      return {
+        id: cid != null ? String(cid) : `conv-fallback-${index}`,
+        user: {
+          id: String(conv.other_user?.id ?? ''),
+          username: conv.other_user?.username ?? 'User',
+          profile_img: conv.other_user?.profile_picture_url,
+          online: !!conv.other_user?.is_online,
+        },
+        lastMessage: {
+          text: getConversationLastMessagePreview(conv),
+          timestamp: last?.created_at
+            ? new Date(last.created_at)
+            : new Date(conv.updated_at || conv.created_at || Date.now()),
+          unreadCount:
+            last?.unread_count ?? conv.unread_count ?? conv.unread_messages ?? 0,
+        },
+        other_user: conv.other_user,
+        conversation_id: cid,
+        type: conv.type,
+      };
+    }) || [];
 
 
   // Build users for AvatarList from API conversations
@@ -196,21 +424,12 @@ export default function Chat() {
               <ActivityIndicator size="large" color={dark ? 'white' : 'black'} />
             </View>
           ) : (
-
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 30 }}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl refreshing={refreshing || isRefetching} onRefresh={onRefresh} />
-              }
-            >
-              <ConversationList
-                conversations={filteredConversations}
-                onConversationPress={handleConversationPress}
-              />
-            </ScrollView>
-
+            <ConversationList
+              conversations={filteredConversations}
+              onConversationPress={handleConversationPress}
+              refreshing={refreshing || isRefetching}
+              onRefresh={onRefresh}
+            />
           )}
         </ThemedView>
       </ThemedView>

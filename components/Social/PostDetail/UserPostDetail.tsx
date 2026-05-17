@@ -1,4 +1,5 @@
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useIosMonetizationHidden } from '@/utils/iosMonetization'
 import React, { useState } from 'react'
 import { images } from '@/constants'
 import ThemedView from '@/components/ThemedView'
@@ -18,6 +19,7 @@ const UserPostDetail: React.FC<{
   onClose?: () => void;
 }> = ({ idCan, onClose }) => {
   const { dark } = useTheme();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const [modalVisible, setModalVisible] = useState(false);
   const clientQuery = useQueryClient();
   console.log("Post Id in UserPostDetail:", idCan.postId);
@@ -91,11 +93,15 @@ const UserPostDetail: React.FC<{
       title: 'Edit Post',
       handleFunction: handleEditPost,
     },
-    {
-      icon: images.BoostIcon,
-      title: 'Boost Post',
-      handleFunction: handleOpenModal,
-    },
+    ...(!hideIosMonetization
+      ? [
+          {
+            icon: images.BoostIcon,
+            title: 'Boost Post',
+            handleFunction: handleOpenModal,
+          },
+        ]
+      : []),
     {
       icon: images.DeleteIcon,
       title: 'Delete Post',
@@ -122,12 +128,14 @@ const UserPostDetail: React.FC<{
         }
       </View>
 
-      <BoostAdModal
-        visible={modalVisible}
-        onClose={handleCloseModal}
-        dark={dark}
-        post_id={post_id}
-      />
+      {!hideIosMonetization && (
+        <BoostAdModal
+          visible={modalVisible}
+          onClose={handleCloseModal}
+          dark={dark}
+          post_id={post_id}
+        />
+      )}
     </>
   )
 }

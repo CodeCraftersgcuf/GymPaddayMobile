@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Header from '@/components/more/withdraw/Header';
@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTransaction } from '@/utils/mutations/transactions';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 export interface WithdrawData {
   amount: string;
@@ -24,6 +25,7 @@ export interface WithdrawData {
 
 export default function WithdrawScreen() {
   const router = useRouter();
+  const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
   const [currentStep, setCurrentStep] = useState<'form' | 'summary'>('form');
   const [withdrawData, setWithdrawData] = useState<WithdrawData>({
     amount: '',
@@ -37,10 +39,10 @@ export default function WithdrawScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    if (Platform.OS === 'ios') {
+    if (!iosMonetizationLoading && hideIosMonetization) {
       router.replace('/(tabs)/more');
     }
-  }, [router]);
+  }, [router, hideIosMonetization, iosMonetizationLoading]);
 
   const handleFormSubmit = (data: WithdrawData) => {
     setWithdrawData(data);

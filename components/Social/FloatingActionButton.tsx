@@ -1,66 +1,49 @@
 import { images } from '@/constants';
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image
-} from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Animated, {
   useAnimatedStyle,
-  withSpring,
   useSharedValue,
+  withSpring,
   withTiming,
-  interpolate
+  interpolate,
 } from 'react-native-reanimated';
+
+/** Matches TabHeader `UserImage` (profile) */
+const HEADER_ICON_SIZE = 35;
+const MENU_GAP = 8;
+const MENU_CLUSTER_WIDTH = 140;
 
 interface FloatingActionButtonProps {
   onStartLive?: () => void;
   onCreatePost?: () => void;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }
 
 const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   onStartLive,
-  onCreatePost
+  onCreatePost,
+  expanded,
+  onExpandedChange,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const animation = useSharedValue(0);
 
-  const toggleMenu = () => {
-    const toValue = isOpen ? 0 : 1;
-    animation.value = withSpring(toValue, {
-      damping: 15,
-      stiffness: 100,
+  useEffect(() => {
+    animation.value = withSpring(expanded ? 1 : 0, {
+      damping: 16,
+      stiffness: 140,
     });
-    setIsOpen(!isOpen);
-  };
+  }, [expanded]);
 
-  const liveButtonStyle = useAnimatedStyle(() => {
+  /** Menu drops down from below the +; hidden state slightly upward */
+  const menuColumnStyle = useAnimatedStyle(() => {
+    const t = interpolate(animation.value, [0, 1], [-12, 0]);
+    const s = interpolate(animation.value, [0, 1], [0.92, 1]);
+    const o = interpolate(animation.value, [0, 0.25, 1], [0, 0.5, 1]);
     return {
-      transform: [
-        { scale: withSpring(interpolate(animation.value, [0, 1], [0, 1])) },
-        {
-          translateY: withSpring(
-            interpolate(animation.value, [0, 1], [0, 140])
-          )
-        }
-      ],
-      opacity: withTiming(interpolate(animation.value, [0, 0.5, 1], [0, 0, 1])),
-    };
-  });
-
-  const postButtonStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { scale: withSpring(interpolate(animation.value, [0, 1], [0, 1])) },
-        {
-          translateY: withSpring(
-            interpolate(animation.value, [0, 1], [0, 70])
-          )
-        }
-      ],
-      opacity: withTiming(interpolate(animation.value, [0, 0.5, 1], [0, 0, 1])),
+      opacity: withTiming(o),
+      transform: [{ translateY: withSpring(t) }, { scale: withSpring(s) }],
     };
   });
 
@@ -68,135 +51,140 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
     return {
       transform: [
         {
-          rotate: withSpring(`${interpolate(animation.value, [0, 1], [0, 45])}deg`)
-        }
+          rotate: withSpring(
+            `${interpolate(animation.value, [0, 1], [0, 45])}deg`,
+          ),
+        },
       ],
     };
   });
+
+  const toggleMenu = () => onExpandedChange(!expanded);
+
   const handleStartLive = () => {
-    toggleMenu();
+    onExpandedChange(false);
     onStartLive?.();
   };
 
   const handleCreatePost = () => {
-    toggleMenu();
+    onExpandedChange(false);
     onCreatePost?.();
   };
 
   return (
-    <>
-      {isOpen && (
+    <View style={styles.anchor}>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={toggleMenu}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={
+          expanded ? 'Close create menu' : 'Create post or go live'
+        }
+      >
+        <Animated.View style={rotateStyle}>
+          <Image source={images.CreatePlus} style={styles.plusIcon} />
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[styles.menuColumnBelow, menuColumnStyle]}
+        collapsable={false}
+        pointerEvents={expanded ? 'auto' : 'none'}
+      >
         <TouchableOpacity
-          activeOpacity={1}
-          onPress={toggleMenu}
-          style={StyleSheet.absoluteFillObject}
+          style={[styles.circleAction, styles.postButton]}
+          onPress={handleCreatePost}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Create post"
         >
-          <View style={styles.overlay} />
+          <Image
+            source={images.notifcationIcon}
+            tintColor="white"
+            style={styles.circleActionIcon}
+          />
         </TouchableOpacity>
-      )}
 
-      <View style={styles.container}>
-        {/* Menu rows render first; FAB last so it stays on top for taps */}
-        <Animated.View style={[styles.menuButton, liveButtonStyle]}>
-          <TouchableOpacity style={styles.button} onPress={handleStartLive}>
-            <Text style={styles.buttonText}>Start Live</Text>
-            <View style={[styles.ImagesButton, styles.liveButton]}>
-              <Image
-                source={images.CreateVideo}
-                tintColor={'white'}
-                style={{ width: 25, height: 25 }}
-              />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View style={[styles.menuButton, postButtonStyle]}>
-          <TouchableOpacity style={styles.button} onPress={handleCreatePost}>
-            <Text style={styles.buttonText}>Create Post</Text>
-            <View style={[styles.ImagesButton, styles.postButton]}>
-              <Image
-                source={images.notifcationIcon}
-                tintColor={'white'}
-                style={{ width: 25, height: 25 }}
-              />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <TouchableOpacity style={styles.fab} onPress={toggleMenu} activeOpacity={0.8}>
-          <Animated.View style={rotateStyle}>
-            <Image source={images.CreatePlus} style={{ width: 20, height: 20 }} />
-          </Animated.View>
+        <TouchableOpacity
+          style={[styles.circleAction, styles.liveButton]}
+          onPress={handleStartLive}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Start live stream"
+        >
+          <Image
+            source={images.CreateVideo}
+            tintColor="white"
+            style={styles.circleActionIcon}
+          />
         </TouchableOpacity>
-      </View>
-    </>
+      </Animated.View>
+    </View>
   );
-
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    zIndex: 0,
-  },
-  container: {
-    position: 'absolute',
-    top: 6,
-    left: 0,
-    right: 0,
+  anchor: {
+    width: HEADER_ICON_SIZE,
+    minHeight: HEADER_ICON_SIZE,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    zIndex: 10,
+    alignSelf: 'center',
+    position: 'relative',
+    marginHorizontal: 2,
+    zIndex: 20,
+    overflow: 'visible',
+  },
+  /** Anchored under the + so actions open downward into the feed, not above the header */
+  menuColumnBelow: {
+    position: 'absolute',
+    top: HEADER_ICON_SIZE + MENU_GAP,
+    width: MENU_CLUSTER_WIDTH,
+    left: (HEADER_ICON_SIZE - MENU_CLUSTER_WIDTH) / 2,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: MENU_GAP,
   },
   fab: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
+    borderRadius: HEADER_ICON_SIZE / 2,
     backgroundColor: '#940304',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    zIndex: 2,
   },
-  menuButton: {
-    position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+  plusIcon: {
+    width: 16,
+    height: 16,
   },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  ImagesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  circleAction: {
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
+    borderRadius: HEADER_ICON_SIZE / 2,
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 25,
+    alignItems: 'center',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 3,
+  },
+  circleActionIcon: {
+    width: 17,
+    height: 17,
   },
   liveButton: {
     backgroundColor: '#6c5ce7',
-    // right:0,
   },
   postButton: {
     backgroundColor: '#ff00ff',
-  },
-  buttonText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontWeight: '600',
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -86,6 +86,7 @@ function LoadingIndicator({ text = "Loading..." }) {
 }
 
 export default function SocialFeedScreen() {
+  const [fabMenuExpanded, setFabMenuExpanded] = useState(false);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [currentComments, setCurrentComments] = useState<any[]>([]);
   const [optimisticComments, setOptimisticComments] = useState<any[]>([]);
@@ -99,18 +100,43 @@ export default function SocialFeedScreen() {
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
   const logoutTriggeredRef = useRef(false);
   const [activePostId, setActivePostId] = useState<number | null>(null);
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 65,
-    minimumViewTime: 120,
-  }).current;
-  const onViewableItemsChanged = useRef(
+
+  const viewabilityConfig = useMemo(
+    () => ({
+      /** Prefer a single dominant post; tighter = fewer overlaps while scrolling */
+      itemVisiblePercentThreshold: 80,
+      minimumViewTime: 80,
+      waitForInteraction: false,
+    }),
+    [],
+  );
+
+  /** Pick bottom-most visible row among qualified items (better match when scrolling down). */
+  const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const tok = viewableItems.find((v) => v.isViewable && v.item);
-      const raw = tok?.item?.id;
+      const viable = viewableItems.filter(
+        (v) => v.isViewable && v.item != null && v.index != null,
+      );
+      if (viable.length === 0) {
+        setActivePostId(null);
+        return;
+      }
+      viable.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+      const tok = viable[viable.length - 1];
+      const raw = tok.item?.id;
       const id = raw != null ? Number(raw) : null;
       setActivePostId(Number.isFinite(id) ? id : null);
-    }
-  ).current;
+    },
+    [],
+  );
+
+  /** If viewability has not fired yet, focus the first post so the first video can mount. */
+  useEffect(() => {
+    if (posts.length === 0) return;
+    setActivePostId((prev) =>
+      prev == null ? Number(posts[0].id) : prev,
+    );
+  }, [posts]);
 
   const handleBlockedOrUnauthorized = async (incomingError: any) => {
     if (logoutTriggeredRef.current) return;
@@ -246,7 +272,7 @@ export default function SocialFeedScreen() {
     isPending: isAddingComment,
     error: addCommentError
   } = useMutation({
-    mutationFn: async ({ text, postId, tempId, parentId }) => {
+    mutationFn: async ({ text, postId, parentId }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error("No token");
       return createComment({
@@ -255,82 +281,31 @@ export default function SocialFeedScreen() {
       });
     },
     onSuccess: async (res, variables) => {
-      // Don't remove optimistic comment or refetch - just log success
       console.log('Comment added successfully to backend');
-      // The optimistic comment will remain in the UI
+      await refetchComments();
+      queryClient.invalidateQueries({ queryKey: ['userPosts'] });
     },
     onError: (error, variables) => {
-      // Only remove the optimistically added comment from UI on error
-      console.error('Error adding comment, removing from UI:', error);
-      setOptimisticComments(prev =>
-        prev.filter(comment => comment.id !== variables.tempId)
+      console.error('Error adding comment:', error);
+      setPosts(prev =>
+        prev.map(post =>
+          Number(post.id) === Number(variables.postId)
+            ? { ...post, comments_count: Math.max(0, Number(post.comments_count || 0) - 1) }
+            : post
+        )
       );
     }
   });
 
   const handleAddComment = async (text: string, postId: number, parentId?: string) => {
-    // Get current user data for optimistic comment
-    const getCurrentUser = async () => {
-      try {
-        const userData = await SecureStore.getItemAsync('user_data');
-        return userData ? JSON.parse(userData) : null;
-      } catch {
-        return null;
-      }
-    };
-
-    const user = await getCurrentUser();
-
-    // Create temporary comment for immediate UI update
-    const tempComment = {
-      id: `temp_${Date.now()}`,
-      userId: user?.id?.toString() || 'current_user',
-      username: user?.username || 'You',
-      profileImage: user?.profile_picture_url || '',
-      text: text,
-      timestamp: new Date().toISOString(),
-      likes: 0,
-      replies: [],
-      parentId: parentId || null
-
-    };
-    setOptimisticComments(prev => {
-      const updated = JSON.parse(JSON.stringify(prev)); // deep clone since it's nested
-
-      if (parentId) {
-        // Insert into the correct parent's replies
-        const insertReply = (comments: any[]) => {
-          for (let comment of comments) {
-            if (comment.id == parentId) {
-              comment.replies = [...(comment.replies || []), tempComment];
-              return true;
-            }
-            if (comment.replies?.length) {
-              const found = insertReply(comment.replies);
-              if (found) return true;
-            }
-          }
-          return false;
-        };
-
-        const found = insertReply(updated);
-
-        if (!found) {
-          console.warn("Parent not found in optimistic comments");
-          return [...updated, tempComment]; // fallback to top level
-        }
-
-        return updated;
-      }
-
-      // No parentId means it's a top-level comment
-      return [...updated, tempComment];
-    });
-
-    // Send to backend
-    addComment({ text, postId, tempId: tempComment.id, parentId });
-
-    console.log('Adding comment to post:', postId, text);
+    setPosts(prev =>
+      prev.map(post =>
+        Number(post.id) === Number(postId)
+          ? { ...post, comments_count: Number(post.comments_count || 0) + 1 }
+          : post
+      )
+    );
+    addComment({ text, postId, parentId });
   };
 
   const handleCommentPress = (comments: any[], postId: number) => {
@@ -352,7 +327,9 @@ export default function SocialFeedScreen() {
     if (data?.pages) {
       const allPosts = data.pages.flatMap(page => page.data || []); // assuming response has .data field
 
-      const formatted = allPosts.map((post: any) => ({
+      const formatted = allPosts.map((post: any) => {
+        const videoMedia = post.media?.find((m: any) => m.media_type === 'video');
+        return {
         id: Number(post.id),
         user: {
           id: post.user?.id,
@@ -363,10 +340,20 @@ export default function SocialFeedScreen() {
         imagesUrl: post.media
           ?.filter((m: any) => m.media_type === 'image')
           .map((m: any) => m.url) || [],
-        videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
+        videoUrl: videoMedia?.url || null,
+        videoPosterUrl:
+          videoMedia?.thumbnail_url ??
+          videoMedia?.thumbnail ??
+          videoMedia?.preview_image_url ??
+          null,
         timestamp: post.created_at,
         likes_count: post.likes?.length || 0,
-        comments_count: post.comments?.length || 0,
+        comments_count: Number(
+          post.all_comments_count ??
+          post.comments_count ??
+          post.comments?.length ??
+          0
+        ),
         view_count: 0,
         share_count: 0,
         likes: post.likes?.map((like: any) => ({
@@ -386,7 +373,8 @@ export default function SocialFeedScreen() {
           },
           text: comment.content || '',
         })) || [],
-      }));
+      };
+      });
 
       // Filter out hidden posts - ensure we check against the hiddenPostIds array
       const hiddenIdsSet = new Set(hiddenPostIds.map(id => Number(id)));
@@ -584,12 +572,29 @@ export default function SocialFeedScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
 
+        {fabMenuExpanded && (
+          <TouchableOpacity
+            activeOpacity={1}
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+            onPress={() => setFabMenuExpanded(false)}
+            style={[styles.fabBackdrop, StyleSheet.absoluteFillObject]}
+          />
+        )}
+
         <TabHeader
           title="Socials"
           admin={{ profile: "https://randomuser.me/api/portraits/men/45.jpg", userId: '12345' }}
           notificationID="notif123"
           refreshing={refreshing} // Pass refreshing state to TabHeader
-        />
+        >
+          <FloatingActionButton
+            expanded={fabMenuExpanded}
+            onExpandedChange={setFabMenuExpanded}
+            onStartLive={handleStartLive}
+            onCreatePost={handleCreatePost}
+          />
+        </TabHeader>
 
         <FlatList
           style={{ flex: 1 }}
@@ -658,12 +663,13 @@ export default function SocialFeedScreen() {
             ) : null
           }
           renderItem={({ item }) => {
-            const primaryId = activePostId ?? posts[0]?.id ?? null;
             const pid = Number(item.id);
             return (
               <PostItem
                 post={item}
-                isFeedVideoActive={primaryId != null && pid === primaryId}
+                isFeedVideoActive={
+                  activePostId != null && pid === Number(activePostId)
+                }
                 onCommentPress={handleCommentPress}
                 handleMenu={handleMenu}
               />
@@ -717,17 +723,11 @@ export default function SocialFeedScreen() {
         />
         <CommentsBottomSheet
           visible={commentModalVisible}
-          comments={[...mapApiCommentsToInternal(commentData), ...optimisticComments]}
+          comments={mapApiCommentsToInternal(commentData)}
           postId={currentPostId}
           onClose={handleCloseComments}
           onAddComment={handleAddComment}
           loading={false}
-        />
-
-
-        <FloatingActionButton
-          onStartLive={handleStartLive}
-          onCreatePost={handleCreatePost}
         />
       </SafeAreaView>
 
@@ -746,6 +746,10 @@ export default function SocialFeedScreen() {
 
 
 const styles = StyleSheet.create({
+  fabBackdrop: {
+    backgroundColor: 'rgba(0, 0, 0, 0.82)',
+    zIndex: 9,
+  },
   container: {
     flex: 1,
     paddingHorizontal: 10,

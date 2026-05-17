@@ -2,6 +2,7 @@ import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   StyleSheet,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,6 +23,7 @@ import ThemedView from "@/components/ThemedView";
 //Code Related to the integration
 import Toast from "react-native-toast-message";
 import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from "@expo/vector-icons";
 
 
 const codeverification = () => {
@@ -54,6 +56,11 @@ const codeverification = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ThemedView style={{ flex: 1 }}>
+        {Platform.OS === "ios" && (
+          <TouchableOpacity style={styles.backButton} onPress={() => route.back()}>
+            <Ionicons name="chevron-back" size={24} color={dark ? "#fff" : "#111"} />
+          </TouchableOpacity>
+        )}
         <LinearGradient
           colors={["#940304", "#840000"]}
           start={{ x: 0, y: 0 }}
@@ -181,6 +188,13 @@ const codeverification = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  backButton: {
+    position: "absolute",
+    top: 8,
+    left: 12,
+    zIndex: 20,
+    padding: 8,
   },
   card: {
     marginTop: 20,

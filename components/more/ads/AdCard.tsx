@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Ad } from './ads';
 import { useTheme } from '@/contexts/themeContext';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 interface AdCardProps {
   ad: Ad;
@@ -20,6 +21,7 @@ export const AdCard: React.FC<AdCardProps> = ({
   onViewDetails
 }) => {
   const { dark } = useTheme();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const colors = {
     background: dark ? '#181818' : '#fff',
     surface: dark ? '#232323' : '#f8f9fa',
@@ -105,18 +107,20 @@ export const AdCard: React.FC<AdCardProps> = ({
 
         <View style={styles.actions}>
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              onPress={() => onEdit(ad)}
-              style={[
-                styles.actionButton,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                }
-              ]}
-            >
-              <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
+            {!hideIosMonetization && (
+              <TouchableOpacity
+                onPress={() => onEdit(ad)}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  }
+                ]}
+              >
+                <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
 
             {ad.status !== 'closed' && (
               <TouchableOpacity

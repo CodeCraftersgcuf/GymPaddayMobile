@@ -17,11 +17,54 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import NotificationManager from "./NotificationManager";
+import { Ionicons } from "@expo/vector-icons";
 
 // ✅ Create the client only once
 const queryClient = new QueryClient();
+const IOS_GLOBAL_BACK_EXCLUDED_ROUTES = new Set([
+  '/',
+  '/index',
+  '/OnboardingScreen',
+  '/login',
+  '/register',
+  '/forgetpassword',
+  '/codeverification',
+  '/resetpassword',
+  '/verify-otp',
+  '/(tabs)',
+  '/goLive',
+  '/BoostPostScreen',
+  '/BoostPostScreen_review',
+  '/BoostPostScreen_audience',
+  '/BoostPostScreen_Final',
+  '/deposit',
+  '/topup',
+  '/withdraw',
+  '/transactionHistory',
+  '/giftHistory',
+  '/notification',
+  '/EditProfile',
+  '/support',
+  '/adsProfile',
+  '/adsDetail',
+  '/bussinessForm',
+  '/bussinessRegister',
+  '/marketView',
+  '/addListing',
+  '/marketProfile',
+  '/UserListing',
+  '/UserProfile',
+  '/messageChat',
+  '/createpost',
+  '/MediaViewer',
+  '/daily-call-screen',
+  '/voiceCall',
+  '/VoiceCallScreen',
+  '/StreamIncomingCall',
+  '/StreamCallInitiateScreen',
+]);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete
 SplashScreen.preventAutoHideAsync();
@@ -89,6 +132,12 @@ export default function RootLayout() {
     );
   }
 
+  const showGlobalIosBack =
+    Platform.OS === "ios" &&
+    !!pathname &&
+    !pathname.startsWith('/(tabs)') &&
+    !IOS_GLOBAL_BACK_EXCLUDED_ROUTES.has(pathname);
+
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -138,6 +187,16 @@ export default function RootLayout() {
               <Stack.Screen name="daily-call-screen" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             </Stack>
+            {showGlobalIosBack && (
+              <TouchableOpacity
+                style={styles.globalBackButton}
+                onPress={() => {
+                  if (router.canGoBack()) router.back();
+                }}
+              >
+                <Ionicons name="chevron-back" size={24} color="#111" />
+              </TouchableOpacity>
+            )}
             {token && userDetails && (
               <NotificationManager token={token} user={userDetails} />
             )}
@@ -153,3 +212,15 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  globalBackButton: {
+    position: "absolute",
+    top: 52,
+    left: 12,
+    zIndex: 9999,
+    padding: 8,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 20,
+  },
+});

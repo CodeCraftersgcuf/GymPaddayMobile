@@ -18,6 +18,7 @@ interface TopupPanelProps {
 }
 
 const TopupPanel: React.FC<TopupPanelProps> = ({ dark, balance, onTopupSuccess }) => {
+  const useStoreIap = false;
   const [topupAmount, setTopupAmount] = React.useState<string>('');
 
   const iapResult = useIAP();
@@ -42,41 +43,18 @@ const TopupPanel: React.FC<TopupPanelProps> = ({ dark, balance, onTopupSuccess }
   };
 
   const handleTopup = async () => {
-    if (Platform.OS === 'ios') {
-      if (!isAvailable || !purchaseProduct) {
-        Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-        return;
-      }
-
-      if (!iosWalletProductReady) {
-        Alert.alert(
-          'Error',
-          'Could not load this product from the App Store. Try again shortly.'
-        );
-        return;
-      }
-
-      try {
-        const success = await purchaseProduct();
-        if (success) {
-          onTopupSuccess(iosWalletGpCredit);
-        }
-      } catch (error) {
-        console.error('Purchase error:', error);
-        Alert.alert('Error', 'Failed to process purchase. Please try again.');
-      }
-      return;
-    }
-
     if (!topupAmount || parseFloat(topupAmount) <= 0) {
       Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
 
     const amount = parseFloat(topupAmount);
-    Alert.alert('Success', `Topup of ${amount} GP Coins successful!`);
-    onTopupSuccess(amount);
-    setTopupAmount('');
+    const success = await purchaseProduct(amount);
+    if (success) {
+      Alert.alert('Success', `Topup of ${amount} GP Coins successful!`);
+      onTopupSuccess(amount);
+      setTopupAmount('');
+    }
   };
 
   const iosBuyDisabled =
@@ -102,7 +80,7 @@ const TopupPanel: React.FC<TopupPanelProps> = ({ dark, balance, onTopupSuccess }
           Topup your balance
         </Text>
 
-        {Platform.OS === 'ios' ? (
+        {useStoreIap ? (
           <>
             <Text style={[styles.topupDescription, { color: themeStyles.textColorSecondary }]}>
               Purchase uses Apple In-App Purchase; price and pack are defined in App Store Connect for{' '}
@@ -173,15 +151,15 @@ const TopupPanel: React.FC<TopupPanelProps> = ({ dark, balance, onTopupSuccess }
         )}
 
         <TouchableOpacity
-          style={[styles.topupButton, (Platform.OS === 'ios' ? iosBuyDisabled : isIAPLoading) && styles.topupButtonDisabled]}
+          style={[styles.topupButton, (useStoreIap ? iosBuyDisabled : isIAPLoading) && styles.topupButtonDisabled]}
           onPress={handleTopup}
-          disabled={Platform.OS === 'ios' ? iosBuyDisabled : isIAPLoading}
+          disabled={useStoreIap ? iosBuyDisabled : isIAPLoading}
         >
           {isIAPLoading ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text style={styles.topupButtonText}>
-              {Platform.OS === 'ios' ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Topup'}
+              {useStoreIap ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Topup'}
             </Text>
           )}
         </TouchableOpacity>

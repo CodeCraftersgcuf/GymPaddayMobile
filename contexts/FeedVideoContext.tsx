@@ -7,6 +7,7 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 
 const STORAGE_KEY = 'feed_video_muted';
 
@@ -21,6 +22,16 @@ const FeedVideoContext = createContext<FeedVideoContextValue | null>(null);
 export function FeedVideoProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

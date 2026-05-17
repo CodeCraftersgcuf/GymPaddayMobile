@@ -29,6 +29,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 import { API_ENDPOINTS } from '@/apiConfig';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 const { width, height } = Dimensions.get('window');
 
@@ -58,6 +59,7 @@ const User_liveViewMain: React.FC = () => {
 
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const [dark, setDark] = useState<boolean>(true);
   const [streamEnded, setStreamEnded] = useState(false);
   const [message, setMessage] = useState<string>('');
@@ -70,6 +72,10 @@ const User_liveViewMain: React.FC = () => {
 
   const [loadingBalance, setLoadingBalance] = useState(true);
   React.useEffect(() => {
+    if (hideIosMonetization) {
+      setLoadingBalance(false);
+      return;
+    }
     (async () => {
       try {
         setLoadingBalance(true); // start loading
@@ -99,7 +105,7 @@ const User_liveViewMain: React.FC = () => {
         setLoadingBalance(false); // stop loading
       }
     })();
-  }, []);
+  }, [hideIosMonetization]);
   const themeStyles = {
     backgroundColor: dark ? '#000000' : '#ffffff',
     secondaryBackground: dark ? '#181818' : '#f5f5f5',
@@ -308,6 +314,7 @@ const User_liveViewMain: React.FC = () => {
     });
   };
   const renderPanel = () => {
+    if (hideIosMonetization) return null;
     switch (activePanel) {
       case 'gifts':
         return (
@@ -417,7 +424,7 @@ const User_liveViewMain: React.FC = () => {
                     <Text style={styles.messageText} selectable>
                       {chat.message}
                     </Text>
-                    {chat.hasGift && (
+                    {chat.hasGift && !hideIosMonetization && (
                       <View style={styles.giftContainer}>
                         <Text style={styles.giftEmoji}>🎁</Text>
                         <View style={styles.giftBadge}>
@@ -434,7 +441,7 @@ const User_liveViewMain: React.FC = () => {
       </View>
 
       <Modal
-        isVisible={activePanel !== 'none'}
+        isVisible={!hideIosMonetization && activePanel !== 'none'}
         onBackdropPress={closePanel}
         onBackButtonPress={closePanel}
         onSwipeComplete={closePanel}
@@ -484,13 +491,15 @@ const User_liveViewMain: React.FC = () => {
               >
                 <Icon name="send" size={20} color="white" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.giftButton}
-                onPress={() => setActivePanel('gifts')}
-                disabled={streamEnded}
-              >
-                <Icon name="gift" size={24} color="#940304" />
-              </TouchableOpacity>
+              {!hideIosMonetization && (
+                <TouchableOpacity
+                  style={styles.giftButton}
+                  onPress={() => setActivePanel('gifts')}
+                  disabled={streamEnded}
+                >
+                  <Icon name="gift" size={24} color="#940304" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>

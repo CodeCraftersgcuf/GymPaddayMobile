@@ -1,5 +1,5 @@
 import { images } from "@/constants";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
+  StatusBar,
 } from "react-native";
 import ThemedView from "../ThemedView";
 import ThemeText from "../ThemedText";
@@ -33,6 +34,9 @@ import * as MediaLibrary from 'expo-media-library';
 import { Video, ResizeMode } from "expo-av";
 import Toast from 'react-native-toast-message';
 import { useFeedVideo } from '@/contexts/FeedVideoContext';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getAppShareMessage } from '@/constants/appShare';
+import { MaterialIcons } from '@expo/vector-icons';
 
 
 
@@ -48,6 +52,8 @@ interface PostItemProps {
     timestamp: string;
     imagesUrl: string[];
     videoUrl?: string;
+    /** Server-generated frame/thumbnail for the video file (not user avatar). */
+    videoPosterUrl?: string | null;
     view_count: number;
     share_count: number;
     location?: string;
@@ -69,7 +75,7 @@ const PostItem: React.FC<PostItemProps> = ({
   post,
   onCommentPress,
   handleMenu,
-  showComment,
+  showComment = true,
   isFeedVideoActive = true,
 }) => {
   const { dark } = useTheme();
@@ -88,9 +94,15 @@ const PostItem: React.FC<PostItemProps> = ({
   const [isPlaying, setIsPlaying] = useState<Record<number, boolean>>({});
   const [isBuffering, setIsBuffering] = useState<Record<number, boolean>>({});
   const [videoAspectRatio, setVideoAspectRatio] = useState<number | undefined>(undefined);
-  const [showVideoControls, setShowVideoControls] = useState<Record<number, boolean>>({});
   const [videoLoaded, setVideoLoaded] = useState<Record<number, boolean>>({});
-  const controlsTimeoutRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({});
+  /** Fullscreen player (tap feed video to open). */
+  const [videoFullscreenUri, setVideoFullscreenUri] = useState<string | null>(null);
+  const [videoFullscreenPosterUri, setVideoFullscreenPosterUri] = useState<string | null>(null);
+  const fsVideoRef = useRef<Video | null>(null);
+  const [fsRate, setFsRate] = useState(1);
+  const [fsSpeedMenuVisible, setFsSpeedMenuVisible] = useState(false);
+  const FS_RATES = [0.5, 1, 1.25, 1.5, 2] as const;
+  const fsInsets = useSafeAreaInsets();
 
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
@@ -101,20 +113,92 @@ const PostItem: React.FC<PostItemProps> = ({
   const [showSeeMore, setShowSeeMore] = useState(false);
   const videoRefs = useRef<Record<number, Video>>({});
 
+  /** Pause + clear shouldPlay so Android ExoPlayer does not keep decoding audio in the background. */
+  const stopPlaybackHard = React.useCallback((ref: Video | null | undefined) => {
+    if (!ref) return;
+    void (async () => {
+      try {
+        await ref.pauseAsync();
+        const status = await ref.getStatusAsync();
+        if (status.isLoaded) {
+          await ref.setStatusAsync({ shouldPlay: false });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  const openVideoFullscreen = React.useCallback(
+    (
+      uri: string,
+      carouselVideoIndex: number,
+      posterUri?: string | null,
+    ) => {
+      stopPlaybackHard(videoRefs.current[carouselVideoIndex]);
+      setIsPlaying((prev) => ({ ...prev, [carouselVideoIndex]: false }));
+      setFsRate(1);
+      setFsSpeedMenuVisible(false);
+      setVideoFullscreenUri(uri);
+      setVideoFullscreenPosterUri(
+        typeof posterUri === 'string' && posterUri.length > 0 ? posterUri : null,
+      );
+    },
+    [stopPlaybackHard],
+  );
+
+  const closeVideoFullscreen = React.useCallback(() => {
+    void (async () => {
+      try {
+        const r = fsVideoRef.current;
+        if (r) {
+          await r.pauseAsync();
+          await r.setStatusAsync({ shouldPlay: false, positionMillis: 0 });
+        }
+      } catch {
+        /* ignore */
+      }
+      setFsSpeedMenuVisible(false);
+      setVideoFullscreenUri(null);
+      setVideoFullscreenPosterUri(null);
+    })();
+  }, []);
+
+  const toggleFullscreenPlayback = React.useCallback(() => {
+    void (async () => {
+      const r = fsVideoRef.current;
+      if (!r) return;
+      try {
+        const s = await r.getStatusAsync();
+        if (!s.isLoaded) return;
+        if (s.isPlaying) await r.pauseAsync();
+        else await r.playAsync();
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  const applyFullscreenRate = React.useCallback((rate: number) => {
+    setFsRate(rate);
+    setFsSpeedMenuVisible(false);
+    void (async () => {
+      const r = fsVideoRef.current;
+      if (!r) return;
+      try {
+        const s = await r.getStatusAsync();
+        if (s.isLoaded) {
+          await r.setStatusAsync({ rate, shouldCorrectPitch: true });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
   // console.log("post data we are getting", post);
   useEffect(() => {
     SecureStore.getItemAsync('auth_token').then(setToken);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      // Clear all timeouts on unmount
-      Object.values(controlsTimeoutRef.current).forEach((timeout) => {
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-      });
-    };
   }, []);
 
   // Check if current user has liked this post
@@ -174,40 +258,40 @@ const PostItem: React.FC<PostItemProps> = ({
     }
 
     setImagesData(mediaArray);
-    
-    // Auto-play video if it's the first item (only when this post is the active feed row)
-    if (isFeedVideoActive && post.videoUrl && mediaArray[0] === post.videoUrl) {
-      setTimeout(() => {
-        const videoRef = videoRefs.current[0];
-        if (videoRef) {
-          videoRef.playAsync().catch(console.error);
-          setIsPlaying(prev => ({ ...prev, 0: true }));
-          setShowVideoControls(prev => ({ ...prev, 0: false }));
-        }
-      }, 100);
-    }
-  }, [post, isFeedVideoActive]);
+  }, [post]);
 
-  // Pause every slide when this post scrolls off-screen; resume current slide when back
+  /** Cover while buffering: post images first, then video thumbnail from API — never profile avatar. */
+  const feedVideoPosterUri = useMemo(() => {
+    const urls = post.imagesUrl ?? [];
+    const firstPostImage = urls.find(
+      (u) => typeof u === 'string' && u.trim().length > 0 && u !== post.videoUrl,
+    );
+    if (firstPostImage) return firstPostImage.trim();
+
+    const videoThumb = post.videoPosterUrl;
+    if (typeof videoThumb === 'string' && videoThumb.trim().length > 0) {
+      return videoThumb.trim();
+    }
+    return null;
+  }, [post.imagesUrl, post.videoUrl, post.videoPosterUrl]);
+
+  // Leaving the feed viewport: stop playback but keep the video mounted as a paused standby frame.
   useEffect(() => {
     if (isFeedVideoActive) return;
     Object.keys(videoRefs.current).forEach((key) => {
-      const ref = videoRefs.current[Number(key)];
-      ref?.pauseAsync?.().catch(() => {});
+      stopPlaybackHard(videoRefs.current[Number(key)]);
     });
-  }, [isFeedVideoActive]);
+    setIsPlaying({});
+    setIsBuffering({});
+  }, [isFeedVideoActive, stopPlaybackHard]);
 
+  // If a standby video becomes the active feed row, resume it without waiting for a remount.
   useEffect(() => {
-    if (!isFeedVideoActive || !post.videoUrl) return;
-    const t = setTimeout(() => {
-      const idx = currentIndex;
-      const ref = videoRefs.current[idx];
-      if (!ref || !videoLoaded[idx]) return;
-      ref.playAsync().catch(() => {});
-      setIsPlaying((prev) => ({ ...prev, [idx]: true }));
-    }, 120);
-    return () => clearTimeout(t);
-  }, [isFeedVideoActive]);
+    if (!isFeedVideoActive) return;
+    const currentMedia = ImagesData[currentIndex];
+    if (currentMedia !== post.videoUrl || !videoLoaded[currentIndex]) return;
+    setIsPlaying((prev) => ({ ...prev, [currentIndex]: true }));
+  }, [ImagesData, currentIndex, isFeedVideoActive, post.videoUrl, videoLoaded]);
 
 
   const handleLike = React.useCallback(async () => {
@@ -277,31 +361,22 @@ const PostItem: React.FC<PostItemProps> = ({
     setCurrentIndex(newIndex);
 
     Object.keys(videoRefs.current).forEach((key) => {
-      const videoIndex = parseInt(key);
+      const videoIndex = parseInt(key, 10);
       const ref = videoRefs.current[videoIndex];
-      if (videoIndex === newIndex) {
-        // Play video and ensure it's visible (only if loaded)
-        if (ref && videoLoaded[videoIndex]) {
-          ref.playAsync().catch(console.error);
-          // State will be updated by onPlaybackStatusUpdate
-          // Hide controls after 3 seconds
-          if (controlsTimeoutRef.current[videoIndex]) {
-            clearTimeout(controlsTimeoutRef.current[videoIndex]!);
-          }
-          controlsTimeoutRef.current[videoIndex] = setTimeout(() => {
-            setShowVideoControls(prev => {
-              if (prev[videoIndex] === false) return prev;
-              return { ...prev, [videoIndex]: false };
-            });
-          }, 3000);
-        }
-      } else {
-        // Pause other videos (only if loaded)
-        if (ref && videoLoaded[videoIndex]) {
-          ref.pauseAsync().catch(console.error);
-          // State will be updated by onPlaybackStatusUpdate
-        }
+      if (videoIndex !== newIndex && ref && videoLoaded[videoIndex]) {
+        stopPlaybackHard(ref);
       }
+    });
+    setIsPlaying((prev) => {
+      const next = { ...prev };
+      Object.keys(videoRefs.current).forEach((key) => {
+        const i = parseInt(key, 10);
+        if (i !== newIndex) next[i] = false;
+      });
+      const atVideo =
+        ImagesData[newIndex] != null && ImagesData[newIndex] === post.videoUrl;
+      if (atVideo && isFeedVideoActive) next[newIndex] = true;
+      return next;
     });
   };
 
@@ -461,6 +536,32 @@ const PostItem: React.FC<PostItemProps> = ({
       console.error('Download error:', error);
     }
   };
+
+  const handleShareAppInvite = async () => {
+    try {
+      await Share.share({ message: getAppShareMessage() });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleOpenMediaOptions = () => {
+    const currentMedia = ImagesData[currentIndex];
+    if (!currentMedia) {
+      Alert.alert('No media', 'There is nothing to save or share yet.');
+      return;
+    }
+    Alert.alert(
+      'Save & invite',
+      'Download this photo or video, or invite friends to install GymPaddy.',
+      [
+        { text: 'Download', onPress: () => void handleDownload() },
+        { text: 'Share app', onPress: () => void handleShareAppInvite() },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  };
+
   const WORD_LIMIT = 25;
   const words = post?.content?.trim().split(' ');
   const shouldTruncate = words?.length > WORD_LIMIT;
@@ -526,34 +627,27 @@ const PostItem: React.FC<PostItemProps> = ({
 
               return isVideo ? (
                 <View style={styles.carouselVideoWrapper}>
-                  <Pressable
-                    onPress={() => {
-                      // Toggle controls visibility on tap
-                      setShowVideoControls(prev => ({ ...prev, [index]: true }));
-                      // Clear existing timeout
-                      if (controlsTimeoutRef.current[index]) {
-                        clearTimeout(controlsTimeoutRef.current[index]!);
-                      }
-                      // Hide controls again after 3 seconds if video is playing
-                      if (isPlaying[index]) {
-                        controlsTimeoutRef.current[index] = setTimeout(() => {
-                          setShowVideoControls(prev => ({ ...prev, [index]: false }));
-                        }, 3000);
-                      }
-                    }}
-                    style={styles.videoPressable}
-                  >
+                  <View style={styles.videoPressable}>
                     <Video
+                      key={`pv-${post.id}-${index}-${item}`}
                       ref={(ref) => {
                         if (ref) {
                           videoRefs.current[index] = ref;
+                        } else {
+                          delete videoRefs.current[index];
                         }
                       }}
                       source={{ uri: item }}
                       style={styles.videoPlayer}
                       resizeMode={ResizeMode.CONTAIN}
                       isLooping
-                      isMuted={isMuted}
+                      playsInSilentModeIOS
+                      isMuted={isMuted || !isFeedVideoActive}
+                      usePoster={!!feedVideoPosterUri}
+                      posterSource={
+                        feedVideoPosterUri ? { uri: feedVideoPosterUri } : undefined
+                      }
+                      posterStyle={StyleSheet.absoluteFillObject}
                       shouldPlay={
                         isFeedVideoActive &&
                         index === currentIndex &&
@@ -561,71 +655,64 @@ const PostItem: React.FC<PostItemProps> = ({
                         !!videoLoaded[index]
                       }
                       useNativeControls={false}
+                      pointerEvents="none"
                       onLoadStart={() => {
-                        setIsBuffering(prev => ({ ...prev, [index]: true }));
-                        setVideoLoaded(prev => ({ ...prev, [index]: false }));
+                        setIsBuffering((prev) => ({ ...prev, [index]: true }));
+                        setVideoLoaded((prev) => ({ ...prev, [index]: false }));
                       }}
                       onLoad={async (data) => {
-                        setIsBuffering(prev => ({ ...prev, [index]: false }));
-                        setVideoLoaded(prev => ({ ...prev, [index]: true }));
-                        // Calculate and set aspect ratio from video natural size
+                        setIsBuffering((prev) => ({ ...prev, [index]: false }));
+                        setVideoLoaded((prev) => ({ ...prev, [index]: true }));
                         if (data.naturalSize) {
-                          const ratio = data.naturalSize.width / data.naturalSize.height;
+                          const ratio =
+                            data.naturalSize.width /
+                            data.naturalSize.height;
                           setVideoAspectRatio(ratio);
                         }
-                        // Auto-play if this is the current video and post is visible in feed
-                        if (index === currentIndex && isFeedVideoActive) {
-                          const ref = videoRefs.current[index];
-                          if (ref) {
-                            try {
-                              await ref.playAsync();
-                            } catch (error) {
-                              console.error('Error playing video:', error);
-                            }
+
+                        const ref = videoRefs.current[index];
+                        if (!isFeedVideoActive && ref) {
+                          try {
+                            await ref.setStatusAsync({
+                              shouldPlay: false,
+                              isMuted: true,
+                              positionMillis: 1,
+                            });
+                          } catch {
+                            /* standby frame best effort */
                           }
+                        } else if (item === post.videoUrl) {
+                          setIsPlaying((prev) => ({ ...prev, [index]: true }));
                         }
                       }}
                       onError={(error) => {
                         console.error('Video playback error:', error);
-                        setIsBuffering(prev => ({ ...prev, [index]: false }));
+                        setIsBuffering((prev) => ({ ...prev, [index]: false }));
                       }}
                       onPlaybackStatusUpdate={(status) => {
                         if (status.isLoaded && 'isPlaying' in status) {
                           const playing = status.isPlaying;
-                          // Only update state if it actually changed to prevent infinite loops
-                          setIsPlaying(prev => {
+                          setIsPlaying((prev) => {
                             if (prev[index] === playing) return prev;
                             return { ...prev, [index]: playing };
                           });
-                          
-                          if (playing) {
-                            // Clear existing timeout
-                            if (controlsTimeoutRef.current[index]) {
-                              clearTimeout(controlsTimeoutRef.current[index]!);
-                            }
-                            // Hide controls after 3 seconds when playing starts
-                            controlsTimeoutRef.current[index] = setTimeout(() => {
-                              setShowVideoControls(prev => {
-                                if (prev[index] === false) return prev; // Prevent unnecessary update
-                                return { ...prev, [index]: false };
-                              });
-                            }, 3000);
-                          } else {
-                            // Show controls when paused
-                            if (controlsTimeoutRef.current[index]) {
-                              clearTimeout(controlsTimeoutRef.current[index]!);
-                            }
-                            setShowVideoControls(prev => {
-                              if (prev[index] === true) return prev; // Prevent unnecessary update
-                              return { ...prev, [index]: true };
-                            });
-                          }
                         }
                       }}
                     />
-                  </Pressable>
+                    <Pressable
+                      style={StyleSheet.absoluteFillObject}
+                      onPress={() =>
+                        openVideoFullscreen(
+                          item,
+                          index,
+                          item === post.videoUrl ? feedVideoPosterUri : null,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel="Open video fullscreen"
+                    />
+                  </View>
 
-                  {/* Loader */}
                   {isBuffering[index] && (
                     <ActivityIndicator
                       size="large"
@@ -634,53 +721,17 @@ const PostItem: React.FC<PostItemProps> = ({
                     />
                   )}
 
-                  {/* Play Button */}
-                  {!isBuffering[index] && showVideoControls[index] && (
+                  {isFeedVideoActive && (
                     <TouchableOpacity
-                      style={styles.playButton}
-                      onPress={async () => {
-                        const ref = videoRefs.current[index];
-                        if (ref && videoLoaded[index]) {
-                          try {
-                            if (isPlaying[index]) {
-                              await ref.pauseAsync();
-                              // State will be updated by onPlaybackStatusUpdate
-                            } else {
-                              await ref.playAsync();
-                              // State will be updated by onPlaybackStatusUpdate
-                              // Show controls temporarily, then hide after 3 seconds
-                              setShowVideoControls(prev => ({ ...prev, [index]: false }));
-                              if (controlsTimeoutRef.current[index]) {
-                                clearTimeout(controlsTimeoutRef.current[index]!);
-                              }
-                              controlsTimeoutRef.current[index] = setTimeout(() => {
-                                setShowVideoControls(prev => {
-                                  if (prev[index] === false) return prev;
-                                  return { ...prev, [index]: false };
-                                });
-                              }, 3000);
-                            }
-                          } catch (error) {
-                            console.error('Error toggling playback:', error);
-                          }
-                        }
-                      }}
+                      onPress={toggleMuted}
+                      style={styles.muteButton}
                     >
                       <Image
-                        source={isPlaying[index] ? images.pauseIcon : images.playIcon}
-                        style={styles.playIcon}
+                        source={isMuted ? images.mute : images.unmute}
+                        style={styles.muteIcon}
                       />
                     </TouchableOpacity>
                   )}
-
-
-                  {/* Mute Button */}
-                  <TouchableOpacity onPress={toggleMuted} style={styles.muteButton}>
-                    <Image
-                      source={isMuted ? images.mute : images.unmute}
-                      style={styles.muteIcon}
-                    />
-                  </TouchableOpacity>
                 </View>
 
               ) : (
@@ -730,7 +781,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
           {showComment && <TouchableOpacity style={styles.actionItem} onPress={handlePress}>
             <Image source={images.comment} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
-            <ThemeText style={styles.actionText}>{post.recent_comments.length}</ThemeText>
+            <ThemeText style={styles.actionText}>{post.comments_count || 0}</ThemeText>
           </TouchableOpacity>}
 
 
@@ -740,8 +791,16 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
         </ThemedView>
         <ThemedView darkColor="transparent">
-          <TouchableOpacity style={styles.actionItem} onPress={handleDownload}>
-            <Image source={images.downloadIcon} tintColor={dark ? 'white' : 'black'} style={{ width: 25, height: 25 }} />
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={handleOpenMediaOptions}
+            accessibilityLabel="Download or share app"
+          >
+            <Image
+              source={images.downloadIcon}
+              tintColor={dark ? 'white' : 'black'}
+              style={{ width: 25, height: 25 }}
+            />
           </TouchableOpacity>
         </ThemedView>
       </View>
@@ -856,6 +915,127 @@ const PostItem: React.FC<PostItemProps> = ({
         </View>
       </Modal>
 
+      <Modal
+        visible={!!videoFullscreenUri}
+        animationType="fade"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={closeVideoFullscreen}
+      >
+        <View style={styles.fsRoot}>
+          <StatusBar barStyle="light-content" hidden />
+          <SafeAreaView style={styles.fsSafeTop} edges={['top', 'bottom']}>
+            <View style={styles.fsTopBar}>
+              <TouchableOpacity
+                onPress={closeVideoFullscreen}
+                style={styles.fsTopIconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close video"
+              >
+                <Text style={styles.fsCloseText}>✕</Text>
+              </TouchableOpacity>
+              <View style={styles.fsTopBarRight}>
+                <TouchableOpacity
+                  style={styles.fsTopIconBtn}
+                  onPress={() => setFsSpeedMenuVisible((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Playback speed and options"
+                >
+                  <MaterialIcons name="more-vert" size={28} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.fsVideoArea}>
+              {videoFullscreenUri ? (
+                <>
+                  <Video
+                    ref={(r) => {
+                      fsVideoRef.current = r;
+                    }}
+                    source={{ uri: videoFullscreenUri }}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode={ResizeMode.CONTAIN}
+                    isLooping
+                    shouldPlay
+                    isMuted={false}
+                    playsInSilentModeIOS
+                    useNativeControls={false}
+                    usePoster={!!videoFullscreenPosterUri}
+                    posterSource={
+                      videoFullscreenPosterUri
+                        ? { uri: videoFullscreenPosterUri }
+                        : undefined
+                    }
+                    posterStyle={StyleSheet.absoluteFillObject}
+                    pointerEvents="none"
+                    onLoad={async () => {
+                      const r = fsVideoRef.current;
+                      if (!r) return;
+                      try {
+                        await r.setStatusAsync({
+                          rate: fsRate,
+                          shouldCorrectPitch: true,
+                          shouldPlay: true,
+                        });
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                  />
+                  <Pressable
+                    style={StyleSheet.absoluteFillObject}
+                    onPress={() => {
+                      if (fsSpeedMenuVisible) setFsSpeedMenuVisible(false);
+                      else toggleFullscreenPlayback();
+                    }}
+                  />
+                </>
+              ) : null}
+            </View>
+
+            {fsSpeedMenuVisible && (
+              <View
+                style={[StyleSheet.absoluteFillObject, styles.fsSpeedMenuLayer]}
+                pointerEvents="box-none"
+              >
+                <Pressable
+                  style={styles.fsSpeedMenuBackdrop}
+                  onPress={() => setFsSpeedMenuVisible(false)}
+                />
+                <View
+                  style={[
+                    styles.fsSpeedPopup,
+                    { top: fsInsets.top + 52, right: 12 },
+                  ]}
+                >
+                  <Text style={styles.fsSpeedPopupTitle}>Playback speed</Text>
+                  {FS_RATES.map((r) => (
+                    <TouchableOpacity
+                      key={r}
+                      style={styles.fsSpeedPopupRow}
+                      onPress={() => applyFullscreenRate(r)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.fsSpeedPopupRowText,
+                          fsRate === r && styles.fsSpeedPopupRowTextActive,
+                        ]}
+                      >
+                        {r === 1 ? 'Normal (1×)' : `${r}×`}
+                      </Text>
+                      {fsRate === r && (
+                        <MaterialIcons name="check" size={20} color="#940304" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+          </SafeAreaView>
+        </View>
+      </Modal>
+
     </View>
   );
 };
@@ -864,16 +1044,96 @@ const styles = StyleSheet.create({
   videoPressable: {
     width: '100%',
     height: '100%',
+  },
+  fsRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  fsSafeTop: {
+    flex: 1,
+  },
+  fsTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+    zIndex: 10,
+  },
+  fsTopBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fsTopIconBtn: {
+    padding: 10,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fsCloseText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '300',
+  },
+  fsVideoArea: {
+    flex: 1,
+    position: 'relative',
+  },
+  fsSpeedMenuLayer: {
+    zIndex: 20,
+  },
+  fsSpeedMenuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  fsSpeedPopup: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    width: 220,
+    zIndex: 21,
+    backgroundColor: '#2c2c2c',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  fsSpeedPopupTitle: {
+    color: '#aaa',
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  fsSpeedPopupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  fsSpeedPopupRowText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  fsSpeedPopupRowTextActive: {
+    color: '#ff6b6b',
+    fontWeight: '600',
   },
   videoPlayer: {
     width: '100%',
     height: '100%',
     backgroundColor: 'transparent',
+  },
+  videoInactiveShell: {
+    backgroundColor: '#111',
+    flexGrow: 0,
   },
   bottomSheetOverlay: {
     flex: 1,
@@ -958,20 +1218,6 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -12 }, { translateY: -12 }],
   },
 
-  playButton: {
-    position: 'absolute',
-    top: '45%',
-    left: '40%',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 30,
-    padding: 15,
-  },
-
-  playIcon: {
-    width: 30,
-    height: 30,
-    tintColor: '#940304',
-  },
   profileImage: {
     width: 40,
     height: 40,
@@ -1151,7 +1397,7 @@ const styles = StyleSheet.create({
     width: width - 20,
     height: (width - 20) * 1.12,
     borderRadius: 18,
-    backgroundColor: '#000',
+    backgroundColor: '#1a1a1c',
     alignSelf: 'center',
     overflow: 'hidden',
     justifyContent: 'center',
@@ -1197,9 +1443,16 @@ const styles = StyleSheet.create({
 
 });
 
-// Performance optimization: Memoize component with custom comparison
+// Memoize feeds; must compare isFeedVideoActive or off-screen rows never pause (React skips re-render).
 export default React.memo(PostItem, (prevProps, nextProps) => {
-  return prevProps.post.id === nextProps.post.id && 
-         prevProps.post.likes_count === nextProps.post.likes_count &&
-         prevProps.post.comments_count === nextProps.post.comments_count;
+  return (
+    prevProps.post.id === nextProps.post.id &&
+    prevProps.post.likes_count === nextProps.post.likes_count &&
+    prevProps.post.comments_count === nextProps.post.comments_count &&
+    prevProps.post.videoUrl === nextProps.post.videoUrl &&
+    prevProps.post.imagesUrl?.[0] === nextProps.post.imagesUrl?.[0] &&
+    prevProps.post.videoPosterUrl === nextProps.post.videoPosterUrl &&
+    prevProps.isFeedVideoActive === nextProps.isFeedVideoActive &&
+    prevProps.showComment === nextProps.showComment
+  );
 });

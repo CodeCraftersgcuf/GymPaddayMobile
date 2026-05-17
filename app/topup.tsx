@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -27,11 +27,17 @@ import { topUpWallet } from '@/utils/mutations/wallets';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
-
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 type ViewMode = 'deposit' | 'payment' | 'flutterwave';
 
 export default function TopupScreen() {
+    const useStoreIap = false;
+    const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+    useEffect(() => {
+        if (!iosMonetizationLoading && hideIosMonetization) router.replace('/(tabs)/more');
+    }, [iosMonetizationLoading, hideIosMonetization]);
+
     const [currentView, setCurrentView] = useState<ViewMode>('deposit');
     const [amount, setAmount] = useState('');
     const [depositorName, setDepositorName] = useState('');
@@ -118,30 +124,6 @@ export default function TopupScreen() {
     });
 
     const handleProceed = async () => {
-        if (Platform.OS === 'ios') {
-            if (!isAvailable) {
-                Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-                return;
-            }
-
-            if (!iosWalletProductReady) {
-                Alert.alert(
-                    'Error',
-                    'Could not load this product from the App Store. Try again shortly.'
-                );
-                return;
-            }
-
-            const success = await purchaseProduct();
-            if (success) {
-                setShowSuccessModal(true);
-                setAmount('');
-                setDepositorName('');
-                setUseMyDetails(false);
-            }
-            return;
-        }
-
         if (!amount) {
             Alert.alert('Error', 'Please enter an amount');
             return;
@@ -325,7 +307,7 @@ export default function TopupScreen() {
             {/* Form */}
             <ThemedView style={styles.form}>
                 <View style={styles.inputContainer}>
-                    {Platform.OS === 'ios' ? (
+                    {useStoreIap ? (
                         iosIapInitializing ? (
                             <View style={styles.iosStoreLoading}>
                                 <ActivityIndicator color="#940304" />
@@ -378,7 +360,7 @@ export default function TopupScreen() {
                 </View>
 
                 {/* Depositor's Name Input - Only show for Android */}
-                {Platform.OS !== 'ios' && (
+                {!useStoreIap && (
                     <>
                         <View style={styles.inputContainer}>
                             <TextInput
@@ -413,17 +395,17 @@ export default function TopupScreen() {
                 <TouchableOpacity 
                     style={[
                         styles.proceedButton,
-                        (isIAPLoading || (Platform.OS === 'ios' && (iosIapInitializing || !iosWalletProductReady))) &&
+                        (isIAPLoading || (useStoreIap && (iosIapInitializing || !iosWalletProductReady))) &&
                             styles.proceedButtonDisabled,
                     ]}
                     onPress={handleProceed}
-                    disabled={isIAPLoading || (Platform.OS === 'ios' && (iosIapInitializing || !iosWalletProductReady))}
+                    disabled={isIAPLoading || (useStoreIap && (iosIapInitializing || !iosWalletProductReady))}
                 >
                     {isIAPLoading ? (
                         <ActivityIndicator color="#FFFFFF" />
                     ) : (
                         <Text style={styles.proceedButtonText}>
-                            {Platform.OS === 'ios' ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Proceed'}
+                            {useStoreIap ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Proceed'}
                         </Text>
                     )}
                 </TouchableOpacity>

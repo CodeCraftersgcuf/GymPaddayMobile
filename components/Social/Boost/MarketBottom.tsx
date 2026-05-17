@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { useIosMonetizationHidden } from '@/utils/iosMonetization'
 import React, { useCallback, useRef } from 'react'
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { useTheme } from '@/contexts/themeContext';
@@ -20,6 +21,7 @@ const MarketBottom: React.FC<props> = ({ selectedItem, setSelectedItem, onBoost 
     const bottomSheetRef = useRef<BottomSheet>(null);
     const router = useRouter();
     const { dark } = useTheme();
+    const { blocked: hideIosMonetization } = useIosMonetizationHidden();
 
     const handleClick = () => {
         console.log('clicked!!')
@@ -47,11 +49,15 @@ const MarketBottom: React.FC<props> = ({ selectedItem, setSelectedItem, onBoost 
     };
 
     const Options = [
-        {
-            icon: Icons.BoostIcon,
-            title: 'Boost Listing',
-            handleFunction: handleBoost,
-        },
+        ...(!hideIosMonetization
+            ? [
+                {
+                    icon: Icons.BoostIcon,
+                    title: 'Boost Listing',
+                    handleFunction: handleBoost,
+                },
+            ]
+            : []),
         {
             icon: Icons.DeleteIcon,
             title: 'Delete Post',

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { TransactionFilter, type Transaction } from '@/components/more/transactions/types';
 import { useTheme } from '@/contexts/themeContext';
 import TransactionItem from '@/components/more/transactions/TransactionItem';
@@ -11,6 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUserTransaction } from '@/utils/queries/transactions';
 import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect } from '@react-navigation/native';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 /** Laravel may return a bare array or a wrapped payload depending on middleware/version. */
 function normalizeTransactionsResponse(payload: unknown): any[] {
@@ -24,6 +26,12 @@ function normalizeTransactionsResponse(payload: unknown): any[] {
 }
 
 export default function TransactionsScreen() {
+  const router = useRouter();
+  const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+  useEffect(() => {
+    if (!iosMonetizationLoading && hideIosMonetization) router.replace('/(tabs)/more');
+  }, [router, hideIosMonetization, iosMonetizationLoading]);
+
   const { dark } = useTheme();
   const [activeFilter, setActiveFilter] = useState<TransactionFilter>('all');
   const [token, setToken] = useState<string | null>(null);

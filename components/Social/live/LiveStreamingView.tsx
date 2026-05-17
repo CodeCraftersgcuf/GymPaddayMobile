@@ -27,6 +27,7 @@ import { Alert } from 'react-native';
 import { TextInput } from 'react-native-gesture-handler';
 import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 import { buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 interface LiveStreamingViewProps {
   dark: boolean;
@@ -70,6 +71,7 @@ export default function LiveStreamingView({
   livestreamId,
   selectedDuration,
 }: LiveStreamingViewProps) {
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const CHANNEL_NAME = channelName ?? 'live_stream';
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const chatScrollRef = useRef<ScrollView>(null);
@@ -426,7 +428,7 @@ export default function LiveStreamingView({
                           <Text style={styles.messageText} selectable>
                             {chat.message}
                           </Text>
-                          {chat.hasGift && (
+                          {chat.hasGift && !hideIosMonetization && (
                             <View style={styles.giftContainer}>
                               <Text style={styles.giftEmoji}>🎁</Text>
                               <View style={styles.giftBadge}>
@@ -652,8 +654,12 @@ export default function LiveStreamingView({
             {[
               { label: '👁️ Viewers', value: audienceCount },
               { label: '⏱️ Duration', value: formatDuration(duration) },
-              { label: '🎁 Gift events', value: totalGifts },
-              { label: '🪙 Gift coins', value: totalGiftCoins },
+              ...(hideIosMonetization
+                ? []
+                : [
+                    { label: '🎁 Gift events', value: totalGifts },
+                    { label: '🪙 Gift coins', value: totalGiftCoins },
+                  ]),
               { label: '💬 Comments', value: textCommentCount },
             ].map((item, idx) => (
               <View

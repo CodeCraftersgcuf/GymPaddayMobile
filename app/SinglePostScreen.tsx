@@ -48,16 +48,26 @@ export default function SinglePostScreen() {
     mutate: addComment,
     isPending: isAddingComment,
   } = useMutation({
-    mutationFn: async ({ text, postId }) => {
+    mutationFn: async ({ text, postId, parentId }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token');
       return createComment({
-        data: { post_id: postId, content: text },
+        data: { post_id: postId, content: text, parent_id: parentId },
         token,
       });
     },
     onSuccess: async () => {
       await refetchComments();
+    },
+    onError: (_error, variables) => {
+      setPost((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              comments_count: Math.max(0, Number(prev.comments_count || 0) - 1),
+            }
+          : prev
+      );
     },
   });
 
@@ -126,8 +136,16 @@ export default function SinglePostScreen() {
     refetchComments();
   };
 
-  const handleAddComment = (text: string, postId: number) => {
-    addComment({ text, postId });
+  const handleAddComment = (text: string, postId: number, parentId?: string) => {
+    setPost((prev: any) =>
+      prev
+        ? {
+            ...prev,
+            comments_count: Number(prev.comments_count || 0) + 1,
+          }
+        : prev
+    );
+    addComment({ text, postId, parentId });
   };
 
   const handleMenu = (userId: number, postId: number) => {

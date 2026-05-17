@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -39,10 +39,11 @@ import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
 import * as Clipboard from 'expo-clipboard';
 import { WebView } from 'react-native-webview';
-
-
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 export default function More() {
+  const useStoreIap = false;
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const queryClient = useQueryClient();
   const [fontsLoaded] = useFonts({
     Caveat_400Regular,
@@ -101,7 +102,7 @@ export default function More() {
         setUserName(snap.displayName);
         setUserEmail(snap.email);
         setProfileImage(snap.profilePictureUrl || defatulImage);
-        if (options?.depositorIfChecked && useMyDetailsRef.current && Platform.OS !== 'ios') {
+        if (options?.depositorIfChecked && useMyDetailsRef.current && !useStoreIap) {
           setDepositorName(snap.depositorName);
         }
         return snap;
@@ -126,7 +127,21 @@ export default function More() {
       };
     }, [applyUserSnapshot])
   );
+  const settingsRows = useMemo(
+    () =>
+      hideIosMonetization
+        ? settingsData.filter(
+            (s) => s.id !== 'gifts-history' && s.id !== 'view-ads'
+          )
+        : settingsData,
+    [hideIosMonetization]
+  );
+
   React.useEffect(() => {
+    if (hideIosMonetization) {
+      setLoadingBalance(false);
+      return;
+    }
     (async () => {
       try {
         setLoadingBalance(true); // start loading
@@ -159,38 +174,40 @@ export default function More() {
         setLoadingBalance(false); // stop loading
       }
     })();
-  }, []);
+  }, [hideIosMonetization]);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      setLoadingBalance(true);
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!token) throw new Error('No token found');
+      if (!hideIosMonetization) {
+        setLoadingBalance(true);
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) throw new Error('No token found');
 
-      const response = await fetch('https://api.gympaddy.com/api/user/balance', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
+        const response = await fetch('https://api.gympaddy.com/api/user/balance', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
 
-      const result = await response.json();
-      if (response.ok && result.status === 'success') {
-        setBalance(Number(result.balance));
-      } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
-        setBalance(0);
+        const result = await response.json();
+        if (response.ok && result.status === 'success') {
+          setBalance(Number(result.balance));
+        } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
+          setBalance(0);
+        }
       }
 
       await applyUserSnapshot({ depositorIfChecked: true });
     } catch (error) {
       console.error('Refresh balance error:', error);
     } finally {
-      setLoadingBalance(false);
+      if (!hideIosMonetization) setLoadingBalance(false);
       setRefreshing(false);
     }
-  }, [applyUserSnapshot]);
+  }, [applyUserSnapshot, hideIosMonetization]);
 
 
   const userProfile = {
@@ -203,11 +220,10 @@ export default function More() {
   };
 
   const handleTopup = async () => {
-    if (Platform.OS !== 'ios') {
-      await applyUserSnapshot({
-        depositorIfChecked: useMyDetailsRef.current,
-      });
-    }
+    if (hideIosMonetization) return;
+    await applyUserSnapshot({
+      depositorIfChecked: useMyDetailsRef.current,
+    });
     setCurrentView('deposit');
     setWebViewUri(null);
     setShowTopupModal(true);
@@ -242,30 +258,6 @@ export default function More() {
   });
 
   const handleTopupProceed = async () => {
-    if (Platform.OS === 'ios') {
-      if (!isAvailable) {
-        Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-        return;
-      }
-
-      if (!iosWalletProductReady) {
-        Alert.alert(
-          'Error',
-          'Could not load this product from the App Store. Try again shortly.'
-        );
-        return;
-      }
-
-      const success = await purchaseProduct();
-      if (success) {
-        setShowSuccessModal(true);
-        setTopupAmount('');
-        setDepositorName('');
-        setUseMyDetails(false);
-      }
-      return;
-    }
-
     if (!topupAmount) {
       Alert.alert('Error', 'Please enter an amount');
       return;
@@ -464,15 +456,13 @@ export default function More() {
   };
 
   const handleWithdraw = () => {
-    if (Platform.OS === 'ios') {
-      return;
-    }
+    if (hideIosMonetization) return;
     route.push('/withdraw');
   };
 
   const handleTransaction = () => {
+    if (hideIosMonetization) return;
     route.push('/transactionHistory');
-    // Alert.alert('Transaction', 'Transaction history will be shown here');
   };
 
   const handleSettingPress = async (id: string) => {
@@ -486,15 +476,15 @@ export default function More() {
         route.push('/EditProfile')
         break;
       case 'gifts-history':
-        route.push('/giftHistory');
+        if (!hideIosMonetization) route.push('/giftHistory');
         break;
       case 'business-settings':
         // Alert.alert('Business Settings', 'Business account settings');
         route.push('/bussinessRegister');
         break;
       case 'view-ads':
-        // Alert.alert('View Ads', 'Advertisement preferences');
-        route.push('/adsProfile')
+        if (hideIosMonetization) break;
+        route.push('/adsProfile');
         break;
       case 'support':
         // Alert.alert('Support', 'Contact customer support');
@@ -552,30 +542,33 @@ export default function More() {
       >
         {/* Header */}
         <ThemedView darkColor='#181818' style={styles.header}>
-          <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Wallet</Text>
+          <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>
+            {hideIosMonetization ? 'Profile' : 'Wallet'}
+          </Text>
           <TouchableOpacity onPress={() => route.push('/EditProfile')}>
             <Image source={{ uri: profileImage || '' }} style={styles.headerProfileImage} />
           </TouchableOpacity>
         </ThemedView>
 
-        {/* Wallet Card */}
-        <WalletCard
-          balance={balance}
-          isBalanceHidden={isBalanceHidden}
-          onToggleBalance={handleToggleBalance}
-          onTopup={handleTopup}
-          onWithdraw={handleWithdraw}
-          onTransaction={handleTransaction}
-          userName={userProfile.name}
-          userImage={profileImage} // Use profileImage state instead of userProfile.image
-          loading={loadingBalance}
-        />
+        {!hideIosMonetization && (
+          <WalletCard
+            balance={balance}
+            isBalanceHidden={isBalanceHidden}
+            onToggleBalance={handleToggleBalance}
+            onTopup={handleTopup}
+            onWithdraw={handleWithdraw}
+            onTransaction={handleTransaction}
+            userName={userProfile.name}
+            userImage={profileImage}
+            loading={loadingBalance}
+          />
+        )}
 
         {/* Settings Section */}
         <View style={styles.settingsSection}>
           <ThemeText lightColor='#8E8E93' style={styles.sectionTitle}>Settings</ThemeText>
           <ThemedView lightColor='#FAFAFA' darkColor='#181818' style={styles.settingsContainer}>
-            {settingsData.map((item) => (
+            {settingsRows.map((item) => (
               <SettingItem
                 key={item.id}
                 item={item}
@@ -638,6 +631,8 @@ export default function More() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
+      {!hideIosMonetization && (
+        <>
       {/* Topup Modal */}
       <Modal
         visible={showTopupModal}
@@ -686,7 +681,7 @@ export default function More() {
             {currentView === 'deposit' ? (
               <ThemedView style={styles.topupForm}>
                 <View style={styles.inputContainer}>
-                  {Platform.OS === 'ios' ? (
+                  {useStoreIap ? (
                     iosIapInitializing ? (
                       <View style={styles.iosStoreLoading}>
                         <ActivityIndicator color="#940304" />
@@ -738,7 +733,7 @@ export default function More() {
                   )}
                 </View>
 
-                {Platform.OS !== 'ios' && (
+                {!useStoreIap && (
                   <>
                     <View style={styles.inputContainer}>
                       <TextInput
@@ -815,7 +810,7 @@ export default function More() {
               style={[
                 styles.proceedButton,
                 (isIAPLoading ||
-                  (Platform.OS === 'ios' &&
+                  (useStoreIap &&
                     currentView === 'deposit' &&
                     (iosIapInitializing || !iosWalletProductReady))) &&
                   styles.proceedButtonDisabled,
@@ -824,7 +819,7 @@ export default function More() {
               onPress={currentView === 'deposit' ? handleTopupProceed : handlePaymentMade}
               disabled={
                 isIAPLoading ||
-                (Platform.OS === 'ios' &&
+                (useStoreIap &&
                   currentView === 'deposit' &&
                   (iosIapInitializing || !iosWalletProductReady)) ||
                 (currentView !== 'deposit' && !paymentDetails.accountNumber)
@@ -835,7 +830,7 @@ export default function More() {
               ) : (
                 <Text style={styles.proceedButtonText}>
                   {currentView === 'deposit'
-                    ? Platform.OS === 'ios'
+                    ? useStoreIap
                       ? `Buy for ${iosLocalizedPrice ?? 'App Store'}`
                       : 'Proceed'
                     : paymentDetails.accountNumber
@@ -873,6 +868,8 @@ export default function More() {
           </View>
         </View>
       </Modal>
+        </>
+      )}
 
       {/* Delete Account Modal */}
       <Modal

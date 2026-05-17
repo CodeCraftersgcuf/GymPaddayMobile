@@ -25,6 +25,7 @@ import { useTheme } from '@/contexts/themeContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import axios from 'axios';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 
 
@@ -32,6 +33,10 @@ const PostAudienceScreen: React.FC = () => {
     const { dark } = useTheme();
     const isDark = dark;
     const route = useRouter();
+    const { hidden, loading: iosStatusLoading } = useIosMonetizationHidden();
+    useEffect(() => {
+        if (!iosStatusLoading && hidden) route.replace('/(tabs)/more');
+    }, [route, iosStatusLoading, hidden]);
     const params = useLocalSearchParams();
     const theme = isDark ? colors.dark : colors.light;
     const bottomSheetRef = useRef<BottomSheet>(null);

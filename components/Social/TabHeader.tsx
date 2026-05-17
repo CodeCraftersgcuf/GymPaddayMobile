@@ -139,12 +139,12 @@ router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } 
         <Image source={logoNew} style={styles.logo} resizeMode="contain" />
       </Pressable>
       <ThemedView style={styles.alignCenter}>
+        {children}
         {userId ? (
           <Pressable onPress={() => hanldeViewProfile()}>
             <Image source={{ uri: profileImage || defatulImage }} style={styles.UserImage} />
           </Pressable>
         ) : null}
-        {children}
         <View style={{ flexDirection: 'row', gap: 10 }} pointerEvents="box-none">
           <Pressable onPress={() => router.push('/search')} hitSlop={8}>
             <ThemedView style={themeStyles.notificationView}>
@@ -173,11 +173,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
+    overflow: 'visible',
+    zIndex: 14,
+    elevation: 14,
   },
   alignCenter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 15,
+    overflow: 'visible',
+    zIndex: 14,
   },
   UserImage: {
     width: 35,

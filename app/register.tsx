@@ -30,6 +30,7 @@ import { registerUser } from "@/utils/mutations/auth";
 import Toast from "react-native-toast-message";
 import { showApiErrorToast, extractFieldErrors } from "@/utils/showApiErrorToast";
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from "@expo/vector-icons";
 
 
 
@@ -140,6 +141,13 @@ export default function Register() {
 
   const styles = StyleSheet.create({
     container: { flex: 1 },
+    backButton: {
+      position: "absolute",
+      top: 8,
+      left: 12,
+      zIndex: 30,
+      padding: 8,
+    },
     headerGradient: { height: 150 },
     cardContainer: {
       marginHorizontal: 20,
@@ -325,6 +333,11 @@ export default function Register() {
       >
         <SafeAreaView style={styles.container}>
           <ThemedView>
+            {Platform.OS === "ios" && (
+              <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <Ionicons name="chevron-back" size={24} color={dark ? "#fff" : "#111"} />
+              </TouchableOpacity>
+            )}
             <LinearGradient
               colors={["#940304", "#840000"]}
               start={{ x: 0, y: 0 }}

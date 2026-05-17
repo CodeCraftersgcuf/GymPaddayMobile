@@ -4,6 +4,7 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -16,6 +17,7 @@ import { useMutation } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { verifyOtp } from "@/utils/mutations/auth";
+import { Ionicons } from "@expo/vector-icons";
 
 const VerifyOtpScreen = () => {
   const { dark } = useTheme();
@@ -143,6 +145,11 @@ const VerifyOtpScreen = () => {
     >
       <SafeAreaView style={{ flex: 1 }}>
         <ThemedView style={styles.container}>
+          {Platform.OS === "ios" && (
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color={themedark ? "#fff" : "#111"} />
+            </TouchableOpacity>
+          )}
           <ThemeText style={styles.title}>Enter OTP</ThemeText>
           <ThemeText style={styles.subtitle}>
             We’ve sent a 6-digit OTP to{" "}
@@ -190,6 +197,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     justifyContent: "center",
     flex: 1,
+  },
+  backButton: {
+    position: "absolute",
+    top: 8,
+    left: 4,
+    zIndex: 20,
+    padding: 8,
   },
   title: {
     fontSize: 26,

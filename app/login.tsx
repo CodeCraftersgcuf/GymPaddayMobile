@@ -27,6 +27,7 @@ import Toast from "react-native-toast-message";
 import { useMutation } from "@tanstack/react-query";
 import { loginUser } from "@/utils/mutations/auth";
 import { ApiError } from "@/utils/customApiCall";
+import { Ionicons } from "@expo/vector-icons";
 
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -139,6 +140,11 @@ if (checkingAuth) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
         <ThemedView style={{ flex: 1 }}>
+        {Platform.OS === "ios" && (
+          <TouchableOpacity style={styles.backButton} onPress={() => route.back()}>
+            <Ionicons name="chevron-back" size={24} color={dark ? "#fff" : "#111"} />
+          </TouchableOpacity>
+        )}
         <LinearGradient
           colors={["#940304", "#840000"]}
           start={{ x: 0, y: 0 }}
@@ -314,6 +320,13 @@ if (checkingAuth) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  backButton: {
+    position: "absolute",
+    top: 8,
+    left: 12,
+    zIndex: 20,
+    padding: 8,
   },
   card: {
     marginTop: 20,

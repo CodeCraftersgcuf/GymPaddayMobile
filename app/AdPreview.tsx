@@ -14,10 +14,12 @@ import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Video } from 'expo-av';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 const { width } = Dimensions.get('window');
 
 export default function AdPreview() {
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const router = useRouter();
   const { postId, campaignId } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
@@ -210,17 +212,19 @@ export default function AdPreview() {
         </View>
       </View>
 
-      {/* Next Button */}
+      {/* Next Button (boost flow hidden on iOS) */}
       <TouchableOpacity
         style={styles.nextButton}
         onPress={() =>
-          router.push({
-            pathname: '/BoostPostScreen_review',
-            params: { postId, campaignId },
-          })
+          hideIosMonetization
+            ? router.back()
+            : router.push({
+                pathname: '/BoostPostScreen_review',
+                params: { postId, campaignId },
+              })
         }
       >
-        <Text style={styles.nextText}>Next</Text>
+        <Text style={styles.nextText}>{hideIosMonetization ? 'Back' : 'Next'}</Text>
       </TouchableOpacity>
     </View>
   );

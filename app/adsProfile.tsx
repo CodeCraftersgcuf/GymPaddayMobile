@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toggleCampaignStatus } from '@/utils/mutations/toggle';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteAdCompaign } from '@/utils/mutations/boost';
-
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 interface AdsListScreenProps {
   navigation: {
@@ -48,6 +48,12 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const route = useRouter();
   const queryClient = useQueryClient();
+  const { blocked: hideIosMonetization, hidden, loading: iosStatusLoading } =
+    useIosMonetizationHidden();
+
+  useEffect(() => {
+    if (!iosStatusLoading && hidden) route.replace('/(tabs)/more');
+  }, [route, iosStatusLoading, hidden]);
 
   // Fetch Ads from API
   const { data: adsApiData, isLoading, error } = useQuery({
@@ -129,6 +135,7 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
   });
 
   const handleEdit = (ad: Ad) => {
+    if (hideIosMonetization) return;
     const isEditable = true;
     const boostType = ad.type === "marketplace" ? "listing" : "post";
 

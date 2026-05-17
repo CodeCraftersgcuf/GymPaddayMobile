@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, Text } from 'react-native';
+import { useRouter } from 'expo-router';
 import { GiftFilter } from '@/components/more/transactions/types';
 import { useTheme } from '@/contexts/themeContext';
 import GiftItem from '@/components/more/transactions/GiftItem';
@@ -11,8 +12,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUserGifts } from '@/utils/queries/gitfs';
 import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect } from '@react-navigation/native';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 export default function GiftsScreen() {
+  const router = useRouter();
+  const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+  useEffect(() => {
+    if (!iosMonetizationLoading && hideIosMonetization) router.replace('/(tabs)/more');
+  }, [router, hideIosMonetization, iosMonetizationLoading]);
+
   const { dark } = useTheme();
   const [activeFilter, setActiveFilter] = useState<GiftFilter>('all');
   const [token, setToken] = useState<string | null>(null);

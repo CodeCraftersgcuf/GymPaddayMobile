@@ -29,10 +29,17 @@ import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
 import { useFocusEffect } from '@react-navigation/native';
 import { resolveLatestDepositorName } from '@/utils/resolveLatestUserProfile';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 type ViewMode = 'deposit' | 'payment';
 
 export default function DepositPaymentTab() {
+    const useStoreIap = false;
+    const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+    useEffect(() => {
+        if (!iosMonetizationLoading && hideIosMonetization) router.replace('/(tabs)/more');
+    }, [iosMonetizationLoading, hideIosMonetization]);
+
     const [currentView, setCurrentView] = useState<ViewMode>('deposit');
     const [amount, setAmount] = useState('');
     const [depositorName, setDepositorName] = useState('');
@@ -95,7 +102,7 @@ export default function DepositPaymentTab() {
             if (useMyDetailsRef.current) {
                 setDepositorName(name);
             }
-            if (Platform.OS === 'ios') {
+            if (useStoreIap) {
                 await refreshIosWalletProduct();
             }
         } finally {
@@ -133,29 +140,6 @@ export default function DepositPaymentTab() {
     });
 
     const handleProceed = async () => {
-        if (Platform.OS === 'ios') {
-            if (!isAvailable) {
-                Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-                return;
-            }
-
-            if (!iosWalletProductReady) {
-                Alert.alert(
-                    'Error',
-                    'Could not load this product from the App Store. Pull to refresh or try again shortly.'
-                );
-                return;
-            }
-
-            const success = await purchaseProduct();
-            if (success) {
-                setShowSuccessModal(true);
-                setAmount('');
-                setDepositorName('');
-                setUseMyDetails(false);
-            }
-            return;
-        }
 
         if (!amount) {
             Alert.alert('Error', 'Please enter an amount');
@@ -236,7 +220,7 @@ export default function DepositPaymentTab() {
             <ThemedView style={styles.form}>
                 {/* Amount: Android manual entry; iOS = single pack from App Store */}
                 <View style={styles.inputContainer}>
-                    {Platform.OS === 'ios' ? (
+                    {useStoreIap ? (
                         iosIapInitializing ? (
                             <View style={styles.iosStoreLoading}>
                                 <ActivityIndicator color="#940304" />
@@ -289,7 +273,7 @@ export default function DepositPaymentTab() {
                 </View>
 
                 {/* Depositor's Name Input - Only show for Android */}
-                {Platform.OS !== 'ios' && (
+                {!useStoreIap && (
                     <>
                         <View style={styles.inputContainer}>
                             <TextInput
@@ -324,17 +308,17 @@ export default function DepositPaymentTab() {
                 <TouchableOpacity 
                     style={[
                         styles.proceedButton,
-                        (isIAPLoading || (Platform.OS === 'ios' && (iosIapInitializing || !iosWalletProductReady))) &&
+                        (isIAPLoading || (useStoreIap && (iosIapInitializing || !iosWalletProductReady))) &&
                             styles.proceedButtonDisabled,
                     ]}
                     onPress={handleProceed}
-                    disabled={isIAPLoading || (Platform.OS === 'ios' && (iosIapInitializing || !iosWalletProductReady))}
+                    disabled={isIAPLoading || (useStoreIap && (iosIapInitializing || !iosWalletProductReady))}
                 >
                     {isIAPLoading ? (
                         <ActivityIndicator color="#FFFFFF" />
                     ) : (
                         <Text style={styles.proceedButtonText}>
-                            {Platform.OS === 'ios' ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Proceed'}
+                            {useStoreIap ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Proceed'}
                         </Text>
                     )}
                 </TouchableOpacity>

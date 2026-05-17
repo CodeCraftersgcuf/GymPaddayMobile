@@ -9,6 +9,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { images } from '@/constants';
@@ -71,7 +72,9 @@ const BoostAdModal: React.FC<BoostAdModalProps> = ({ visible, onClose, dark , po
   console.log("This is opened");
   const styles = createStyles(dark);
   const route = useRouter();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const onProceed = () => {
+    if (hideIosMonetization) return;
     route.push({pathname :'/BoostPostScreen_audience',params: {
       post_id: post_id, // Replace with actual post_id from props, state, or context
     }});
