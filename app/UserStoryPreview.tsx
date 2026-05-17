@@ -27,6 +27,21 @@ const fixUrl = (url: string) =>
 type StoryWithMusic = StoryItem & {
   music_url?: string | null;
   music_title?: string | null;
+  music?: { url?: string | null } | null;
+  musicUrl?: string | null;
+};
+
+const resolveStoryMusicUrl = (story?: StoryWithMusic): string | undefined => {
+  if (!story) return undefined;
+  const candidate =
+    story.music_url ??
+    story.music?.url ??
+    story.musicUrl ??
+    undefined;
+  if (!candidate || typeof candidate !== 'string') return undefined;
+  const trimmed = candidate.trim();
+  if (!trimmed) return undefined;
+  return fixUrl(trimmed);
 };
 
 const UserStoryPreview = () => {
@@ -44,9 +59,7 @@ const UserStoryPreview = () => {
 
   const currentStory = stories[currentIndex] as StoryWithMusic | undefined;
   const fixedUrl = fixUrl(currentStory?.full_media_url || '');
-  const fixedMusicUrl = currentStory?.music_url
-    ? fixUrl(String(currentStory.music_url))
-    : undefined;
+  const fixedMusicUrl = resolveStoryMusicUrl(currentStory);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -284,6 +297,13 @@ useEffect(() => {
               // Start music after image loads
               if (fixedMusicUrl) {
                 await playMusicAfterMediaLoads();
+              }
+            }}
+            onLoadEnd={() => {
+              // Fallback: cached images may skip the onLoad timing path on some devices.
+              setIsMediaLoaded(true);
+              if (fixedMusicUrl) {
+                playMusicAfterMediaLoads();
               }
             }}
           />

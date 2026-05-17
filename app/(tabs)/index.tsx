@@ -14,6 +14,7 @@ import {
   NativeScrollEvent,
   ViewToken,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostItem from '@/components/Social/PostItem';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
