@@ -328,9 +328,7 @@ export default function SocialFeedScreen() {
     if (data?.pages) {
       const allPosts = data.pages.flatMap(page => page.data || []); // assuming response has .data field
 
-      const formatted = allPosts.map((post: any) => {
-        const videoMedia = post.media?.find((m: any) => m.media_type === 'video');
-        return {
+      const formatted = allPosts.map((post: any) => ({
         id: Number(post.id),
         user: {
           id: post.user?.id,
@@ -341,12 +339,7 @@ export default function SocialFeedScreen() {
         imagesUrl: post.media
           ?.filter((m: any) => m.media_type === 'image')
           .map((m: any) => m.url) || [],
-        videoUrl: videoMedia?.url || null,
-        videoPosterUrl:
-          videoMedia?.thumbnail_url ??
-          videoMedia?.thumbnail ??
-          videoMedia?.preview_image_url ??
-          null,
+        videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
         timestamp: post.created_at,
         likes_count: post.likes?.length || 0,
         comments_count: Number(
@@ -374,8 +367,7 @@ export default function SocialFeedScreen() {
           },
           text: comment.content || '',
         })) || [],
-      };
-      });
+      }));
 
       // Filter out hidden posts - ensure we check against the hiddenPostIds array
       const hiddenIdsSet = new Set(hiddenPostIds.map(id => Number(id)));

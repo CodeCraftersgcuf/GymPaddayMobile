@@ -1,5 +1,4 @@
 import { images } from "@/constants";
-import { getVideoFirstFramePosterUri } from "@/utils/videoFirstFramePoster";
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -54,8 +53,6 @@ interface PostItemProps {
     timestamp: string;
     imagesUrl: string[];
     videoUrl?: string;
-    /** Optional server first-frame URL if client extraction fails. */
-    videoPosterUrl?: string | null;
     view_count: number;
     share_count: number;
     location?: string;
@@ -99,13 +96,19 @@ const PostItem: React.FC<PostItemProps> = ({
   const [videoLoaded, setVideoLoaded] = useState<Record<number, boolean>>({});
   /** Fullscreen player (tap feed video to open). */
   const [videoFullscreenUri, setVideoFullscreenUri] = useState<string | null>(null);
-  const [videoFullscreenPosterUri, setVideoFullscreenPosterUri] = useState<string | null>(null);
-  const [videoFramePosterUri, setVideoFramePosterUri] = useState<string | null>(null);
   const fsVideoRef = useRef<Video | null>(null);
   const [fsRate, setFsRate] = useState(1);
   const [fsSpeedMenuVisible, setFsSpeedMenuVisible] = useState(false);
   const FS_RATES = [0.5, 1, 1.25, 1.5, 2] as const;
   const fsInsets = useSafeAreaInsets();
+
+  /** Image-modal fullscreen video (carousel tap on photos, not feed tap-to-fullscreen). */
+  const fullscreenVideoRef = useRef<Video | null>(null);
+  const [fullscreenIsPlaying, setFullscreenIsPlaying] = useState(true);
+  const [fullscreenPlaybackRate, setFullscreenPlaybackRate] = useState(1.0);
+  const [fullscreenPositionMs, setFullscreenPositionMs] = useState(0);
+  const [fullscreenDurationMs, setFullscreenDurationMs] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   const [ImagesData, setImagesData] = useState<string[]>([]);
   const [isLiked, setIsLiked] = useState(false);
@@ -133,19 +136,12 @@ const PostItem: React.FC<PostItemProps> = ({
   }, []);
 
   const openVideoFullscreen = React.useCallback(
-    (
-      uri: string,
-      carouselVideoIndex: number,
-      posterUri?: string | null,
-    ) => {
+    (uri: string, carouselVideoIndex: number) => {
       stopPlaybackHard(videoRefs.current[carouselVideoIndex]);
       setIsPlaying((prev) => ({ ...prev, [carouselVideoIndex]: false }));
       setFsRate(1);
       setFsSpeedMenuVisible(false);
       setVideoFullscreenUri(uri);
-      setVideoFullscreenPosterUri(
-        typeof posterUri === 'string' && posterUri.length > 0 ? posterUri : null,
-      );
     },
     [stopPlaybackHard],
   );
@@ -163,7 +159,6 @@ const PostItem: React.FC<PostItemProps> = ({
       }
       setFsSpeedMenuVisible(false);
       setVideoFullscreenUri(null);
-      setVideoFullscreenPosterUri(null);
     })();
   }, []);
 
@@ -262,30 +257,6 @@ const PostItem: React.FC<PostItemProps> = ({
 
     setImagesData(mediaArray);
   }, [post]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const videoUrl = post.videoUrl?.trim();
-    if (!videoUrl) {
-      setVideoFramePosterUri(null);
-      return;
-    }
-
-    void (async () => {
-      const frameUri = await getVideoFirstFramePosterUri(videoUrl);
-      if (cancelled) return;
-      if (frameUri) {
-        setVideoFramePosterUri(frameUri);
-        return;
-      }
-      const apiThumb = post.videoPosterUrl?.trim();
-      setVideoFramePosterUri(apiThumb || null);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [post.videoUrl, post.videoPosterUrl]);
 
   // Leaving the feed viewport: stop playback but keep the video mounted as a paused standby frame.
   useEffect(() => {
@@ -680,11 +651,6 @@ const PostItem: React.FC<PostItemProps> = ({
                       isLooping
                       playsInSilentModeIOS
                       isMuted={isMuted || !isFeedVideoActive}
-                      usePoster={!!videoFramePosterUri}
-                      posterSource={
-                        videoFramePosterUri ? { uri: videoFramePosterUri } : undefined
-                      }
-                      posterStyle={StyleSheet.absoluteFillObject}
                       shouldPlay={
                         isFeedVideoActive &&
                         index === currentIndex &&
@@ -738,13 +704,7 @@ const PostItem: React.FC<PostItemProps> = ({
                     />
                     <Pressable
                       style={StyleSheet.absoluteFillObject}
-                      onPress={() =>
-                        openVideoFullscreen(
-                          item,
-                          index,
-                          item === post.videoUrl ? videoFramePosterUri : null,
-                        )
-                      }
+                      onPress={() => openVideoFullscreen(item, index)}
                       accessibilityRole="button"
                       accessibilityLabel="Open video fullscreen"
                     />
@@ -1110,13 +1070,6 @@ const PostItem: React.FC<PostItemProps> = ({
                     isMuted={false}
                     playsInSilentModeIOS
                     useNativeControls={false}
-                    usePoster={!!videoFullscreenPosterUri}
-                    posterSource={
-                      videoFullscreenPosterUri
-                        ? { uri: videoFullscreenPosterUri }
-                        : undefined
-                    }
-                    posterStyle={StyleSheet.absoluteFillObject}
                     pointerEvents="none"
                     onLoad={async () => {
                       const r = fsVideoRef.current;
@@ -1613,7 +1566,7 @@ const styles = StyleSheet.create({
     width: width - 20,
     height: (width - 20) * 1.12,
     borderRadius: 18,
-    backgroundColor: '#1a1a1c',
+    backgroundColor: '#000',
     alignSelf: 'center',
     overflow: 'hidden',
     justifyContent: 'center',
@@ -1666,7 +1619,6 @@ export default React.memo(PostItem, (prevProps, nextProps) => {
     prevProps.post.likes_count === nextProps.post.likes_count &&
     prevProps.post.comments_count === nextProps.post.comments_count &&
     prevProps.post.videoUrl === nextProps.post.videoUrl &&
-    prevProps.post.videoPosterUrl === nextProps.post.videoPosterUrl &&
     prevProps.isFeedVideoActive === nextProps.isFeedVideoActive &&
     prevProps.showComment === nextProps.showComment
   );
