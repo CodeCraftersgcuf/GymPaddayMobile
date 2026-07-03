@@ -16,7 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { formatNaira } from '@/utils/formatters';
-import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl';
 
 
 //Code Related to the integration
@@ -101,9 +101,7 @@ export default function ItemDetailsScreen() {
 
     const images =
         Array.isArray(listing?.media_urls) && listing.media_urls.length > 0
-            ? listing.media_urls
-                .map((url: string) => resolveMediaUrl(url))
-                .filter(Boolean)
+            ? resolveMediaUrls(listing.media_urls)
             : [
                 'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg',
             ];

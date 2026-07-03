@@ -10,6 +10,7 @@ import {
   Platform,
   StatusBar,
   KeyboardAvoidingView,
+  Keyboard,
   ScrollView,
   Modal,
   Dimensions,
@@ -27,7 +28,7 @@ import { UNREAD_MESSAGES_QUERY_KEY } from '@/utils/queries/chat';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import { sendChatMessage } from '@/utils/mutations/chat';
 import { router, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
@@ -44,6 +45,7 @@ import { RtcSurfaceView } from 'react-native-agora';
 
 export default function MessageChat() {
   const { dark } = useTheme();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { conversation_id, user_id, user_pic, user_name } = useLocalSearchParams();
   const [newMessage, setNewMessage] = useState('');
@@ -480,6 +482,14 @@ export default function MessageChat() {
     })();
   }, []);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvent, () => {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+    return () => sub.remove();
+  }, []);
+
   const handlePickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -496,21 +506,23 @@ export default function MessageChat() {
   };
 
   return (
-    <KeyboardAvoidingView
+    <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      edges={['top', 'left', 'right']}
     >
-      <SafeAreaView style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      >
         {isLoading && (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={styles.loadingCenter}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         )}
 
-
         {!isLoading && (
-          // {true && (
-          <>
+          <View style={styles.flex}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.border }]}>
               <TouchableOpacity
@@ -533,7 +545,6 @@ export default function MessageChat() {
               <View style={styles.headerActions}>
                 <TouchableOpacity style={[styles.actionButton, { backgroundColor: dark ? '#0D0D0D' : '#FAFAFA' }]} onPress={handleVoiceCall}>
                   <Image source={images.chatsPhone} style={{ width: 20, height: 20 }} tintColor={theme.text} />
-                  {/* <Icon name="call" size={20} color={theme.text} /> */}
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionButton, { backgroundColor: dark ? '#0D0D0D' : '#FAFAFA' }]} onPress={handleVideoCall}>
                   <MaterialIcons name="videocam" size={20} color={theme.text} />
@@ -541,15 +552,17 @@ export default function MessageChat() {
               </View>
             </View>
 
-            {/* Profile Card */}
             <FlatList
               ref={flatListRef}
               data={messages || []}
               style={styles.messagesContainer}
+              contentContainerStyle={styles.messagesContent}
               keyExtractor={(item) => item?.id || String(Math.random())}
               scrollEnabled={true}
               refreshing={refreshing}
               onRefresh={handleRefresh}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
               ListEmptyComponent={<View />}
               ListHeaderComponent={
@@ -585,54 +598,39 @@ export default function MessageChat() {
               renderItem={renderMessage}
             />
 
-
-            {/* Image preview above input bar */}
             {attachedImage && (
-              <View style={{ alignItems: 'flex-end', marginRight: 16, marginBottom: 4 }}>
-                <View style={{ position: 'relative', width: 80, height: 80 }}>
+              <View style={styles.attachedImageWrap}>
+                <View style={styles.attachedImageBox}>
                   <Image
                     source={{ uri: attachedImage }}
-                    style={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: '#ccc',
-                    }}
+                    style={styles.attachedImage}
                   />
                   <TouchableOpacity
-                    style={{
-                      position: 'absolute',
-                      top: -8,
-                      right: -8,
-                      backgroundColor: '#fff',
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: '#ccc',
-                      width: 24,
-                      height: 24,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      zIndex: 2,
-                    }}
+                    style={styles.removeAttachedImage}
                     onPress={() => setAttachedImage(null)}
                   >
-                    <Text style={{ color: '#333', fontWeight: 'bold', fontSize: 16 }}>×</Text>
+                    <Text style={styles.removeAttachedImageText}>×</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
 
-            {/* Input Container */}
-            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-              {/* Attach photo icon */}
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  borderColor: theme.border,
+                  paddingBottom: Math.max(insets.bottom, 12),
+                },
+              ]}
+            >
               <TouchableOpacity
-                style={{ marginRight: 8 }}
+                style={styles.attachButton}
                 onPress={handlePickImage}
               >
                 <Image
                   source={images.gallery || images.notifcationIcon}
-                  style={{ width: 25, height: 25, }}
+                  style={{ width: 25, height: 25 }}
                 />
               </TouchableOpacity>
               <TextInput
@@ -661,16 +659,24 @@ export default function MessageChat() {
                 )}
               </TouchableOpacity>
             </View>
-          </>
+          </View>
         )}
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  loadingCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   iconStyle: {
     width: 30,
@@ -775,8 +781,10 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
+  },
+  messagesContent: {
     padding: 16,
-    marginBottom: 10, // Space for input
+    paddingBottom: 8,
   },
   messageBubble: {
     flexDirection: 'row',
@@ -827,9 +835,48 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    // marginTop: 10,
+    paddingHorizontal: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
+  },
+  attachButton: {
+    marginRight: 8,
+  },
+  attachedImageWrap: {
+    alignItems: 'flex-end',
+    marginRight: 16,
+    marginBottom: 4,
+  },
+  attachedImageBox: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+  },
+  attachedImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  removeAttachedImage: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  removeAttachedImageText: {
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   input: {
     flex: 1,

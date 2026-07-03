@@ -8,10 +8,10 @@ interface PostContainerProps {
   showComment?:boolean
   onCommentPress: (comments: any[], postId: number) => void;
   handleMenu:(userId: number | string, postId: number) => void;
+  activePostId?: number | null;
 }
 
-const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,handleMenu,showComment=true }) => {
-  // console.log("PostContainer posts:", posts);
+const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress, handleMenu, showComment=true, activePostId }) => {
   return (
     <FlatList
       data={posts}
@@ -22,6 +22,7 @@ const PostContainer: React.FC<PostContainerProps> = ({ posts, onCommentPress,han
           showComment={showComment}
           onCommentPress={onCommentPress}
           handleMenu={handleMenu}
+          isFeedFocused={activePostId != null ? item.id === activePostId : undefined}
         />
       )}
       contentContainerStyle={{ paddingBottom: 100 }}

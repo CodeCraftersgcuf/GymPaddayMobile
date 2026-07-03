@@ -20,8 +20,13 @@ import { useTheme } from '@/contexts/themeContext';
 import { useLocalSearchParams } from 'expo-router';
 
 //Code related to integration
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPost, updatePost } from '@/utils/mutations/posts';
+import {
+  notifyUploadFailed,
+  notifyUploadReceived,
+  notifyUploadStarted,
+} from '@/utils/backgroundUpload';
 import { getPostById } from '@/utils/queries/posts';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
@@ -53,6 +58,7 @@ export default function CreatePostScreen() {
   const theme = useTheme();
   const dark = theme?.dark ?? false; // Safety check in case theme context isn't initialized
   const router = useRouter();
+  const queryClient = useQueryClient();
   const  tokenn = async ()=>{
     const token = await SecureStore.getItemAsync('auth_token');
     return token;
@@ -528,6 +534,41 @@ export default function CreatePostScreen() {
       });
 
       // Call appropriate mutation based on mode
+      const hasNewMedia =
+        selectedMedia.length > 0 &&
+        selectedMedia.some((m) => !isEditMode || !m.id.startsWith('existing_'));
+
+      if (hasNewMedia) {
+        notifyUploadStarted('post');
+        router.replace('/(tabs)');
+
+        const uploadTask = isEditMode && postId
+          ? updatePost({ postId, data: formData, token })
+          : createPost({ data: formData, token });
+
+        uploadTask
+          .then(async (result) => {
+            await notifyUploadReceived('post');
+            queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+            if (!result?.async) {
+              Toast.show({
+                type: 'success',
+                text1: 'Post published!',
+                text2: 'Your post is live.',
+                visibilityTime: 3000,
+              });
+            }
+          })
+          .catch(async (error: any) => {
+            console.error('Background upload failed:', error);
+            await notifyUploadFailed('post', error?.message);
+          })
+          .finally(() => {
+            setIsSubmittingLocal(false);
+          });
+        return;
+      }
+
       if (isEditMode && postId) {
         console.log('🔄 Updating post with ID:', postId);
         updatePostMutation.mutate({

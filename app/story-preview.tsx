@@ -21,6 +21,11 @@ import { Video, Audio } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
 import { API_ENDPOINTS } from '@/apiConfig';
 import Toast from 'react-native-toast-message';
+import {
+  notifyUploadFailed,
+  notifyUploadReceived,
+  notifyUploadStarted,
+} from '@/utils/backgroundUpload';
 import { STORY_MUSIC_LIBRARY, MUSIC_CATEGORIES, getMusicByGenre, StoryMusic } from '@/constants/storyMusic';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -250,12 +255,16 @@ export default function StoryPreview() {
 
   const handleUpload = async () => {
     try {
-      setIsUploading(true);
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('User not authenticated.');
 
-      for (let i = 0; i < mediaList.length; i++) {
-        const media = mediaList[i];
+      const items = [...mediaList];
+      notifyUploadStarted('story');
+      setIsUploading(false);
+      router.replace('/(tabs)');
+
+      for (let i = 0; i < items.length; i++) {
+        const media = items[i];
         const formData = new FormData();
         formData.append('media', {
           uri: media.uri,
@@ -265,8 +274,7 @@ export default function StoryPreview() {
         formData.append('media_type', media.mediaType);
         formData.append('caption', '');
 
-        if (selectedMusicMap[i] && selectedMusicMap[i].title && selectedMusicMap[i].preview) {
-          console.log(selectedMusicMap[i], "selected music");
+        if (selectedMusicMap[i]?.title && selectedMusicMap[i]?.preview) {
           formData.append('music_title', selectedMusicMap[i].title);
           formData.append('music_url', selectedMusicMap[i].preview);
           if (selectedMusicMap[i].artist) {
@@ -285,19 +293,14 @@ export default function StoryPreview() {
 
         const result = await response.json();
         if (!response.ok) {
-          Toast.show({ type: 'error', text1: 'Upload failed', text2: result?.message || 'Unknown error' });
-          setIsUploading(false);
-          return;
+          throw new Error(result?.message || 'Upload failed');
         }
       }
 
-      Toast.show({ type: 'success', text1: 'Stories uploaded!' });
-      setIsUploading(false);
-      router.replace('/(tabs)');
-    } catch (error) {
+      await notifyUploadReceived('story');
+    } catch (error: any) {
       console.error('Upload error:', error);
-      Toast.show({ type: 'error', text1: 'Upload failed', text2: 'Please try again.' });
-      setIsUploading(false);
+      await notifyUploadFailed('story', error?.message);
     }
   };
 

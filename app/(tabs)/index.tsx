@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,14 @@ import {
   StatusBar,
   TouchableOpacity,
   Image,
-  ScrollView,
+  FlatList,
   RefreshControl,
-  ActivityIndicator, // <-- add this
+  ActivityIndicator,
   Alert,
+  ViewToken,
 } from 'react-native';
 import StoryContainer from '@/components/Social/StoryContainer';
-import PostContainer from '@/components/Social/PostContainer';
+import PostItem from '@/components/Social/PostItem';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
 import { mockStories, mockPosts } from '@/components/Social/mockData';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,17 +24,14 @@ import PostDetailBottomsheet from '@/components/Social/PostDetailBottomsheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { getUserPosts } from '@/utils/queries/posts';
 import * as SecureStore from 'expo-secure-store';
 import { getPostComments } from '@/utils/queries/comments';
-import { useMutation } from '@tanstack/react-query';
 import { createComment } from '@/utils/mutations/comments';
 import { GroupedUserStories } from '@/utils/types/story';
 import { fetchGroupedStories } from '@/utils/storiesApi';
 import { mapPostFromApi } from '@/utils/mapFeedPost';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { fetchUserProfile } from '@/utils/queries/profile';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // LoadingIndicator component
@@ -58,7 +56,7 @@ export default function SocialFeedScreen() {
   const { dark } = useTheme();
   const route = useRouter();
   const [posts, setPosts] = useState<any[]>([]);
-  const queryClient = useQueryClient();
+  const [activePostId, setActivePostId] = useState<number | null>(null);
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
   const logoutTriggeredRef = useRef(false);
 
@@ -312,8 +310,40 @@ export default function SocialFeedScreen() {
       
       console.log('📊 Filtering posts - Total:', formatted.length, 'Hidden:', hiddenPostIds.length, 'Filtered:', filtered.length);
       setPosts(filtered);
+      if (filtered.length > 0) {
+        setActivePostId((prev) =>
+          prev != null && filtered.some((p: any) => p.id === prev) ? prev : filtered[0].id
+        );
+      }
     }
   }, [data, hiddenPostIds]);
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const visible = viewableItems
+        .filter((entry) => entry.isViewable && entry.item?.id != null)
+        .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+      if (visible.length === 0) {
+        setActivePostId(null);
+        return;
+      }
+
+      const center = visible[Math.floor(visible.length / 2)];
+      const nextId = Number(center.item.id);
+      setActivePostId((prev) => (prev === nextId ? prev : nextId));
+    },
+    []
+  );
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 250,
+  }).current;
+
+  const viewabilityConfigCallbackPairs = useRef([
+    { viewabilityConfig, onViewableItemsChanged },
+  ]).current;
 
 
 
@@ -438,37 +468,88 @@ export default function SocialFeedScreen() {
       replies: mapApiCommentsToInternal(item.replies || [])
     }));
   };
-  useEffect(() => {
-    const prefetchProfiles = async () => {
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!token) return;
 
-      const uniqueUserIds = Array.from(new Set(posts.map(post => post.user?.id)));
+  const renderFeedPost = useCallback(
+    ({ item }: { item: any }) => (
+      <PostItem
+        post={item}
+        onCommentPress={handleCommentPress}
+        handleMenu={handleMenu}
+        isFeedFocused={item.id === activePostId}
+      />
+    ),
+    [activePostId, handleCommentPress, handleMenu]
+  );
 
-      // Prefetch profiles with delay to avoid rate limiting
-      // Limit to first 10 users to prevent too many requests
-      const limitedUserIds = uniqueUserIds.slice(0, 10);
-      
-      for (let i = 0; i < limitedUserIds.length; i++) {
-        const id = limitedUserIds[i];
-        // Add delay between requests to avoid rate limiting
-        setTimeout(() => {
-          console.log('Prefetching profile for user ID:', id);
-          queryClient.prefetchQuery({
-            queryKey: ['userProfile', id],
-            queryFn: () => fetchUserProfile(token, id),
-            staleTime: 5 * 60 * 1000, // 5 minutes
-            gcTime: 10 * 60 * 1000, // 10 minutes
-          });
-        }, i * 200); // 200ms delay between each request
-      }
-    };
+  const feedListHeader = useCallback(
+    () => (
+      <>
+        {isError && posts.length === 0 && (
+          <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+            <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
+              {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
+                ? (error?.message || 'Your account has been blocked. Please contact support.')
+                : error?.statusCode === 401 || error?.statusCode === 403
+                ? 'Your session has expired. Please login again.'
+                : error?.message?.includes('Network') || error?.message?.includes('timeout')
+                ? 'Network connection error. Please check your internet connection.'
+                : 'Failed to load posts. Please try again.'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => refetch()}
+              style={{
+                backgroundColor: '#940304',
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: 8,
+                marginTop: 10,
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {!isError && <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />}
+      </>
+    ),
+    [isError, posts.length, dark, error, refetch, groupedStories, refreshing]
+  );
 
-    if (posts.length > 0) {
-      prefetchProfiles();
-    }
-  }, [posts]);
-
+  const feedListFooter = useCallback(
+    () => (
+      <>
+        {isFetchingNextPage && (
+          <View style={{ paddingVertical: 20, alignItems: 'center', marginBottom: 100 }}>
+            <ActivityIndicator size="small" color="#940304" />
+            <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
+          </View>
+        )}
+        {isError && posts.length > 0 && (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
+              {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
+                ? (error?.message || 'Your account has been blocked. Please contact support.')
+                : error?.statusCode === 401 || error?.statusCode === 403
+                ? 'Your session has expired. Please login again.'
+                : 'Failed to load more posts'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => fetchNextPage()}
+              style={{
+                backgroundColor: '#940304',
+                paddingHorizontal: 15,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </>
+    ),
+    [isFetchingNextPage, isError, posts.length, dark, error, fetchNextPage]
+  );
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -479,22 +560,29 @@ export default function SocialFeedScreen() {
           title="Socials"
           admin={{ profile: "https://randomuser.me/api/portraits/men/45.jpg", userId: '12345' }}
           notificationID="notif123"
-          refreshing={refreshing} // Pass refreshing state to TabHeader
+          refreshing={refreshing}
         />
 
-        <ScrollView
+        <FlatList
           style={{ flex: 1 }}
+          data={isError && posts.length === 0 ? [] : posts}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderFeedPost}
+          extraData={activePostId}
+          ListHeaderComponent={feedListHeader}
+          ListFooterComponent={feedListFooter}
+          contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
-          onScroll={({ nativeEvent }) => {
-            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 60;
-
-            if (isBottom && hasNextPage && !isFetchingNextPage) {
+          viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+          initialNumToRender={4}
+          maxToRenderPerBatch={5}
+          windowSize={7}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
               fetchNextPage();
             }
           }}
-          scrollEventThrottle={400}
-
+          onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -505,72 +593,7 @@ export default function SocialFeedScreen() {
               titleColor={dark ? '#ffffff' : '#000000'}
             />
           }
-        >
-          {isError && posts.length === 0 && (
-            <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
-              <Text style={{ color: dark ? '#fff' : '#000', fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
-                {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
-                  ? (error?.message || 'Your account has been blocked. Please contact support.')
-                  : error?.statusCode === 401 || error?.statusCode === 403
-                  ? 'Your session has expired. Please login again.'
-                  : error?.message?.includes('Network') || error?.message?.includes('timeout') 
-                  ? 'Network connection error. Please check your internet connection.'
-                  : 'Failed to load posts. Please try again.'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => refetch()}
-                style={{
-                  backgroundColor: '#940304',
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                  borderRadius: 8,
-                  marginTop: 10,
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {!isError && (
-            <>
-              <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />
-              <PostContainer
-                posts={posts}
-                onCommentPress={handleCommentPress}
-                handleMenu={handleMenu}
-              />
-            </>
-          )}
-          {isFetchingNextPage && (
-            <View style={{ paddingVertical: 20, alignItems: 'center', marginBottom: 100, zIndex: 100 }}>
-              <ActivityIndicator size="small" color="#940304" />
-              <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
-            </View>
-          )}
-          {isError && posts.length > 0 && (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
-                {error?.errorCode === 'ACCOUNT_BANNED' || /banned/i.test(error?.message || '')
-                  ? (error?.message || 'Your account has been blocked. Please contact support.')
-                  : error?.statusCode === 401 || error?.statusCode === 403
-                  ? 'Your session has expired. Please login again.'
-                  : 'Failed to load more posts'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => fetchNextPage()}
-                style={{
-                  backgroundColor: '#940304',
-                  paddingHorizontal: 15,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-        </ScrollView>
+        />
         <CommentsBottomSheet
           visible={commentModalVisible}
           comments={[...mapApiCommentsToInternal(commentData), ...optimisticComments]}

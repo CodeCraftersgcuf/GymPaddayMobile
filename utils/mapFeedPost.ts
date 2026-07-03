@@ -18,6 +18,9 @@ export function mapPostFromApi(post: any) {
         .filter(Boolean) || [],
     videoUrl: resolveVideoPlaybackUrl(videoMedia),
     videoMp4Url: videoMedia ? resolveMediaUrl(videoMedia.url) : null,
+    videoThumbnailUrl: videoMedia?.thumbnail_url
+      ? resolveMediaUrl(videoMedia.thumbnail_url)
+      : null,
     timestamp: post.created_at,
     likes_count: post.likes_count ?? post.likes?.length ?? 0,
     comments_count:

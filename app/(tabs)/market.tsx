@@ -23,7 +23,7 @@ import { AntDesign, Entypo, Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 import { formatNaira } from '@/utils/formatters';
-import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl';
 
 //Code Related to the integration
 import { QueryClient, useQuery } from '@tanstack/react-query';
@@ -222,7 +222,7 @@ export default function MarketplaceScreen() {
     ? data.data.map((item: any) => {
       let imageUrl = dummyImage;
       if (Array.isArray(item.media_urls) && item.media_urls.length > 0) {
-        imageUrl = resolveMediaUrl(item.media_urls[0]) || dummyImage;
+        imageUrl = resolveMediaUrls(item.media_urls)[0] || dummyImage;
       }
 
       let sellerAvatar = dummyImage;

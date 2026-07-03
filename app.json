@@ -24,6 +24,7 @@
     "android": {
       "googleServicesFile": "./google-services.json",
       "package": "com.pejul.gympaddy",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff",
