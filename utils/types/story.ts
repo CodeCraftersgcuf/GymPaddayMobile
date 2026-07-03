@@ -12,7 +12,8 @@ export interface StoryItem {
   media_url: string;
   media_type: 'photo' | 'video';
   caption: string | null;
-  full_media_url: string;
+  full_media_url: string | null;
+  processing_status?: 'pending' | 'processing' | 'ready' | 'failed';
   created_at: string;
   expires_at: string;
   user: User;

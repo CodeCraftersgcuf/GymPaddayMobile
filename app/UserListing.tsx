@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getMarketplaceListingsByUser } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { useLocalSearchParams } from 'expo-router';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 
 
@@ -137,12 +138,7 @@ export default function ListingsScreen() {
         <TouchableOpacity key={item.id} style={[styles.listingItem, { backgroundColor: theme.secondary }]} onPress={() => handleItemPress(item.id)}>
             <Image
                 source={{
-                    uri: item.media_urls?.[0]
-                        ? (item.media_urls[0].startsWith('http')
-                            ? item.media_urls[0]
-                            : `https://gympaddy.skillverse.com.pk/storage/${item.media_urls[0]}`
-                        )
-                        : 'https://via.placeholder.com/300x200?text=No+Image',
+                    uri: resolveMediaUrl(item.media_urls?.[0]) || 'https://via.placeholder.com/300x200?text=No+Image',
                 }}
                 style={styles.listingImage}
             />

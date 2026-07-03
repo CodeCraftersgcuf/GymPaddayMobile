@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, StatusBar, ScrollView } from 'react-native';
-import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { useLocalSearchParams } from 'expo-router';
 import PostItem from '@/components/Social/PostItem';
@@ -8,6 +7,9 @@ import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getPostComments } from '@/utils/queries/comments';
 import { createComment } from '@/utils/mutations/comments';
+import { getPostById } from '@/utils/queries/posts';
+import { mapPostFromApi } from '@/utils/mapFeedPost';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 export default function SinglePostScreen() {
   const { postId } = useLocalSearchParams();
@@ -61,7 +63,7 @@ export default function SinglePostScreen() {
       id: item.id.toString(),
       userId: item.user?.id?.toString() || '',
       username: item.user?.username || 'Unknown',
-      profileImage: item.user?.profile_picture_url || '',
+      profileImage: resolveMediaUrl(item.user?.profile_picture_url) || '',
       text: item.content || '',
       timestamp: item.created_at,
       likes: 0,
@@ -72,34 +74,8 @@ export default function SinglePostScreen() {
   const fetchPost = async () => {
     if (!token || !postId) return;
     try {
-      const response = await axios.get(
-        `https://gympaddy.skillverse.com.pk/api/user/posts/${postId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      const rawPost = response.data;
-
-      const parsedPost = {
-        id: rawPost.id,
-        content: rawPost.content,
-        timestamp: rawPost.created_at,
-        likes_count: rawPost.likes?.length || 0,
-        comments_count: rawPost.all_comments_count || 0,
-        user: {
-          id: rawPost.user.id,
-          username: rawPost.user.username,
-          profile_picture: rawPost.user.profile_picture_url,
-        },
-        imagesUrl: rawPost.media?.filter((m: any) => m.media_type === 'image').map((m: any) => m.url) || [],
-        videoUrl: rawPost.media?.find((m: any) => m.media_type === 'video')?.url || null,
-        recent_comments: rawPost.comments || [],
-        share_count: 0,
-        view_count: 0,
-      };
-
-      setPost(parsedPost);
+      const rawPost = await getPostById(Number(postId), token);
+      setPost(mapPostFromApi(rawPost));
     } catch (error) {
       console.error('Failed to load post:', error);
     } finally {

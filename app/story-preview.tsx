@@ -19,6 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, Audio } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
+import { API_ENDPOINTS } from '@/apiConfig';
 import Toast from 'react-native-toast-message';
 import { STORY_MUSIC_LIBRARY, MUSIC_CATEGORIES, getMusicByGenre, StoryMusic } from '@/constants/storyMusic';
 import { Ionicons } from '@expo/vector-icons';
@@ -273,7 +274,7 @@ export default function StoryPreview() {
           }
         }
 
-        const response = await fetch('https://gympaddy.skillverse.com.pk/api/user/stories', {
+        const response = await fetch(API_ENDPOINTS.USER.STORIES.Create, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,

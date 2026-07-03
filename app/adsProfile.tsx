@@ -23,6 +23,7 @@ import { getAdCampaigns } from '@/utils/queries/adCampaigns';
 import { useMutation } from '@tanstack/react-query';
 import { toggleCampaignStatus } from '@/utils/mutations/toggle';
 import { useQueryClient } from '@tanstack/react-query';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 import { deleteAdCompaign } from '@/utils/mutations/boost';
 
 
@@ -90,12 +91,9 @@ export const AdsListScreen: React.FC<AdsListScreenProps> = ({ navigation }) => {
 
       let imageUrl = '';
       if (item.type === 'boost_post' && Array.isArray(item.post?.media) && item.post.media.length > 0) {
-        imageUrl = item.post.media[0].url; // Already a full URL
+        imageUrl = resolveMediaUrl(item.post.media[0].url) || '';
       } else if (item.type === 'boost_listing' && Array.isArray(item.listing?.media) && item.listing.media.length > 0) {
-        const url = item.listing.media[0].url;
-        imageUrl = url.startsWith('http')
-          ? url
-          : `https://gympaddy.skillverse.com.pk/storage/${url}`;
+        imageUrl = resolveMediaUrl(item.listing.media[0].url) || '';
       }
 
       return {

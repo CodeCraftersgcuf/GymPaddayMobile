@@ -29,6 +29,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { getMarketplaceListingsByUser } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import { deleteMarketplaceListing } from '@/utils/mutations/boost';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 function timeAgo(dateString: string): string {
     if (!dateString) return '--';
@@ -181,7 +182,7 @@ const ProfileScreen: React.FC = () => {
                         item.status === 'closed' ? 'Closed' : 'Pending',
             time: timeAgo(item.created_at),
             image: item.media_urls && item.media_urls.length > 0
-                ? `https://gympaddy.skillverse.com.pk/storage/${item.media_urls[0]}`
+                ? resolveMediaUrl(item.media_urls[0]) || 'https://placehold.co/200x200?text=No+Image'
                 : 'https://placehold.co/200x200?text=No+Image',
         }))
         : [];

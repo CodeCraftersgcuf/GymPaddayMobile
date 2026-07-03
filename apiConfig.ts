@@ -2,7 +2,7 @@
 // const API_DOMAIN = "http://192.168.175.151:8000/api";   // Localhost IP
 
 const API_DOMAIN = "https://api.gympaddy.com/api";
-
+const MEDIA_CDN_URL = "https://media.gympaddy.com";
 
 const API_ENDPOINTS = {
   AUTH: {
@@ -33,6 +33,13 @@ const API_ENDPOINTS = {
       Update: (id: number) => API_DOMAIN + `/user/posts/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/posts/${id}`,
     },
+    STORIES: {
+      List: API_DOMAIN + "/user/get/stories",
+      Create: API_DOMAIN + "/user/stories",
+    },
+    SEARCH: (query: string) =>
+      `${API_DOMAIN}/user/search?q=${encodeURIComponent(query)}`,
+    BALANCE: API_DOMAIN + "/user/balance",
     COMMENTS: {
       PostList: (id: number) => API_DOMAIN + `/user/comments?post_id=${id}`,
       List: API_DOMAIN + "/user/comments",
@@ -189,4 +196,4 @@ const API_ENDPOINTS = {
   },
 };
 
-export { API_DOMAIN, API_ENDPOINTS };
+export { API_DOMAIN, MEDIA_CDN_URL, API_ENDPOINTS };

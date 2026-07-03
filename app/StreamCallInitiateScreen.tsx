@@ -13,7 +13,7 @@ import * as SecureStore from 'expo-secure-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import CallScreen from '@/components/CallScreen';
 
-const API_URL = 'https://gympaddy.skillverse.com.pk/api/user';
+const API_URL = 'https://api.gympaddy.com/api/user';
 
 export default function StreamCallInitiateScreen() {
     const router = useRouter();

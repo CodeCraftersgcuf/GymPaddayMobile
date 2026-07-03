@@ -16,6 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { formatNaira } from '@/utils/formatters';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 
 //Code Related to the integration
@@ -96,25 +97,19 @@ export default function ItemDetailsScreen() {
 
     console.log("Listing Datass:", listingData);
 
-    // Base API URL
-    // const API_BASE_URL = 'http://192.168.175.151:8000/storage/';
-    const API_BASE_URL = 'https://gympaddy.skillverse.com.pk/storage/';
-    // Extract the actual data from the API response
     const listing = listingData?.data;
 
-    // Prepare images from API
     const images =
         Array.isArray(listing?.media_urls) && listing.media_urls.length > 0
-            ? listing.media_urls.map((url: string) =>
-                url.startsWith('http') ? url : API_BASE_URL + url
-            )
+            ? listing.media_urls
+                .map((url: string) => resolveMediaUrl(url))
+                .filter(Boolean)
             : [
                 'https://images.pexels.com/photos/1229356/pexels-photo-1229356.jpeg',
             ];
 
-    // Prepare seller image
     const sellerImage =
-        listing?.user?.profile_picture_url ||
+        resolveMediaUrl(listing?.user?.profile_picture_url) ||
         'https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg';
 
     console.log("Seller Image:", sellerImage);

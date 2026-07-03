@@ -153,7 +153,7 @@ export default function LiveStreamingView({
     queryKey: ['audience', livestreamId],
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
-      const res = await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${livestreamId}/audience`, {
+      const res = await fetch(`https://api.gympaddy.com/api/user/live-streams/${livestreamId}/audience`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -219,7 +219,7 @@ export default function LiveStreamingView({
     const interval = setInterval(async () => {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
-        const res = await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${livestreamId}/audience-count`, {
+        const res = await fetch(`https://api.gympaddy.com/api/user/live-streams/${livestreamId}/audience-count`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -241,7 +241,7 @@ export default function LiveStreamingView({
     const sendHeartbeat = async () => {
       try {
         const token = await SecureStore.getItemAsync('auth_token');
-        await fetch(`https://gympaddy.skillverse.com.pk/api/user/live-streams/${livestreamId}/heartbeat`, {
+        await fetch(`https://api.gympaddy.com/api/user/live-streams/${livestreamId}/heartbeat`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });

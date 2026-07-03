@@ -15,14 +15,14 @@ import {
 import { Audio, Video } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StoryItem } from '@/utils/types/story';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 import CachedImage from 'expo-cached-image';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
 const STORY_DURATION = 4000; // Reduced from 5000ms to 4000ms for faster transitions
 
-const fixUrl = (url: string) =>
-  url?.replace('https://gympaddy.skillverse.com.pk/storage//', 'https://gympaddy.skillverse.com.pk/storage/');
+const storyMediaUrl = (url?: string | null) => resolveMediaUrl(url);
 
 const UserStoryPreview = () => {
   const { selected } = useLocalSearchParams();
@@ -38,7 +38,7 @@ const UserStoryPreview = () => {
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const currentStory = stories[currentIndex];
-  const fixedUrl = fixUrl(currentStory?.full_media_url);
+  const fixedUrl = storyMediaUrl(currentStory?.full_media_url);
   const [musicSound, setMusicSound] = useState<Audio.Sound | null>(null);
 
   useEffect(() => {
@@ -219,7 +219,7 @@ useEffect(() => {
     // Preload next story
     const nextStory = stories[currentIndex + 1];
     if (nextStory) {
-      const nextUrl = fixUrl(nextStory.full_media_url);
+      const nextUrl = storyMediaUrl(nextStory.full_media_url);
       if (nextStory.media_type === 'photo') {
         Image.prefetch(nextUrl).catch(() => {}); // Silent fail
       } else if (nextStory.media_type === 'video') {
@@ -234,7 +234,7 @@ useEffect(() => {
     // Also preload the story after next for even smoother experience
     const nextNextStory = stories[currentIndex + 2];
     if (nextNextStory) {
-      const nextNextUrl = fixUrl(nextNextStory.full_media_url);
+      const nextNextUrl = storyMediaUrl(nextNextStory.full_media_url);
       if (nextNextStory.media_type === 'photo') {
         Image.prefetch(nextNextUrl).catch(() => {});
       }

@@ -16,6 +16,8 @@ import { useRouter } from 'expo-router';
 import PostContainer from '@/components/Social/PostContainer';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { API_ENDPOINTS } from '@/apiConfig';
+import { mapPostFromApi } from '@/utils/mapFeedPost';
 
 
 const SearchScreen = () => {
@@ -40,7 +42,7 @@ const SearchScreen = () => {
         queryKey: ['searchResults', query],
         queryFn: async () => {
             const token = await SecureStore.getItemAsync('auth_token');
-            const res = await fetch(`https://gympaddy.skillverse.com.pk/api/user/search?q=${query}`, {
+            const res = await fetch(API_ENDPOINTS.USER.SEARCH(query), {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -175,36 +177,7 @@ const SearchScreen = () => {
                                     renderItem={({ item }) => (
                                     <PostContainer
                                         showComment={false}
-                                        posts={[
-                                            {
-                                                id: item.id,
-                                                content: item.content,
-                                                title: item.title,
-                                                user: {
-                                                    id: item.user?.id,
-                                                    username: item.user?.username,
-                                                    profile_picture: item.user?.profile_picture_url ?? null,
-                                                },
-                                                imagesUrl:
-                                                    item.media?.filter((m) => m.media_type === 'image')?.map((m) => m.url) || [],
-                                                videoUrl: item.media?.find((m) => m.media_type === 'video')?.url || null,
-                                                timestamp: item.created_at,
-                                                likes_count: item.likes?.length || 0,
-                                                comments_count: item.comments?.length || 0,
-                                                view_count: 0,
-                                                share_count: 0,
-                                                recent_comments:
-                                                    item.comments?.slice(0, 2).map((comment) => ({
-                                                        id: comment.id,
-                                                        content: comment.content,
-                                                        user: {
-                                                            id: comment.user.id,
-                                                            username: comment.user.username,
-                                                            profile_picture: comment.user.profile_picture_url,
-                                                        },
-                                                    })) || [],
-                                            },
-                                        ]}
+                                        posts={[mapPostFromApi(item)]}
                                         onCommentPress={() => { }}
                                         handleMenu={() => { }}
                                     />

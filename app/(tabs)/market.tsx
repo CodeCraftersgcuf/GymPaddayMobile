@@ -23,6 +23,7 @@ import { AntDesign, Entypo, Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 import { formatNaira } from '@/utils/formatters';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 //Code Related to the integration
 import { QueryClient, useQuery } from '@tanstack/react-query';
@@ -217,27 +218,16 @@ export default function MarketplaceScreen() {
     others: 'others',
   };
 
-  // const BASE_STORAGE_URL = 'http://192.168.175.151:8000/storage/';
-  const BASE_STORAGE_URL = 'https://gympaddy.skillverse.com.pk/storage/';
-
-
   const apiListings = Array.isArray(data?.data)
     ? data.data.map((item: any) => {
-      // Handle product image
       let imageUrl = dummyImage;
       if (Array.isArray(item.media_urls) && item.media_urls.length > 0) {
-        const firstUrl = item.media_urls[0];
-        imageUrl = firstUrl.startsWith('http')
-          ? firstUrl
-          : BASE_STORAGE_URL + firstUrl;
+        imageUrl = resolveMediaUrl(item.media_urls[0]) || dummyImage;
       }
 
-      // Handle seller avatar
       let sellerAvatar = dummyImage;
       if (item.user?.profile_picture_url) {
-        sellerAvatar = item.user.profile_picture_url.startsWith('http')
-          ? item.user.profile_picture_url
-          : BASE_STORAGE_URL + item.user.profile_picture_url.replace(/^\/?storage\//, '');
+        sellerAvatar = resolveMediaUrl(item.user.profile_picture_url) || dummyImage;
       }
 
       const categoryName = item.category?.name || '';

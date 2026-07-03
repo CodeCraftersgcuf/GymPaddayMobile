@@ -46,6 +46,7 @@ interface PostItemProps {
     timestamp: string;
     imagesUrl: string[];
     videoUrl?: string;
+    videoMp4Url?: string | null;
     view_count: number;
     share_count: number;
     location?: string;
@@ -88,6 +89,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [shareCount, setShareCount] = useState(post.share_count || 0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
+  const [videoFallbackUrls, setVideoFallbackUrls] = useState<Record<number, string>>({});
   const videoRefs = useRef<Record<number, Video>>({});
 
   // console.log("post data we are getting", post);
@@ -163,6 +165,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     }
 
     setImagesData(mediaArray);
+    setVideoFallbackUrls({});
     
     // Auto-play video if it's the first item
     if (post.videoUrl && mediaArray[0] === post.videoUrl) {
@@ -493,7 +496,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                           videoRefs.current[index] = ref;
                         }
                       }}
-                      source={{ uri: item }}
+                      source={{ uri: videoFallbackUrls[index] || item }}
                       style={styles.videoPlayer}
                       resizeMode="cover"
                       isLooping
@@ -527,6 +530,16 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       }}
                       onError={(error) => {
                         console.error('Video playback error:', error);
+                        if (
+                          post.videoMp4Url &&
+                          (videoFallbackUrls[index] || item) !== post.videoMp4Url
+                        ) {
+                          setVideoFallbackUrls((prev) => ({
+                            ...prev,
+                            [index]: post.videoMp4Url!,
+                          }));
+                          return;
+                        }
                         setIsBuffering(prev => ({ ...prev, [index]: false }));
                       }}
                       onPlaybackStatusUpdate={(status) => {

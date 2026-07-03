@@ -32,6 +32,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { updateMarketplaceListing,  } from '@/utils/mutations/boost';
 import { showApiErrorToast } from '@/utils/showApiErrorToast';
 import { getMarketplaceListingById } from '@/utils/queries/marketplace';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 interface ImageSlot {
     id: number;
@@ -103,7 +104,7 @@ export default function AddListingScreen() {
         if (passedListing && Array.isArray(passedListing.media_urls)) {
             return passedListing.media_urls.map((uri, idx) => ({
                 id: idx + 1,
-                uri: uri.startsWith('http') ? uri : `https://gympaddy.skillverse.com.pk/storage/${uri}`,
+                uri: resolveMediaUrl(uri) || undefined,
             }));
         }
         // Fallback: 4 empty slots

@@ -29,8 +29,9 @@ import * as SecureStore from 'expo-secure-store';
 import { getPostComments } from '@/utils/queries/comments';
 import { useMutation } from '@tanstack/react-query';
 import { createComment } from '@/utils/mutations/comments';
-import { groupStoriesByUser } from '@/utils/groupStories';
-import { GroupedUserStories, StoryItem } from '@/utils/types/story';
+import { GroupedUserStories } from '@/utils/types/story';
+import { fetchGroupedStories } from '@/utils/storiesApi';
+import { mapPostFromApi } from '@/utils/mapFeedPost';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -159,19 +160,10 @@ export default function SocialFeedScreen() {
   useEffect(() => {
     const fetchStories = async () => {
       try {
-        const response = await fetch(`https://gympaddy.skillverse.com.pk/api/user/get/stories`, {
-          headers: {
-            Authorization: `Bearer ${await getToken()}`,
-          },
-        });
-        const json = await response.json();
-        const { stories = [], my_stories = [] } = json;
-        const groupedStories = groupStoriesByUser(stories);
-        const myGroupedStories = groupStoriesByUser(my_stories);
-        setGroupedStories([
-          ...myGroupedStories,
-          ...groupedStories,
-        ]);
+        const token = await getToken();
+        if (!token) return;
+        const grouped = await fetchGroupedStories(token);
+        setGroupedStories(grouped);
       } catch (err) {
         console.error('Error fetching stories:', err);
       } finally {
@@ -307,41 +299,9 @@ export default function SocialFeedScreen() {
     if (data?.pages) {
       const allPosts = data.pages.flatMap(page => page.data || []); // assuming response has .data field
 
-      const formatted = allPosts.map((post: any) => ({
-        id: Number(post.id),
-        user: {
-          id: post.user?.id,
-          username: post.user?.username,
-          profile_picture: post.user?.profile_picture_url,
-        },
-        content: post.content || post.title || '',
-        imagesUrl: post.media
-          ?.filter((m: any) => m.media_type === 'image')
-          .map((m: any) => m.url) || [],
-        videoUrl: post.media?.find((m: any) => m.media_type === 'video')?.url || null,
-        timestamp: post.created_at,
-        likes_count: post.likes?.length || 0,
-        comments_count: post.comments?.length || 0,
-        view_count: 0,
-        share_count: 0,
-        likes: post.likes?.map((like: any) => ({
-          id: like.id,
-          user: {
-            id: like.user?.id,
-            username: like.user?.username || 'Unknown',
-            fullname: like.user?.fullname || '',
-            profile_picture_url: like.user?.profile_picture_url || '',
-          }
-        })) || [],
-        recent_comments: post.comments?.slice(0, 2).map((comment: any) => ({
-          id: comment.id,
-          user: {
-            username: comment.user?.username || 'Unknown',
-            profile_picture: comment.user?.profile_picture_url || '',
-          },
-          text: comment.content || '',
-        })) || [],
-      }));
+      const formatted = allPosts
+        .map(mapPostFromApi)
+        .filter((post: any) => post.publish_status !== 'processing');
 
       // Filter out hidden posts - ensure we check against the hiddenPostIds array
       const hiddenIdsSet = new Set(hiddenPostIds.map(id => Number(id)));
@@ -410,22 +370,11 @@ export default function SocialFeedScreen() {
 
     // Refresh stories
     try {
-      const response = await fetch(`https://gympaddy.skillverse.com.pk/api/user/get/stories`, {
-        headers: {
-          Authorization: `Bearer ${await getToken()}`,
-        },
-      });
-
-      const json = await response.json();
-      const { stories = [], my_stories = [] } = json;
-
-      const groupedStories = groupStoriesByUser(stories);
-      const myGroupedStories = groupStoriesByUser(my_stories);
-
-      setGroupedStories([
-        ...myGroupedStories,
-        ...groupedStories,
-      ]);
+      const token = await getToken();
+      if (token) {
+        const grouped = await fetchGroupedStories(token);
+        setGroupedStories(grouped);
+      }
     } catch (err) {
       console.error('Error refreshing stories:', err);
     }

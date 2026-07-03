@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import axios from 'axios';
 
-const API_URL = 'https://gympaddy.skillverse.com.pk/api/user/set-fcm-token';
+const API_URL = 'https://api.gympaddy.com/api/user/set-fcm-token';
 
 export const registerForPushNotificationsAsync = async (): Promise<string | null> => {
     try {

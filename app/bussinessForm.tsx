@@ -19,7 +19,7 @@ import { getBusinessStatus } from '@/utils/queries/marketplace';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { showApiErrorToast } from '@/utils/showApiErrorToast';
-import { API_DOMAIN } from '@/apiConfig';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 
 const validationSchema = Yup.object().shape({
@@ -73,13 +73,7 @@ export default function BusinessRegistrationScreen() {
     const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
     const [businessDetails, setBusinessDetails] = useState<any>(null);
 
-    const buildBusinessPhotoUrl = (photoPath?: string | null) => {
-        if (!photoPath) return null;
-        if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) return photoPath;
-
-        const base = API_DOMAIN.replace(/\/api\/?$/, '');
-        return `${base}/storage/${photoPath.replace(/^\/?storage\//, '')}`;
-    };
+    const buildBusinessPhotoUrl = (photoPath?: string | null) => resolveMediaUrl(photoPath);
 
     const normalizeBusinessDetails = (business: any): NormalizedBusinessDetails | null => {
         if (!business || typeof business !== 'object') return null;

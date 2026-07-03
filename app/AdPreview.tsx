@@ -11,9 +11,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Video } from 'expo-av';
+import { getPostById } from '@/utils/queries/posts';
+import { resolveMediaUrl, resolveVideoPlaybackUrl } from '@/utils/mediaUrl';
 
 const { width } = Dimensions.get('window');
 
@@ -41,10 +42,8 @@ export default function AdPreview() {
     const fetchPost = async () => {
       if (!token || !postId) return;
       try {
-        const response = await axios.get(`https://gympaddy.skillverse.com.pk/api/user/posts/${postId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setPost(response.data);
+        const data = await getPostById(Number(postId), token);
+        setPost(data);
       } catch (error) {
         console.error('Failed to fetch post:', error);
       } finally {
@@ -107,7 +106,7 @@ export default function AdPreview() {
         {/* User Info */}
         <View style={styles.userInfo}>
           <Image
-            source={{ uri: user?.profile_picture_url || 'https://via.placeholder.com/40' }}
+            source={{ uri: resolveMediaUrl(user?.profile_picture_url) || 'https://via.placeholder.com/40' }}
             style={styles.avatar}
           />
           <View>
@@ -136,7 +135,7 @@ export default function AdPreview() {
                           ref={(ref) => {
                             if (ref) videoRefs.current[index] = ref;
                           }}
-                          source={{ uri: item.url }}
+                          source={{ uri: resolveVideoPlaybackUrl(item) || resolveMediaUrl(item.url) || '' }}
                           style={styles.media}
                           resizeMode="cover"
                           useNativeControls={false}
@@ -177,7 +176,7 @@ export default function AdPreview() {
                       </>
                     ) : (
                       <Image
-                        source={{ uri: item.url }}
+                        source={{ uri: resolveMediaUrl(item.url) || '' }}
                         style={styles.media}
                         resizeMode="cover"
                       />

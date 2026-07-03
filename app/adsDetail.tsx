@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { getAdCampaignById } from '@/utils/queries/adCampaigns';
 import { useAdCampaignActions } from '@/hooks/useAdCampaignActions';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 // Helper: format date
 function formatDate(d: string | null | undefined) {
@@ -61,12 +62,9 @@ const AdDetailsScreen: React.FC = () => {
   let imageUrl = 'https://placehold.co/600x400?text=No+Image';
 
   if (ad?.type === 'boost_post' && Array.isArray(ad?.post?.media) && ad.post.media.length > 0 && ad.post.media[0].url) {
-    imageUrl = ad.post.media[0].url;
+    imageUrl = resolveMediaUrl(ad.post.media[0].url) || imageUrl;
   } else if (ad?.type === 'boost_listing' && Array.isArray(ad?.listing?.media) && ad.listing.media.length > 0 && ad.listing.media[0].url) {
-    const url = ad.listing.media[0].url;
-    imageUrl = url.startsWith('http')
-      ? url
-      : `https://gympaddy.skillverse.com.pk/storage/${url}`;
+    imageUrl = resolveMediaUrl(ad.listing.media[0].url) || imageUrl;
   }
 
 

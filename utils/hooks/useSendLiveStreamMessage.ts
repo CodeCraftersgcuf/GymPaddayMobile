@@ -22,7 +22,7 @@ export const useSendLiveStreamMessage = (liveStreamId: string) => {
       }
 
       const response = await fetch(
-        `https://gympaddy.skillverse.com.pk/api/user/live-streams/${liveStreamId}/chats`,
+        `https://api.gympaddy.com/api/user/live-streams/${liveStreamId}/chats`,
         {
           method: 'POST',
           headers: {
