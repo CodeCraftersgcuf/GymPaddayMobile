@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -29,9 +29,15 @@ import { getUserPosts } from '@/utils/queries/posts';
 import * as SecureStore from 'expo-secure-store';
 import { getPostComments } from '@/utils/queries/comments';
 import { createComment } from '@/utils/mutations/comments';
-import { GroupedUserStories } from '@/utils/types/story';
 import { fetchGroupedStories } from '@/utils/storiesApi';
 import { mapPostFromApi } from '@/utils/mapFeedPost';
+import { STALE_TIMES } from '@/utils/queryClient';
+import { getFeedScrollState } from '@/utils/sessionPersistence';
+import { useFeedSession } from '@/contexts/FeedSessionContext';
+import { useSilentInfiniteScroll } from '@/utils/useSilentInfiniteScroll';
+import { getNextFeedPage } from '@/utils/feedPagination';
+import { seedPostCaches } from '@/utils/postCache';
+import { prefetchFeedVideos } from '@/utils/videoPrefetch';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // LoadingIndicator component
@@ -55,10 +61,15 @@ export default function SocialFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { dark } = useTheme();
   const route = useRouter();
-  const [posts, setPosts] = useState<any[]>([]);
   const [activePostId, setActivePostId] = useState<number | null>(null);
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
   const logoutTriggeredRef = useRef(false);
+  const flatListRef = useRef<FlatList<any>>(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollRestoredRef = useRef(false);
+  const savedActivePostRef = useRef<number | null>(null);
+  const activePostIdRef = useRef<number | null>(null);
+  const { registerFeedScroll, registerActivePostId } = useFeedSession();
 
   const handleBlockedOrUnauthorized = async (incomingError: any) => {
     if (logoutTriggeredRef.current) return;
@@ -117,16 +128,11 @@ export default function SocialFeedScreen() {
     queryFn: async ({ pageParam = 1 }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
-      return getUserPosts(token, pageParam); // Accepts page number
+      return getUserPosts(token, pageParam);
     },
-    initialPageParam: 1, // ✅ Required
-    getNextPageParam: (lastPage) => {
-      if (lastPage?.next_page_url) {
-        const url = new URL(lastPage.next_page_url);
-        return parseInt(url.searchParams.get('page') || '') || undefined;
-      }
-      return undefined;
-    },
+    initialPageParam: 1,
+    placeholderData: (previousData) => previousData,
+    getNextPageParam: getNextFeedPage,
     retry: (failureCount, error: any) => {
       // Don't retry on authentication errors (401, 403)
       if (error?.statusCode === 401 || error?.statusCode === 403) {
@@ -139,8 +145,8 @@ export default function SocialFeedScreen() {
       // Exponential backoff: 1s, 2s, 4s
       return Math.min(1000 * 2 ** attemptIndex, 4000);
     },
-    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    staleTime: STALE_TIMES.feed,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -150,26 +156,25 @@ export default function SocialFeedScreen() {
   }, [isError, error]);
 
 
-  const [groupedStories, setGroupedStories] = useState<GroupedUserStories[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: groupedStories = [],
+    refetch: refetchStories,
+    isFetching: isFetchingStories,
+  } = useQuery({
+    queryKey: ['groupedStories'],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No auth token');
+      return fetchGroupedStories(token);
+    },
+    placeholderData: (previousData) => previousData,
+    staleTime: STALE_TIMES.stories,
+    gcTime: 24 * 60 * 60 * 1000,
+  });
+
   const getToken = async () => {
     return await SecureStore.getItemAsync('auth_token');
-  }
-  useEffect(() => {
-    const fetchStories = async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const grouped = await fetchGroupedStories(token);
-        setGroupedStories(grouped);
-      } catch (err) {
-        console.error('Error fetching stories:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStories();
-  }, []);
+  };
   const {
     data: commentData,
     isLoading: isLoadingComments,
@@ -294,29 +299,82 @@ export default function SocialFeedScreen() {
   };
 
   useEffect(() => {
-    if (data?.pages) {
-      const allPosts = data.pages.flatMap(page => page.data || []); // assuming response has .data field
+    activePostIdRef.current = activePostId;
+  }, [activePostId]);
 
-      const formatted = allPosts
-        .map(mapPostFromApi)
-        .filter((post: any) => post.publish_status !== 'processing');
+  useEffect(() => {
+    registerFeedScroll(() => scrollOffsetRef.current);
+    registerActivePostId(() => activePostIdRef.current);
+  }, [registerFeedScroll, registerActivePostId]);
 
-      // Filter out hidden posts - ensure we check against the hiddenPostIds array
-      const hiddenIdsSet = new Set(hiddenPostIds.map(id => Number(id)));
-      const filtered = formatted.filter((post: any) => {
-        const postId = Number(post.id);
-        return !hiddenIdsSet.has(postId);
-      });
-      
-      console.log('📊 Filtering posts - Total:', formatted.length, 'Hidden:', hiddenPostIds.length, 'Filtered:', filtered.length);
-      setPosts(filtered);
-      if (filtered.length > 0) {
-        setActivePostId((prev) =>
-          prev != null && filtered.some((p: any) => p.id === prev) ? prev : filtered[0].id
-        );
-      }
-    }
+  const posts = useMemo(() => {
+    if (!data?.pages) return [];
+    const allPosts = data.pages.flatMap((page) => page.data || []);
+    const formatted = allPosts
+      .map(mapPostFromApi)
+      .filter((post: any) => post.publish_status !== 'processing');
+    const hiddenIdsSet = new Set(hiddenPostIds.map((id) => Number(id)));
+    return formatted.filter((post: any) => !hiddenIdsSet.has(Number(post.id)));
   }, [data, hiddenPostIds]);
+
+  useEffect(() => {
+    if (!data?.pages?.length) return;
+    const rawPosts = data.pages.flatMap((page) => page?.data ?? []);
+    seedPostCaches(rawPosts);
+  }, [data?.pages]);
+
+  useEffect(() => {
+    prefetchFeedVideos(posts, activePostId, 2);
+  }, [posts, activePostId]);
+
+  const { loadMore, onPrefetchViewableItemsChanged, prefetchViewabilityConfig } =
+    useSilentInfiniteScroll({
+      itemCount: posts.length,
+      hasNextPage,
+      isFetchingNextPage,
+      fetchNextPage,
+      thresholdFromEnd: 8,
+      bootstrapPages: 4,
+      loadedPageCount: data?.pages?.length ?? 0,
+      chainPrefetch: true,
+      autoPrefetchSecondPage: false,
+      firstPageReady: Boolean(data?.pages?.[0]?.data?.length),
+    });
+
+  useEffect(() => {
+    if (posts.length === 0) return;
+    setActivePostId((prev) => {
+      const saved = savedActivePostRef.current;
+      if (saved != null && posts.some((p: any) => p.id === saved)) {
+        savedActivePostRef.current = null;
+        return saved;
+      }
+      if (prev != null && posts.some((p: any) => p.id === prev)) {
+        return prev;
+      }
+      return posts[0].id;
+    });
+  }, [posts]);
+
+  useEffect(() => {
+    if (posts.length === 0 || scrollRestoredRef.current) return;
+
+    (async () => {
+      const { offset, activePostId: savedPostId } = await getFeedScrollState();
+      if (savedPostId != null && !Number.isNaN(savedPostId)) {
+        savedActivePostRef.current = savedPostId;
+        setActivePostId(savedPostId);
+      }
+      if (offset > 0) {
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToOffset({ offset, animated: false });
+          scrollRestoredRef.current = true;
+        });
+      } else {
+        scrollRestoredRef.current = true;
+      }
+    })();
+  }, [posts.length]);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -333,8 +391,19 @@ export default function SocialFeedScreen() {
       const nextId = Number(center.item.id);
       setActivePostId((prev) => (prev === nextId ? prev : nextId));
     },
-    []
+    [],
   );
+
+  const onViewableItemsChangedRef = useRef(onViewableItemsChanged);
+  useEffect(() => {
+    onViewableItemsChangedRef.current = onViewableItemsChanged;
+  }, [onViewableItemsChanged]);
+
+  const stableOnViewableItemsChanged = useRef(
+    (info: { viewableItems: ViewToken[] }) => {
+      onViewableItemsChangedRef.current(info);
+    },
+  ).current;
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
@@ -342,7 +411,11 @@ export default function SocialFeedScreen() {
   }).current;
 
   const viewabilityConfigCallbackPairs = useRef([
-    { viewabilityConfig, onViewableItemsChanged },
+    { viewabilityConfig, onViewableItemsChanged: stableOnViewableItemsChanged },
+    {
+      viewabilityConfig: prefetchViewabilityConfig,
+      onViewableItemsChanged: onPrefetchViewableItemsChanged,
+    },
   ]).current;
 
 
@@ -397,25 +470,12 @@ export default function SocialFeedScreen() {
 
     // Refresh posts
     await refetch();
-
-    // Refresh stories
-    try {
-      const token = await getToken();
-      if (token) {
-        const grouped = await fetchGroupedStories(token);
-        setGroupedStories(grouped);
-      }
-    } catch (err) {
-      console.error('Error refreshing stories:', err);
-    }
+    await refetchStories();
 
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, refetchStories]);
 
-  // Show loading indicator while user posts are loading
-  // if (isLoading) {
-  //   return <LoadingIndicator text="Loading posts..." />;
-  // }
+  const showFeedSkeleton = isLoading && posts.length === 0 && !data?.pages?.length;
 
   const handleHidePost = async () => {
     console.log('🔒 Hiding post:', idCan);
@@ -444,9 +504,6 @@ export default function SocialFeedScreen() {
         
         return updated;
       });
-      
-      // Immediately remove from UI
-      setPosts(prev => prev.filter(p => Number(p.id) !== postIdToHide));
       
       // Close the bottom sheet
       setBottomIndex(-1);
@@ -509,21 +566,25 @@ export default function SocialFeedScreen() {
             </TouchableOpacity>
           </View>
         )}
-        {!isError && <StoryContainer stories={groupedStories ?? []} refreshing={refreshing} />}
+        {!isError && (
+          <StoryContainer
+            stories={groupedStories ?? []}
+            refreshing={refreshing || isFetchingStories}
+          />
+        )}
+        {showFeedSkeleton && (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#940304" />
+          </View>
+        )}
       </>
     ),
-    [isError, posts.length, dark, error, refetch, groupedStories, refreshing]
+    [isError, posts.length, dark, error, refetch, groupedStories, refreshing, isFetchingStories]
   );
 
   const feedListFooter = useCallback(
     () => (
       <>
-        {isFetchingNextPage && (
-          <View style={{ paddingVertical: 20, alignItems: 'center', marginBottom: 100 }}>
-            <ActivityIndicator size="small" color="#940304" />
-            <Text style={{ color: dark ? '#fff' : '#000', marginTop: 8 }}>Loading more posts...</Text>
-          </View>
-        )}
         {isError && posts.length > 0 && (
           <View style={{ padding: 20, alignItems: 'center' }}>
             <Text style={{ color: dark ? '#fff' : '#000', fontSize: 14, marginBottom: 10, textAlign: 'center' }}>
@@ -548,7 +609,7 @@ export default function SocialFeedScreen() {
         )}
       </>
     ),
-    [isFetchingNextPage, isError, posts.length, dark, error, fetchNextPage]
+    [isError, posts.length, dark, error, fetchNextPage],
   );
 
   return (
@@ -561,9 +622,15 @@ export default function SocialFeedScreen() {
           admin={{ profile: "https://randomuser.me/api/portraits/men/45.jpg", userId: '12345' }}
           notificationID="notif123"
           refreshing={refreshing}
-        />
+        >
+          <FloatingActionButton
+            onStartLive={handleStartLive}
+            onCreatePost={handleCreatePost}
+          />
+        </TabHeader>
 
         <FlatList
+          ref={flatListRef}
           style={{ flex: 1 }}
           data={isError && posts.length === 0 ? [] : posts}
           keyExtractor={(item) => item.id.toString()}
@@ -576,13 +643,14 @@ export default function SocialFeedScreen() {
           viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
           initialNumToRender={4}
           maxToRenderPerBatch={5}
-          windowSize={7}
-          onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage) {
-              fetchNextPage();
-            }
+          windowSize={11}
+          updateCellsBatchingPeriod={50}
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
           }}
-          onEndReachedThreshold={0.4}
+          scrollEventThrottle={16}
+          onEndReached={loadMore}
+          onEndReachedThreshold={2}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -601,12 +669,6 @@ export default function SocialFeedScreen() {
           onClose={handleCloseComments}
           onAddComment={handleAddComment}
           loading={false}
-        />
-
-
-        <FloatingActionButton
-          onStartLive={handleStartLive}
-          onCreatePost={handleCreatePost}
         />
       </SafeAreaView>
 

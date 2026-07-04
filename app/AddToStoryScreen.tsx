@@ -1,7 +1,4 @@
-// ✅ Fully optimized AddToStoryScreen with:
-// 1. Camera picker
-// 2. Full gallery access from all folders
-// 3. Pagination for better performance
+// Add to Story: gallery grid + camera capture.
 
 export const options = {
   headerShown: false,
@@ -21,8 +18,8 @@ import {
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = (width - 40) / 3;
@@ -35,6 +32,14 @@ export default function AddToStoryScreen() {
   const [hasNextPage, setHasNextPage] = useState(true);
   const router = useRouter();
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
+
   useEffect(() => {
     (async () => {
       const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -44,12 +49,6 @@ export default function AddToStoryScreen() {
       setLoading(false);
     })();
   }, []);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      setSelected([]);
-    }, [])
-  );
 
   const loadMoreAssets = async () => {
     if (!hasNextPage) return;
@@ -66,11 +65,41 @@ export default function AddToStoryScreen() {
 
   const openCamera = async () => {
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ['images', 'videos'],
       quality: 1,
+      allowsEditing: true,
+      videoMaxDuration: 120,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setSelected((prev) => [...prev, result.assets[0]]);
+      const a = result.assets[0];
+      setSelected((prev) => [
+        ...prev,
+        {
+          id: `cam_${Date.now()}`,
+          uri: a.uri,
+          mediaType: a.type === 'video' ? 'video' : 'photo',
+        },
+      ]);
+    }
+  };
+
+  const openLibrary = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      quality: 1,
+      allowsEditing: true,
+      videoMaxDuration: 120,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      const a = result.assets[0];
+      setSelected((prev) => [
+        ...prev,
+        {
+          id: `lib_${Date.now()}`,
+          uri: a.uri,
+          mediaType: a.type === 'video' ? 'video' : 'photo',
+        },
+      ]);
     }
   };
 
@@ -106,10 +135,21 @@ export default function AddToStoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Add to Story</Text>
-        <TouchableOpacity onPress={openCamera} style={styles.cameraButton}>
-          <Text style={styles.cameraButtonText}>📷 Open Camera</Text>
-        </TouchableOpacity>
+        <View style={styles.headerTop}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerSide} hitSlop={8}>
+            <Ionicons name="chevron-back" size={26} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add to Story</Text>
+          <View style={styles.headerSide} />
+        </View>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={openCamera} style={styles.actionButton}>
+            <Text style={styles.actionButtonText}>Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openLibrary} style={styles.actionButton}>
+            <Text style={styles.actionButtonText}>Library</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -150,25 +190,43 @@ export default function AddToStoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: {
-    padding: 16,
-    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
     backgroundColor: '#fff',
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  headerSide: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '700',
     color: '#111',
+    textAlign: 'center',
   },
-  cameraButton: {
-    marginTop: 8,
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionButton: {
     backgroundColor: '#940304',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 6,
   },
-  cameraButtonText: {
+  actionButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',

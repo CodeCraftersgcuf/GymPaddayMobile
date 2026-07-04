@@ -12,17 +12,38 @@ import {
   Text,
   StatusBar,
 } from 'react-native';
-import { Audio, Video } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StoryItem } from '@/utils/types/story';
-import { resolveMediaUrl } from '@/utils/mediaUrl';
 import CachedImage from 'expo-cached-image';
 import { Ionicons } from '@expo/vector-icons';
+import { prefetchVideoUrl } from '@/utils/videoPrefetch';
 
 const { width, height } = Dimensions.get('window');
 const STORY_DURATION = 4000; // Reduced from 5000ms to 4000ms for faster transitions
 
-const storyMediaUrl = (url?: string | null) => resolveMediaUrl(url);
+const fixUrl = (url: string) =>
+  url?.replace('https://api.gympaddy.com/storage//', 'https://api.gympaddy.com/storage/');
+
+type StoryWithMusic = StoryItem & {
+  music_url?: string | null;
+  music_title?: string | null;
+  music?: { url?: string | null } | null;
+  musicUrl?: string | null;
+};
+
+const resolveStoryMusicUrl = (story?: StoryWithMusic): string | undefined => {
+  if (!story) return undefined;
+  const candidate =
+    story.music_url ??
+    story.music?.url ??
+    story.musicUrl ??
+    undefined;
+  if (!candidate || typeof candidate !== 'string') return undefined;
+  const trimmed = candidate.trim();
+  if (!trimmed) return undefined;
+  return fixUrl(trimmed);
+};
 
 const UserStoryPreview = () => {
   const { selected } = useLocalSearchParams();
@@ -37,8 +58,17 @@ const UserStoryPreview = () => {
   const videoRef = useRef<Video | null>(null);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  const currentStory = stories[currentIndex];
-  const fixedUrl = storyMediaUrl(currentStory?.full_media_url);
+  const currentStory = stories[currentIndex] as StoryWithMusic | undefined;
+  const fixedUrl = fixUrl(currentStory?.full_media_url || '');
+  const fixedMusicUrl = resolveStoryMusicUrl(currentStory);
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    }).catch(() => {});
+  }, []);
   const [musicSound, setMusicSound] = useState<Audio.Sound | null>(null);
 
   useEffect(() => {
@@ -171,7 +201,8 @@ const UserStoryPreview = () => {
     }
   };
   const playMusicAfterMediaLoads = useCallback(async () => {
-    if (currentStory?.music_url) {
+    const musicUri = fixedMusicUrl;
+    if (musicUri) {
       try {
         // Stop any existing music first
         if (musicSound) {
@@ -184,7 +215,7 @@ const UserStoryPreview = () => {
         }
 
         const { sound } = await Audio.Sound.createAsync(
-          { uri: currentStory.music_url },
+          { uri: musicUri },
           { 
             shouldPlay: true,
             isLooping: true, // Loop music for story
@@ -212,29 +243,25 @@ const UserStoryPreview = () => {
         // Network errors are expected and don't need logging
       }
     }
-  }, [currentStory?.music_url, musicSound]);
+  }, [fixedMusicUrl, musicSound]);
 // Enhanced preloading - preload next 2 stories for ultra-smooth transitions
 useEffect(() => {
   const preloadStories = async () => {
     // Preload next story
     const nextStory = stories[currentIndex + 1];
     if (nextStory) {
-      const nextUrl = storyMediaUrl(nextStory.full_media_url);
+      const nextUrl = fixUrl(nextStory.full_media_url);
       if (nextStory.media_type === 'photo') {
         Image.prefetch(nextUrl).catch(() => {}); // Silent fail
       } else if (nextStory.media_type === 'video') {
-        try {
-          await Video.prefetchAsync(nextUrl);
-        } catch (e) {
-          // Silent fail for better UX
-        }
+        prefetchVideoUrl(nextUrl);
       }
     }
 
     // Also preload the story after next for even smoother experience
     const nextNextStory = stories[currentIndex + 2];
     if (nextNextStory) {
-      const nextNextUrl = storyMediaUrl(nextNextStory.full_media_url);
+      const nextNextUrl = fixUrl(nextNextStory.full_media_url);
       if (nextNextStory.media_type === 'photo') {
         Image.prefetch(nextNextUrl).catch(() => {});
       }
@@ -255,7 +282,7 @@ useEffect(() => {
             source={{ uri: fixedUrl }}
             cacheKey={`story-${currentStory.id}`}
             style={styles.media}
-            resizeMode="cover"
+            resizeMode="contain"
             onLoadStart={() => {
               setIsMediaLoaded(false);
               progress.setValue(0);
@@ -265,8 +292,15 @@ useEffect(() => {
               // Small delay to ensure image is fully rendered
               await new Promise(resolve => setTimeout(resolve, 100));
               // Start music after image loads
-              if (currentStory?.music_url) {
+              if (fixedMusicUrl) {
                 await playMusicAfterMediaLoads();
+              }
+            }}
+            onLoadEnd={() => {
+              // Fallback: cached images may skip the onLoad timing path on some devices.
+              setIsMediaLoaded(true);
+              if (fixedMusicUrl) {
+                playMusicAfterMediaLoads();
               }
             }}
           />
@@ -288,7 +322,7 @@ useEffect(() => {
           rate={1.0}
           volume={1.0}
           isMuted={false}
-          resizeMode="cover"
+          resizeMode={ResizeMode.CONTAIN}
           shouldPlay={!isPaused}
           style={styles.media}
           onLoadStart={() => {
@@ -301,7 +335,7 @@ useEffect(() => {
               await videoRef.current?.playAsync?.();
             }
             // Start music after video loads
-            if (currentStory?.music_url) {
+            if (fixedMusicUrl) {
               await playMusicAfterMediaLoads();
             }
           }}
@@ -388,14 +422,14 @@ useEffect(() => {
       />
 
       {/* Music indicator */}
-      {currentStory?.music_url && (
+      {fixedMusicUrl ? (
         <View style={styles.musicIndicator}>
           <Ionicons name="musical-note" size={16} color="#fff" />
           <Text style={styles.musicText} numberOfLines={1}>
-            {currentStory.music_title || 'Playing music'}
+            {currentStory?.music_title || 'Playing music'}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Story counter */}
       <View style={styles.storyCounter}>
@@ -419,7 +453,8 @@ const styles = StyleSheet.create({
   },
   media: {
     width,
-    height,
+    height: height * 0.88,
+    backgroundColor: '#000',
   },
   loader: {
     position: 'absolute',

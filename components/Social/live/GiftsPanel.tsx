@@ -90,29 +90,27 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
           <View style={styles.quantityControl}>
             <TouchableOpacity
               onPress={() => {
-                const newQty = quantity + 1;
-                const totalCost = item.price * newQty;
-
-                if (totalCost > balance) {
-                  alert("Not enough balance for this quantity.");
-                  return;
-                }
-
+                const newQty = Math.max(1, quantity - 1);
                 setGiftQuantities((prev) => ({
                   ...prev,
                   [item.id]: newQty,
                 }));
               }}
-
             >
               <Text style={styles.quantityBtn}>−</Text>
             </TouchableOpacity>
             <Text style={styles.quantityValue}>{quantity}</Text>
             <TouchableOpacity
               onPress={() => {
+                const newQty = quantity + 1;
+                const totalCost = item.price * newQty;
+                if (totalCost > balance) {
+                  alert("Not enough balance for this quantity.");
+                  return;
+                }
                 setGiftQuantities((prev) => ({
                   ...prev,
-                  [item.id]: quantity + 1,
+                  [item.id]: newQty,
                 }));
               }}
             >
@@ -139,16 +137,18 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
         </View>
       </View>
 
-      <View style={{ flex: 1 }}>
-        <FlatList
-          data={giftItems}
-          renderItem={renderGiftItem}
-          numColumns={4}
-          contentContainerStyle={styles.giftsGrid}
-          scrollEnabled={true}
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
+      <FlatList
+        data={giftItems}
+        keyExtractor={(item) => item.id}
+        renderItem={renderGiftItem}
+        numColumns={4}
+        style={styles.giftsList}
+        contentContainerStyle={styles.giftsGrid}
+        scrollEnabled
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      />
 
       <TouchableOpacity style={styles.topupBtn} onPress={onTopupPress}>
         <Text style={styles.topupText}>Topup</Text>
@@ -159,10 +159,16 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
 
 const styles = StyleSheet.create({
   giftsPanel: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    minHeight: 280,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 20,
+  },
+  giftsList: {
+    flexGrow: 1,
+    flexShrink: 1,
   },
   giftsPanelHeader: {
     flexDirection: 'row',
@@ -207,7 +213,8 @@ const styles = StyleSheet.create({
   },
   giftsGrid: {
     paddingHorizontal: 16,
-    flex: 1,
+    paddingBottom: 8,
+    flexGrow: 1,
   },
   giftCard: {
     flex: 1,

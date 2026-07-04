@@ -3,7 +3,12 @@
 import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../apiConfig";
 
-export const fetchUserProfile = async (token: string, userId: number): Promise<any> => {
-  const url = API_ENDPOINTS.USER.PROFILE.PROFILE(userId);
+export const fetchUserProfile = async (
+  token: string,
+  userId: number,
+  page = 1,
+  limit = 9,
+): Promise<any> => {
+  const url = `${API_ENDPOINTS.USER.PROFILE.PROFILE(userId)}?page=${page}&limit=${limit}`;
   return await apiCall(url, "GET", undefined, token);
 };

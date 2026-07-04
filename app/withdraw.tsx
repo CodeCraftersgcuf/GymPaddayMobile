@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import Header from '@/components/more/withdraw/Header';
 import WithdrawForm from '@/components/more/withdraw/WithdrawForm';
 import WithdrawSummary from '@/components/more/withdraw/WithdrawSummary';
@@ -12,6 +13,7 @@ import { useMutation } from '@tanstack/react-query';
 import { createTransaction } from '@/utils/mutations/transactions';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 export interface WithdrawData {
   amount: string;
@@ -22,6 +24,13 @@ export interface WithdrawData {
 }
 
 export default function WithdrawScreen() {
+  const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+  useEffect(() => {
+    if (!iosMonetizationLoading && hideIosMonetization) {
+      router.replace('/(tabs)/more');
+    }
+  }, [iosMonetizationLoading, hideIosMonetization]);
+
   const [currentStep, setCurrentStep] = useState<'form' | 'summary'>('form');
 
   const [withdrawData, setWithdrawData] = useState<WithdrawData>({

@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, Text } from 'react-native';
+import { useRouter } from 'expo-router';
 import { GiftFilter } from '@/components/more/transactions/types';
 import { useTheme } from '@/contexts/themeContext';
 import GiftItem from '@/components/more/transactions/GiftItem';
@@ -7,27 +8,54 @@ import FilterButton from '@/components/more/transactions/FilterButton';
 import SummaryCard from '@/components/more/transactions/SummaryCard';
 import Header from '@/components/more/withdraw/Header';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUserGifts } from '@/utils/queries/gitfs';
 import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect } from '@react-navigation/native';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 export default function GiftsScreen() {
+  const router = useRouter();
+  const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+  useEffect(() => {
+    if (!iosMonetizationLoading && hideIosMonetization) router.replace('/(tabs)/more');
+  }, [router, hideIosMonetization, iosMonetizationLoading]);
+
   const { dark } = useTheme();
   const [activeFilter, setActiveFilter] = useState<GiftFilter>('all');
   const [token, setToken] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     SecureStore.getItemAsync('auth_token').then(setToken);
   }, []);
 
-  const { data: giftData = [], isLoading } = useQuery({
-    queryKey: ['user-gifts'],
+  const { data: giftDataRaw = [], isLoading } = useQuery({
+    queryKey: ['user-gifts', token ?? ''],
     queryFn: async () => {
       if (!token) throw new Error('No auth token');
       return await getUserGifts(token);
     },
     enabled: !!token,
   });
+
+  const giftData = useMemo(
+    () =>
+      giftDataRaw.map((g: any) => ({
+        ...g,
+        id: String(g.id ?? ''),
+        amount: typeof g.amount === 'number' ? g.amount : parseFloat(String(g.amount ?? 0)) || 0,
+      })),
+    [giftDataRaw]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (token) {
+        queryClient.invalidateQueries({ queryKey: ['user-gifts'] });
+      }
+    }, [token, queryClient])
+  );
 
   const filteredGifts = useMemo(() => {
     if (activeFilter === 'all') return giftData;
@@ -52,7 +80,7 @@ export default function GiftsScreen() {
       dark ? styles.containerDark : styles.containerLight
     ]}>
       <Header
-        title={'Transactions'}
+        title="Gifts"
         showBackButton={true}
         onBackPress={() => { }}
       />

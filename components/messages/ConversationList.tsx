@@ -28,6 +28,7 @@ type Conversation = {
 type Props = {
   conversations: Conversation[];
   onConversationPress: (conversationId: string) => void;
+  onConversationPressIn?: (conversationId: string) => void;
   refreshing?: boolean;
   onRefresh?: () => void;
 };
@@ -35,6 +36,7 @@ type Props = {
 export default function ConversationList({
   conversations,
   onConversationPress,
+  onConversationPressIn,
   refreshing,
   onRefresh,
 }: Props) {
@@ -71,6 +73,7 @@ export default function ConversationList({
       renderItem={({ item }) => (
         <TouchableOpacity
           style={styles.item}
+          onPressIn={() => onConversationPressIn?.(item.id)}
           onPress={() => onConversationPress(item.id)}
         >
           <View style={styles.avatarWrapper}>

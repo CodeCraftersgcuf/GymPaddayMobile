@@ -5,7 +5,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image
+  Image,
+  Modal,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -19,6 +20,9 @@ interface FloatingActionButtonProps {
   onStartLive?: () => void;
   onCreatePost?: () => void;
 }
+
+const FAB_SIZE = 35;
+const PLUS_ICON_SIZE = 14;
 
 const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   onStartLive,
@@ -73,6 +77,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       ],
     };
   });
+
   const handleStartLive = () => {
     toggleMenu();
     onStartLive?.();
@@ -84,74 +89,69 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   };
 
   return (
-    <>
-      {isOpen && (
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.fab} onPress={toggleMenu} activeOpacity={0.8}>
+        <Animated.View style={rotateStyle}>
+          <Image
+            source={images.CreatePlus}
+            style={{ width: PLUS_ICON_SIZE, height: PLUS_ICON_SIZE }}
+          />
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Modal
+        visible={isOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={toggleMenu}
+      >
         <TouchableOpacity
           activeOpacity={1}
           onPress={toggleMenu}
-          style={StyleSheet.absoluteFillObject}
+          style={styles.modalBackdrop}
         >
-          <View style={styles.overlay} />
+          <View style={styles.menuAnchor} pointerEvents="box-none">
+            <Animated.View style={[styles.menuButton, postButtonStyle]}>
+              <TouchableOpacity style={styles.button} onPress={handleCreatePost}>
+                <Text style={styles.buttonText}>Create Post</Text>
+                <View style={[styles.ImagesButton, styles.postButton]}>
+                  <Image
+                    source={images.notifcationIcon}
+                    tintColor={'white'}
+                    style={{ width: 25, height: 25 }}
+                  />
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View style={[styles.menuButton, liveButtonStyle]}>
+              <TouchableOpacity style={styles.button} onPress={handleStartLive}>
+                <Text style={styles.buttonText}>Start Live</Text>
+                <View style={[styles.ImagesButton, styles.liveButton]}>
+                  <Image
+                    source={images.CreateVideo}
+                    tintColor={'white'}
+                    style={{ width: 25, height: 25 }}
+                  />
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         </TouchableOpacity>
-      )}
-
-      <View style={styles.container}>
-        {/* Menu rows render first; FAB last so it stays on top for taps */}
-        <Animated.View style={[styles.menuButton, liveButtonStyle]}>
-          <TouchableOpacity style={styles.button} onPress={handleStartLive}>
-            <Text style={styles.buttonText}>Start Live</Text>
-            <View style={[styles.ImagesButton, styles.liveButton]}>
-              <Image
-                source={images.CreateVideo}
-                tintColor={'white'}
-                style={{ width: 25, height: 25 }}
-              />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View style={[styles.menuButton, postButtonStyle]}>
-          <TouchableOpacity style={styles.button} onPress={handleCreatePost}>
-            <Text style={styles.buttonText}>Create Post</Text>
-            <View style={[styles.ImagesButton, styles.postButton]}>
-              <Image
-                source={images.notifcationIcon}
-                tintColor={'white'}
-                style={{ width: 25, height: 25 }}
-              />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <TouchableOpacity style={styles.fab} onPress={toggleMenu} activeOpacity={0.8}>
-          <Animated.View style={rotateStyle}>
-            <Image source={images.CreatePlus} style={{ width: 20, height: 20 }} />
-          </Animated.View>
-        </TouchableOpacity>
-      </View>
-    </>
+      </Modal>
+    </View>
   );
-
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    zIndex: 0,
-  },
   container: {
-    position: 'absolute',
-    top: 6,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    position: 'relative',
     zIndex: 10,
   },
   fab: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     backgroundColor: '#940304',
     justifyContent: 'center',
     alignItems: 'center',
@@ -161,12 +161,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 4,
   },
-  menuButton: {
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  menuAnchor: {
     position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    top: 52,
+    right: 60,
+    alignItems: 'flex-end',
+  },
+  menuButton: {
+    marginBottom: 8,
   },
   button: {
     flexDirection: 'row',
@@ -188,7 +194,6 @@ const styles = StyleSheet.create({
   },
   liveButton: {
     backgroundColor: '#6c5ce7',
-    // right:0,
   },
   postButton: {
     backgroundColor: '#ff00ff',

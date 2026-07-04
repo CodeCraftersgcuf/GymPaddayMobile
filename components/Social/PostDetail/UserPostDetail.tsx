@@ -1,4 +1,5 @@
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useIosMonetizationHidden } from '@/utils/iosMonetization'
 import React, { useState } from 'react'
 import { images } from '@/constants'
 import ThemedView from '@/components/ThemedView'
@@ -8,6 +9,7 @@ import BoostAdModal from '../Boost/BoostAdModal'
 import axios from 'axios'
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query'
+import { router } from 'expo-router'
 
 const UserPostDetail: React.FC<{
   idCan: {
@@ -17,11 +19,12 @@ const UserPostDetail: React.FC<{
   onClose?: () => void;
 }> = ({ idCan, onClose }) => {
   const { dark } = useTheme();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const [modalVisible, setModalVisible] = useState(false);
   const clientQuery = useQueryClient();
   console.log("Post Id in UserPostDetail:", idCan.postId);
 
-  const post_id = idCan.postId; // Assuming postId is passed as a prop
+  const post_id = idCan.postId;
 
   const handleOpenModal = () => {
     setModalVisible(true);
@@ -34,12 +37,12 @@ const UserPostDetail: React.FC<{
   const handleProceed = () => {
     setModalVisible(false);
   };
-  const handleClick = () => {
-    console.log('clicked!!')
-  }
-  const hanldeEditPost = () => {
-    // router.push({ pathname: '/createpost', params: { postId: idCan.postId } })
-    router.push("/createpost");
+  const handleEditPost = () => {
+    onClose?.()
+    router.push({
+      pathname: '/createpost',
+      params: { postId: String(idCan.postId) },
+    })
   }
   const handleDeletePost = async () => {
     Alert.alert(
@@ -67,8 +70,7 @@ const UserPostDetail: React.FC<{
                 },
               });
 
-              await clientQuery.invalidateQueries(['userPosts']); // ✅ fixed typo from invalidateQuerie → invalidateQueries
-              // Close the bottom sheet after successful deletion
+              await clientQuery.invalidateQueries({ queryKey: ['userPosts'] });
               if (onClose) {
                 onClose();
               }
@@ -87,14 +89,18 @@ const UserPostDetail: React.FC<{
   const Options = [
     {
       icon: images.EditIcon,
-      title: 'Edit Profile',
-      handleFunction: hanldeEditPost,
+      title: 'Edit Post',
+      handleFunction: handleEditPost,
     },
-    {
-      icon: images.BoostIcon,
-      title: 'Boost Post',
-      handleFunction: handleOpenModal,
-    },
+    ...(!hideIosMonetization
+      ? [
+          {
+            icon: images.BoostIcon,
+            title: 'Boost Post',
+            handleFunction: handleOpenModal,
+          },
+        ]
+      : []),
     {
       icon: images.DeleteIcon,
       title: 'Delete Post',
@@ -121,12 +127,14 @@ const UserPostDetail: React.FC<{
         }
       </View>
 
-      <BoostAdModal
-        visible={modalVisible}
-        onClose={handleCloseModal}
-        dark={dark}
-        post_id={post_id}
-      />
+      {!hideIosMonetization && (
+        <BoostAdModal
+          visible={modalVisible}
+          onClose={handleCloseModal}
+          dark={dark}
+          post_id={post_id}
+        />
+      )}
     </>
   )
 }

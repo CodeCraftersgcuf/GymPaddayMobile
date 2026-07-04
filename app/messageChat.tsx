@@ -32,7 +32,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
-import { useAgoraCall } from './AgoraCallScreen';
+import { useAgoraCall } from '@/hooks/useAgoraCall';
 
 import AgoraVideoView from 'react-native-agora';
 
@@ -112,7 +112,8 @@ export default function MessageChat() {
       return fetchChatMessages(token, conversation_id);
     },
     enabled: !!conversation_id,
-    refetchInterval: 3000, // Refetch every 3 seconds to get new messages
+    placeholderData: (previousData) => previousData,
+    refetchInterval: 3000,
   });
   const [lastCallId, setLastCallId] = useState<number | null>(null);
 
@@ -433,15 +434,15 @@ export default function MessageChat() {
     : null;
 
   const { data: otherUserProfile } = useQuery({
-    queryKey: ['userProfile', otherUser?.id],
+    queryKey: ['userProfile', otherUser?.id ? String(otherUser.id) : ''],
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token || !otherUser?.id) throw new Error('Missing profile info');
       return fetchUserProfile(token, otherUser.id);
     },
     enabled: !!otherUser?.id,
-    staleTime: 0, // Always fetch fresh data for online status
-    refetchInterval: 10000, // Refetch every 10 seconds to get updated online status
+    staleTime: 60 * 1000,
+    refetchInterval: 10000,
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
     retry: (failureCount, error: any) => {
       // Don't retry on rate limit errors (429)
@@ -515,13 +516,11 @@ export default function MessageChat() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        {isLoading && (
+        {isLoading && !data ? (
           <View style={styles.loadingCenter}>
-            <ActivityIndicator size="large" color="#fff" />
+            <ActivityIndicator size="large" color="#940304" />
           </View>
-        )}
-
-        {!isLoading && (
+        ) : (
           <View style={styles.flex}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.border }]}>

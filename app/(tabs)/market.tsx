@@ -17,7 +17,6 @@ import {
 import Modal from 'react-native-modal'; // ✅ Correct
 
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { categories } from '@/constants/marketData';
 import { AntDesign, Entypo, Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
@@ -26,8 +25,9 @@ import { formatNaira } from '@/utils/formatters';
 import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl';
 
 //Code Related to the integration
-import { QueryClient, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { getBusinessStatus, getMarketplaceListingById, getMarketplaceListings } from '@/utils/queries/marketplace';
+import { queryClient, STALE_TIMES } from '@/utils/queryClient';
 import * as SecureStore from 'expo-secure-store';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 
@@ -57,7 +57,6 @@ export default function MarketplaceScreen() {
   const [showCategorySheet, setShowCategorySheet] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
- const queryClient = new QueryClient();
 
   const dummyImage = "https://images.pexels.com/photos/1024311/pexels-photo-1024311.jpeg";
   const [profileImage, setProfileImage] = useState<string | null>(dummyImage);
@@ -169,38 +168,30 @@ export default function MarketplaceScreen() {
   };
 
   // --- Fetch listings from API ---
-  const [token, setToken] = useState<string | null>(null);
-  React.useEffect(() => {
-    SecureStore.getItemAsync('auth_token').then(setToken);
-  }, []);
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, refetch, isFetching, isFetched } = useQuery({
     queryKey: ['marketplace-listings'],
     queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
       return await getMarketplaceListings(token);
     },
-    enabled: !!token,
+    placeholderData: (previousData) => previousData,
+    staleTime: STALE_TIMES.market,
+    gcTime: 24 * 60 * 60 * 1000,
   });
   const { data:businessData } = useQuery({
     queryKey: ['get-business-status'],
     queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
       return await getBusinessStatus(token);
     },
-    enabled: !!token,
+    staleTime: STALE_TIMES.market,
   });
   console.log("Business Data", businessData)
 
   // Add refresh state (optional, but not strictly needed with isFetching)
   const [refreshing, setRefreshing] = useState(false);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      if (token) {
-        refetch();
-      }
-    }, [token, refetch])
-  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -271,27 +262,24 @@ export default function MarketplaceScreen() {
   const handleItemPress = (item: any) => {
     router.push({
       pathname: '/marketView',
-      params: { id: item.toString() }, // always pass params as strings
+      params: { id: item.toString() },
     });
-
-    // router.push("/marketProfile");
   };
+
+  const prefetchListing = (listingId: number) => {
+    SecureStore.getItemAsync('auth_token').then((token) => {
+      if (!token) return;
+      queryClient.prefetchQuery({
+        queryKey: ['marketplace-listing', listingId, token],
+        queryFn: () => getMarketplaceListingById(listingId, token),
+        staleTime: STALE_TIMES.market,
+      });
+    });
+  };
+
   const handleMarketProfile = () => {
     router.push("/marketProfile");
   }
-React.useEffect(() => {
-  if (token && Array.isArray(data?.data)) {
-    data.data.forEach((item: any) => {
-      console.log('Prefetching listing:', item.id);
-      queryClient.prefetchQuery({
-        queryKey: ['marketplace-listing', item.id, token],
-        queryFn: async () => {
-          return getMarketplaceListingById(Number(item.id), token);
-        },
-      });
-    });
-  }
-}, [data, token]);
 
   // Image helper: show a small loader only on the very first load for this
   // image. Subsequent re-renders (e.g. while filtering/searching) will NOT
@@ -328,6 +316,7 @@ React.useEffect(() => {
   const renderListingItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.listingCard, { backgroundColor: theme.cardBackground }]}
+      onPressIn={() => prefetchListing(Number(item.id))}
       onPress={() => handleItemPress(item.id)}
     >
       <ImageWithLoading source={{ uri: item.image }} style={styles.listingImage} />
@@ -365,7 +354,7 @@ React.useEffect(() => {
   );
 
   // --- Loading state ---
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#940304" />

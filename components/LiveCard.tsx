@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -52,17 +53,24 @@ const LiveCard: React.FC<Props> = ({
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error('Join error:', errorData);
+        let message = 'Unable to join this stream.';
+        try {
+          const errorData = await res.json();
+          if (typeof errorData?.message === 'string') message = errorData.message;
+        } catch {
+          /* ignore */
+        }
+        Alert.alert('Live stream', message);
         return;
       }
 
       router.push({
         pathname: '/userLiveViewMain',
-        params: { channelName, id },
+        params: { channelName, id: String(id) },
       });
     } catch (err) {
       console.error('Join live stream failed:', err);
+      Alert.alert('Live stream', 'Could not join. Check your connection and try again.');
     }
   };
 

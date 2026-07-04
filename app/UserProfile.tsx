@@ -3,15 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   Dimensions,
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Share,
+  type ViewToken,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -20,7 +21,7 @@ import FollowingBottomSheet from '@/components/Social/post/FollowingBottomSheet'
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { images } from '@/constants';
 import { useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
@@ -28,79 +29,169 @@ import { followUnfollowUser, getFollowerList, getFollowingList } from '@/utils/q
 import { useTheme } from '@/contexts/themeContext';
 import { ChatMessagePayload, sendChatMessage } from '@/utils/mutations/chat';
 import Toast from 'react-native-toast-message';
-import { Video } from 'expo-av';
 import { blockUser, restrictUser } from '@/utils/utils/userPrivacyStorage';
 // import { blockUser, restrictUser } from '@/utils/userPrivacyStorage'; // adjust path
+
+import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { STALE_TIMES } from '@/utils/queryClient';
+import { useSilentInfiniteScroll } from '@/utils/useSilentInfiniteScroll';
+import { openSinglePost } from '@/utils/prefetchNavigation';
+import { seedPostCaches } from '@/utils/postCache';
+import {
+  prefetchProfileGridVideos,
+  prefetchVideoForPostId,
+  prefetchVideoFromRawPost,
+} from '@/utils/videoPrefetch';
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 30) / 3;
 
-const profileData = {
-  name: 'Adewale',
-  bio: 'Here to have fun, make friends and stay healthy',
-  posts: 50,
-  followers: 3255,
-  following: 100,
-  avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+type ProfileGridItem = {
+  postId: number;
+  postIndex: number;
+  mediaIndex: number;
+  media_type: 'image' | 'video';
+  url: string;
 };
 
-// function getMediaByType(posts, type: 'image' | 'video') {
-//   if (!Array.isArray(posts)) return [];
-//   return posts.flatMap((post, postIndex) =>
-//     (Array.isArray(post.media) ? post.media : [])
-//       .filter(mediaItem =>
-//         type === 'image'
-//           ? mediaItem.media_type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(mediaItem.url)
-//           : mediaItem.media_type === 'video' || /\.(mp4|mov|avi|webm)$/i.test(mediaItem.url)
-//       )
-//       .map((mediaItem, mediaIndex) => ({
-//         ...mediaItem,
-//         postIndex,
-//         mediaIndex,
-//       }))
-//   );
-// }
-function getMediaByType(posts, type: 'image' | 'video') {
-  if (!Array.isArray(posts)) return [];
+function isVideoMedia(mediaItem: any): boolean {
+  if (!mediaItem) return false;
+  if (mediaItem.media_type === 'video') return true;
+  const url = mediaItem.url || '';
+  return /\.(mp4|mov|avi|webm|m3u8)(\?|$)/i.test(url);
+}
 
-  const seenPostIds = new Set();
+function pickDisplayMedia(post: any) {
+  if (!Array.isArray(post?.media) || post.media.length === 0) return null;
+
+  const video = post.media.find(isVideoMedia);
+  const image = post.media.find((m: any) => m.media_type === 'image');
+
+  if (video) {
+    const thumb =
+      resolveMediaUrl(video.thumbnail_url || video.thumbnail) ||
+      resolveMediaUrl(video.url);
+    if (!thumb) return null;
+    return {
+      media: video,
+      mediaIndex: post.media.indexOf(video),
+      media_type: 'video' as const,
+      url: thumb,
+    };
+  }
+
+  if (image) {
+    const url = resolveMediaUrl(image.url);
+    if (!url) return null;
+    return {
+      media: image,
+      mediaIndex: post.media.indexOf(image),
+      media_type: 'image' as const,
+      url,
+    };
+  }
+
+  const fallback = post.media[0];
+  const url = resolveMediaUrl(fallback.url);
+  if (!url) return null;
+  return {
+    media: fallback,
+    mediaIndex: 0,
+    media_type: isVideoMedia(fallback) ? ('video' as const) : ('image' as const),
+    url,
+  };
+}
+
+/** Posts tab: one grid tile per post (images + videos). */
+function getAllPostsForGrid(posts: any[]): ProfileGridItem[] {
+  if (!Array.isArray(posts)) return [];
 
   return posts
     .map((post, postIndex) => {
-      if (!Array.isArray(post.media)) return null;
+      const picked = pickDisplayMedia(post);
+      if (!picked) return null;
 
-      const firstMedia = post.media.find((mediaItem) =>
-        type === 'image'
-          ? mediaItem.media_type === 'image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(mediaItem.url)
-          : mediaItem.media_type === 'video' || /\.(mp4|mov|avi|webm)$/i.test(mediaItem.url)
-      );
-
-      if (firstMedia && !seenPostIds.has(post.id)) {
-        seenPostIds.add(post.id);
-        return {
-          ...firstMedia,
-          postIndex,
-          mediaIndex: 0, // always first
-          postId: post.id,
-        };
-      }
-
-      return null;
+      return {
+        postId: post.id,
+        postIndex,
+        mediaIndex: picked.mediaIndex,
+        media_type: picked.media_type,
+        url: picked.url,
+      };
     })
-    .filter(Boolean); // remove nulls
+    .filter((item): item is ProfileGridItem => item != null);
+}
+
+/** Videos tab: only posts that contain video. */
+function getVideoPostsForGrid(posts: any[]): ProfileGridItem[] {
+  if (!Array.isArray(posts)) return [];
+
+  return posts
+    .map((post, postIndex) => {
+      if (!Array.isArray(post?.media)) return null;
+      const video = post.media.find(isVideoMedia);
+      if (!video) return null;
+
+      const url =
+        resolveMediaUrl(video.thumbnail_url || video.thumbnail) ||
+        resolveMediaUrl(video.url);
+      if (!url) return null;
+
+      return {
+        postId: post.id,
+        postIndex,
+        mediaIndex: post.media.indexOf(video),
+        media_type: 'video' as const,
+        url,
+      };
+    })
+    .filter((item): item is ProfileGridItem => item != null);
 }
 
 
 export default function ProfileScreen() {
-  // --- All hooks at the top ---
   const { dark } = useTheme();
+  const theme = {
+    background: dark ? '#000000' : '#FAFAFA',
+    secondary: dark ? '#181818' : '#f5f5f5',
+    text: dark ? '#ffffff' : '#000000',
+    textSecondary: dark ? '#999999' : '#666666',
+    border: dark ? '#333333' : '#e0e0e0',
+    Mbtn: dark ? '#FFFFFF80' : '#000000',
+  };
+
   const [activeTab, setActiveTab] = useState('posts');
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
   const followingSheetRef = useRef<BottomSheet>(null);
   const [authUser, setAuthUser] = useState<any>(null);
-  const { user_id } = useLocalSearchParams<{ user_id?: any }>();
+  const [loadFollowers, setLoadFollowers] = useState(false);
+  const [loadFollowing, setLoadFollowing] = useState(false);
+  const { user_id, username, profile_picture } = useLocalSearchParams<{
+    user_id?: string;
+    username?: string;
+    profile_picture?: string;
+  }>();
   const queryClient = useQueryClient();
+
+  const profileUserId = user_id ? String(user_id) : '';
+
+  const profilePlaceholder = useMemo(() => {
+    if (!username && !profile_picture) return undefined;
+    return {
+      status: 'success',
+      user: {
+        username: username || '',
+        profile_picture_url: profile_picture ? resolveMediaUrl(profile_picture) : undefined,
+      },
+      bio: '',
+      followers_count: undefined,
+      following_count: undefined,
+      post_count: undefined,
+      posts: [],
+      is_following: false,
+    };
+  }, [username, profile_picture]);
 
   // Mutations
   const followMutation = useMutation({
@@ -110,59 +201,87 @@ export default function ProfileScreen() {
       return await followUnfollowUser(Number(user_id), token);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['followers', user_id] });
-      queryClient.invalidateQueries({ queryKey: ['userProfile', user_id] });
+      queryClient.invalidateQueries({ queryKey: ['followers', profileUserId] });
+      queryClient.invalidateQueries({ queryKey: ['userProfile', profileUserId] });
     },
     onError: (error) => {
       console.error('Error following/unfollowing user:', error);
     },
   });
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['userProfile', user_id],
-    queryFn: async () => {
+  const {
+    data: profilePages,
+    isLoading,
+    isFetching,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['userProfile', profileUserId],
+    queryFn: async ({ pageParam = 1 }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
-      return await fetchUserProfile(token, Number(user_id));
+      return await fetchUserProfile(token, Number(profileUserId), pageParam, 9);
     },
-    enabled: !!user_id,
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (formerly cacheTime)
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage?.posts_pagination?.has_more
+        ? lastPage.posts_pagination.current_page + 1
+        : undefined,
+    enabled: !!profileUserId,
+    placeholderData: profilePlaceholder
+      ? { pages: [profilePlaceholder], pageParams: [1] }
+      : undefined,
+    staleTime: STALE_TIMES.profile,
+    gcTime: 10 * 60 * 1000,
     retry: (failureCount, error: any) => {
-      // Don't retry on rate limit errors (429)
       if (error?.statusCode === 429) {
         return false;
       }
-      // Retry up to 2 times for other errors
       return failureCount < 2;
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
+
+  const data = useMemo(() => {
+    if (!profilePages?.pages?.length) return undefined;
+    const first = profilePages.pages[0];
+    const allPosts = profilePages.pages.flatMap((page) => page?.posts ?? []);
+    return { ...first, posts: allPosts };
+  }, [profilePages]);
+
+  useEffect(() => {
+    if (!profilePages?.pages?.length) return;
+    const rawPosts = profilePages.pages.flatMap((page) => page?.posts ?? []);
+    seedPostCaches(rawPosts);
+    rawPosts.slice(0, 9).forEach((post) => prefetchVideoFromRawPost(post));
+  }, [profilePages?.pages]);
 
   const {
     data: followersApiData,
     isLoading: isLoadingFollowers,
   } = useQuery({
-    queryKey: ['followers', user_id],
+    queryKey: ['followers', profileUserId],
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
       return await getFollowerList(Number(user_id), token);
     },
-    enabled: !!user_id,
+    enabled: !!profileUserId && loadFollowers,
   });
 
   const {
     data: followingApiData,
     isLoading: isLoadingFollowing,
   } = useQuery({
-    queryKey: ['following', user_id],
+    queryKey: ['following', profileUserId],
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
       return await getFollowingList(Number(user_id), token);
     },
-    enabled: !!user_id,
+    enabled: !!profileUserId && loadFollowing,
   });
 
   // Fetch auth user data
@@ -258,9 +377,11 @@ export default function ProfileScreen() {
     bottomSheetRef.current?.close();
   };
   const openFollowersSheet = () => {
+    setLoadFollowers(true);
     followersSheetRef.current?.expand();
   };
   const openFollowingSheet = () => {
+    setLoadFollowing(true);
     followingSheetRef.current?.expand();
   };
   const navigateToListings = () => {
@@ -317,91 +438,262 @@ export default function ProfileScreen() {
     setRefreshing(true);
     // Refetch all relevant queries
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['userProfile', user_id] }),
-      queryClient.invalidateQueries({ queryKey: ['followers', user_id] }),
-      queryClient.invalidateQueries({ queryKey: ['following', user_id] }),
+      queryClient.invalidateQueries({ queryKey: ['userProfile', profileUserId] }),
+      queryClient.invalidateQueries({ queryKey: ['followers', profileUserId] }),
+      queryClient.invalidateQueries({ queryKey: ['following', profileUserId] }),
     ]);
     setRefreshing(false);
   };
 
-  // Theme
-  const theme = {
-    background: dark ? '#000000' : '#FAFAFA',
-    secondary: dark ? '#181818' : '#f5f5f5',
-    text: dark ? '#ffffff' : '#000000',
-    textSecondary: dark ? '#999999' : '#666666',
-    border: dark ? '#333333' : '#e0e0e0',
-    Mbtn: dark ? '#FFFFFF80' : '#000000',
-  };
+  // Media grid — smaller pages + silent prefetch (Instagram-style)
+  const allPostsMedia = useMemo(() => getAllPostsForGrid(data?.posts), [data?.posts]);
+  const videoPostsMedia = useMemo(() => getVideoPostsForGrid(data?.posts), [data?.posts]);
+  const mediaArray = useMemo(
+    () => (activeTab === 'posts' ? allPostsMedia : videoPostsMedia),
+    [activeTab, allPostsMedia, videoPostsMedia],
+  );
+  const mediaArrayRef = useRef(mediaArray);
+  useEffect(() => {
+    mediaArrayRef.current = mediaArray;
+  }, [mediaArray]);
 
-  // Media grid
-  const imageMedia = getMediaByType(data?.posts, 'image');
-  const videoMedia = getMediaByType(data?.posts, 'video');
-  const renderMediaGrid = () => {
-    const mediaArray = activeTab === 'posts' ? imageMedia : videoMedia;
+  const { loadMore, onPrefetchViewableItemsChanged, prefetchViewabilityConfig } =
+    useSilentInfiniteScroll({
+      itemCount: mediaArray.length,
+      hasNextPage,
+      isFetchingNextPage,
+      fetchNextPage,
+      thresholdFromEnd: 5,
+      firstPageReady: Boolean(profilePages?.pages?.[0]?.posts?.length),
+      resetKey: profileUserId,
+    });
 
-    if (!mediaArray.length) {
+  const onGridViewableItemsChanged = useRef(
+    (info: { viewableItems: ViewToken[] }) => {
+      onPrefetchViewableItemsChanged(info);
+      prefetchProfileGridVideos(mediaArrayRef.current, info.viewableItems);
+    },
+  ).current;
+
+  const renderGridItem = useCallback(
+    ({ item }: { item: ProfileGridItem }) => (
+      <TouchableOpacity
+        style={styles.gridItem}
+        activeOpacity={0.8}
+        onPressIn={() => {
+          if (item.media_type === 'video') {
+            prefetchVideoForPostId(item.postId);
+          }
+        }}
+        onPress={() =>
+          openSinglePost(router, item.postId, {
+            videoThumbnailUrl: item.media_type === 'video' ? item.url : undefined,
+          })
+        }
+      >
+        {item.media_type === 'video' ? (
+          <View>
+            <Image
+              source={{ uri: item.url }}
+              style={styles.gridImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+            <View style={styles.playButton}>
+              <Icon name="play" size={24} color="#fff" />
+            </View>
+          </View>
+        ) : (
+          <Image
+            source={{ uri: item.url }}
+            style={styles.gridImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        )}
+      </TouchableOpacity>
+    ),
+    [],
+  );
+
+  const profileListHeader = useMemo(
+    () => (
+      <>
+        <View style={styles.profileSection}>
+          <Image
+            source={{ uri: data?.user?.profile_picture_url }}
+            style={styles.avatar}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+          <Text style={[styles.name, { color: theme.text }]}>{data?.user.username}</Text>
+          <Text style={[styles.bio, { color: theme.textSecondary }]}>
+            {data?.bio || data?.user?.bio || ''}
+          </Text>
+
+          <View style={[styles.statsContainer, { backgroundColor: theme.secondary }]}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: theme.text }]}>
+                {data?.post_count ?? '–'}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Posts</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.statItem} onPress={openFollowersSheet}>
+              <Text style={[styles.statNumber, { color: theme.text }]}>
+                {data?.followers_count ?? '–'}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
+            </TouchableOpacity>
+            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.statItem} onPress={openFollowingSheet}>
+              <Text style={[styles.statNumber, { color: theme.text }]}>
+                {data?.following_count ?? '–'}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
+            </TouchableOpacity>
+          </View>
+
+          {authUser && authUser?.id != user_id && (
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.followButton}
+                onPress={() => followMutation.mutate()}
+                disabled={followMutation.isPending}
+              >
+                {followMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.followButtonText}>
+                    {data?.is_following ? 'Unfollow' : 'Follow'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.messageButton, { backgroundColor: theme.Mbtn }]}
+                onPress={() => sendMessageMutation.mutate()}
+              >
+                <Text style={[styles.messageButtonText, { color: 'white' }]}>Message</Text>
+              </TouchableOpacity>
+              {data?.is_business && (
+                <TouchableOpacity
+                  onPress={() => handleListingPress()}
+                  style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}
+                >
+                  <Text style={[styles.messageButtonText, { color: '#940304' }]}>Listing</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {authUser && authUser?.id == user_id && (
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                onPress={() => router.push('/EditProfile')}
+                style={styles.followButton}
+              >
+                <Text style={styles.followButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleListingPress()}
+                style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}
+              >
+                <Text style={[styles.messageButtonText, { color: '#940304' }]}>Listing</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.tabContainer, { backgroundColor: theme.background }]}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'posts' && styles.activeTab]}
+            onPress={() => setActiveTab('posts')}
+          >
+            <Image
+              source={images.profileImages}
+              style={{
+                width: 20,
+                height: 20,
+                tintColor: activeTab === 'posts' ? theme.text : theme.textSecondary,
+              }}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                { color: activeTab === 'posts' ? theme.text : theme.textSecondary },
+              ]}
+            >
+              Posts
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'videos' && styles.activeTab]}
+            onPress={() => setActiveTab('videos')}
+          >
+            <Image
+              source={images.profileVideos}
+              style={{
+                width: 20,
+                height: 20,
+                tintColor: activeTab === 'videos' ? theme.text : theme.textSecondary,
+              }}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                { color: activeTab === 'videos' ? theme.text : theme.textSecondary },
+              ]}
+            >
+              Videos
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    ),
+    [
+      data,
+      theme,
+      authUser,
+      user_id,
+      activeTab,
+      followMutation,
+      sendMessageMutation,
+      openFollowersSheet,
+      openFollowingSheet,
+      handleListingPress,
+    ],
+  );
+
+  const listEmptyComponent = useMemo(() => {
+    if (isFetching && !mediaArray.length) {
       return (
         <View style={{ alignItems: 'center', padding: 40 }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 16 }}>
-            {activeTab === 'posts' ? 'No posts yet' : 'No videos yet'}
-          </Text>
+          <ActivityIndicator size="small" color="#940304" />
         </View>
       );
     }
 
     return (
-      <View style={styles.gridContainer}>
-        {mediaArray.map((mediaItem, idx) => (
-          <TouchableOpacity
-            key={`${mediaItem.postIndex}-${mediaItem.mediaIndex}`}
-            style={styles.gridItem}
-            activeOpacity={0.8}
-            onPress={() =>
-              router.push({
-                pathname: '/SinglePostScreen',
-                params: {
-                  postId: mediaItem?.postId
-                }
-              })
-            }
-          >
-            {mediaItem.media_type === 'video' ? (
-              <View>
-                <Video
-                  source={{ uri: mediaItem.url }}
-                  style={styles.gridImage}
-                  resizeMode="cover"
-                  shouldPlay={false}
-                  isMuted
-                  isLooping={false}
-                  useNativeControls={false}
-                />
-                <View style={styles.playButton}>
-                  <Icon name="play" size={24} color="#fff" />
-                </View>
-              </View>
-            ) : (
-              <Image
-                source={{ uri: mediaItem.url }}
-                style={styles.gridImage}
-                resizeMode="cover"
-              />
-            )}
-          </TouchableOpacity>
-        ))}
+      <View style={{ alignItems: 'center', padding: 40 }}>
+        <Text style={{ color: theme.textSecondary, fontSize: 16 }}>
+          {activeTab === 'posts' ? 'No posts yet' : 'No videos yet'}
+        </Text>
       </View>
     );
-  };
+  }, [isFetching, mediaArray.length, activeTab, theme.textSecondary]);
 
-
-  // --- End of hooks and logic ---
-
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
-      <GestureHandlerRootView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+      <GestureHandlerRootView
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: theme.background,
+        }}
+      >
         <ActivityIndicator size="large" color="#940304" />
-        <Text style={{ color: '#fff', fontSize: 18, marginTop: 16 }}>Loading profile...</Text>
+        <Text style={{ color: theme.text, fontSize: 18, marginTop: 16 }}>Loading profile...</Text>
       </GestureHandlerRootView>
     );
   }
@@ -420,8 +712,21 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <FlatList
+          key={activeTab}
+          data={mediaArray}
+          numColumns={3}
+          keyExtractor={(item) => `${item.postId}-${item.mediaIndex}`}
+          renderItem={renderGridItem}
+          ListHeaderComponent={profileListHeader}
+          ListEmptyComponent={listEmptyComponent}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
+          onViewableItemsChanged={onGridViewableItemsChanged}
+          viewabilityConfig={prefetchViewabilityConfig}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.gridListContent}
+          columnWrapperStyle={mediaArray.length ? styles.gridRow : undefined}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -432,95 +737,7 @@ export default function ProfileScreen() {
               titleColor={theme.text}
             />
           }
-        >
-          {/* Profile Info */}
-          <View style={styles.profileSection}>
-            <Image source={{ uri: data?.user?.profile_picture_url }} style={styles.avatar} />
-            <Text style={[styles.name, { color: theme.text }]}>{data?.user.username}</Text>
-            <Text style={[styles.bio, { color: theme.textSecondary }]}>{profileData.bio}</Text>
-
-            {/* Stats */}
-            <View style={[styles.statsContainer, { backgroundColor: theme.secondary }]}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>
-                  {data?.post_count}
-                </Text>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Posts</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-              <TouchableOpacity style={styles.statItem} onPress={openFollowersSheet}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>
-                  {data?.followers_count}
-                </Text>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
-              </TouchableOpacity>
-              <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-              <TouchableOpacity style={styles.statItem} onPress={openFollowingSheet}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>
-                  {data?.following_count}
-                </Text>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Action Buttons */}
-            {authUser && authUser?.id != user_id && <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.followButton}
-                onPress={() => followMutation.mutate()}
-                disabled={followMutation.isPending}
-              >
-                {followMutation.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.followButtonText}>
-                    {data?.is_following ? 'Unfollow' : 'Follow'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.messageButton, { backgroundColor: theme.Mbtn }]} onPress={() => sendMessageMutation.mutate()}>
-                <Text style={[styles.messageButtonText, { color: 'white' }]}>Message</Text>
-              </TouchableOpacity>
-              {
-                data?.is_business &&
-                <TouchableOpacity onPress={() => handleListingPress()} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>
-                  <Text style={[styles.messageButtonText, { color: "#940304" }]}>Listing</Text>
-                </TouchableOpacity>
-              }
-            </View>
-            }
-            {authUser && authUser?.id == user_id && <View style={styles.actionButtons}>
-              <TouchableOpacity onPress={() => router.push('/EditProfile')} style={styles.followButton}>
-                <Text style={styles.followButtonText}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleListingPress()} style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}>
-                <Text style={[styles.messageButtonText, { color: "#940304" }]}>Listing</Text>
-              </TouchableOpacity>
-            </View>}
-          </View>
-
-          {/* Tab Navigation */}
-          <View style={[styles.tabContainer, { backgroundColor: theme.background }]}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'posts' && styles.activeTab]}
-              onPress={() => setActiveTab('posts')}
-            >
-              <Image source={images.profileImages} style={{ width: 20, height: 20, tintColor: activeTab === 'posts' ? theme.text : theme.textSecondary }} />
-              <Text style={[styles.tabText, { color: activeTab === 'posts' ? theme.text : theme.textSecondary }]}>Posts</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'videos' && styles.activeTab]}
-              onPress={() => setActiveTab('videos')}
-            >
-              <Image source={images.profileVideos} style={{ width: 20, height: 20, tintColor: activeTab === 'videos' ? theme.text : theme.textSecondary }} />
-              <Text style={[styles.tabText, { color: activeTab === 'videos' ? theme.text : theme.textSecondary }]}>Videos</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Content Grid */}
-          {renderMediaGrid()}
-        </ScrollView>
+        />
 
         {/* Main Options Bottom Sheet */}
         <BottomSheet
@@ -738,6 +955,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     padding: 5,
+  },
+  gridListContent: {
+    paddingBottom: 24,
+  },
+  gridRow: {
+    paddingHorizontal: 5,
+    gap: 5,
   },
   gridItem: {
     width: imageSize,

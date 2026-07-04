@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,15 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import HorizontalStreamList from '@/components/HorizontalStreamList';
 import { useLiveStreams } from '@/utils/useLiveStreams';
 import { router } from 'expo-router';
 import LiveStreamFeed from '@/components/LiveStreamFeed';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { isLiveStreamDiscoverable } from '@/utils/liveStreamStatus';
 
 const Section = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
@@ -25,10 +28,17 @@ const EmptyStreamPlaceholder = () => (
 );
 
 export default function LiveStreamDiscoverScreen() {
-  const { data, isLoading, error } = useLiveStreams();
+  const queryClient = useQueryClient();
+  const { data, isLoading, error, isRefetching, refetch } = useLiveStreams();
+
+  useFocusEffect(
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ['liveStreams'] });
+    }, [queryClient])
+  );
 
   const renderSectionContent = () => {
-    if (isLoading) {
+    if (isLoading && !data) {
       return <ActivityIndicator size="large" color="red" />;
     }
 
@@ -37,7 +47,11 @@ export default function LiveStreamDiscoverScreen() {
     }
 
     const streams = Array.isArray(data) ? data : [];
-    if (streams.length > 0) {
+    const activeCount = streams.filter((s) =>
+      isLiveStreamDiscoverable(s as Record<string, unknown>)
+    ).length;
+
+    if (activeCount > 0) {
       return <LiveStreamFeed streams={streams} />;
     }
 
@@ -59,7 +73,12 @@ export default function LiveStreamDiscoverScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#940304" />
+        }
+      >
         <Section title="Top Live Streams" />
         {renderSectionContent()}
       </ScrollView>

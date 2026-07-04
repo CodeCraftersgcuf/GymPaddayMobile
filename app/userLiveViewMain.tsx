@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,24 +9,27 @@ import {
   TextInput,
   ScrollView,
   Dimensions,
-  Modal,
-  Pressable,
   Alert,
   Keyboard,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
+import Modal from 'react-native-modal';
 import { useRouter } from 'expo-router';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import GiftsPanel from '@/components/Social/live/GiftsPanel';
 import TopupPanel from '@/components/Social/live/TopupPanel';
 import SendCoinsPanel from '@/components/Social/live/SendCoinsPanel';
 import { useLocalSearchParams } from 'expo-router';
-import LiveStreamingPlayer from '@/components/Social/live/LiveStreamingPlayer';
+import { buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
 import WebView from 'react-native-webview';
 import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
 import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
 import * as SecureStore from 'expo-secure-store';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
+import { API_ENDPOINTS } from '@/apiConfig';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,7 +39,7 @@ interface ChatMessage {
   message: string;
   avatar: string;
   hasGift?: boolean;
-  giftCount?: number;
+  giftCount?: number | string;
 }
 
 interface GiftItem {
@@ -51,12 +54,16 @@ interface GiftItem {
 type PanelType = 'gifts' | 'topup' | 'sendCoins' | 'none';
 
 const User_liveViewMain: React.FC = () => {
-  const { channelName, id } = useLocalSearchParams<{ channelName: string, id: string }>();
+  const { channelName, id } = useLocalSearchParams<{ channelName: string; id: string }>();
+  const streamId = id != null ? String(Array.isArray(id) ? id[0] : id) : '';
 
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const [dark, setDark] = useState<boolean>(true);
+  const [streamEnded, setStreamEnded] = useState(false);
   const [message, setMessage] = useState<string>('');
-  const [balance, setBalance] = useState<number>(200000);
+  const [balance, setBalance] = useState<number>(0);
   const [activePanel, setActivePanel] = useState<PanelType>('none');
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -65,13 +72,17 @@ const User_liveViewMain: React.FC = () => {
 
   const [loadingBalance, setLoadingBalance] = useState(true);
   React.useEffect(() => {
+    if (hideIosMonetization) {
+      setLoadingBalance(false);
+      return;
+    }
     (async () => {
       try {
         setLoadingBalance(true); // start loading
         const token = await SecureStore.getItemAsync('auth_token');
         if (!token) throw new Error('No token founds');
 
-        const response = await fetch('https://api.gympaddy.com/api/user/balance', {
+        const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -94,32 +105,99 @@ const User_liveViewMain: React.FC = () => {
         setLoadingBalance(false); // stop loading
       }
     })();
-  }, []);
+  }, [hideIosMonetization]);
   const themeStyles = {
     backgroundColor: dark ? '#000000' : '#ffffff',
     secondaryBackground: dark ? '#181818' : '#f5f5f5',
     textColor: dark ? '#ffffff' : '#000000',
     textColorSecondary: dark ? '#cccccc' : '#666666',
   };
-  const { data: chats = [], isLoading } = useLiveStreamChats(id);
-  const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(id);
-  console.log("chats", chats)
-  useEffect(() => {
-    if (chats.length > 0) {
-      const formatted = chats.map((msg: any) => ({
-        id: msg.id.toString(),
-        user: msg.user?.fullname || 'User',
-        message: msg.message,
-        avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
-      }));
-      setChatMessages(formatted);
+  const leaveLiveStream = useCallback(async () => {
+    if (!streamId) return;
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) return;
+      await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${streamId}/leave`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+    } catch (e) {
+      console.warn('leaveLiveStream', e);
     }
+  }, [streamId]);
+
+  useEffect(() => {
+    return () => {
+      leaveLiveStream();
+    };
+  }, [leaveLiveStream]);
+
+  const { data: streamMeta } = useQuery({
+    queryKey: ['liveStreamDetail', streamId],
+    enabled: !!streamId && !streamEnded,
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('No token');
+      const res = await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${streamId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error('Failed to load stream');
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  useEffect(() => {
+    if (!streamMeta) return;
+    const active =
+      streamMeta.is_active === true ||
+      streamMeta.is_active === 1 ||
+      streamMeta.is_active === '1';
+    const ended = streamMeta.status === 'ended';
+    if (!active || ended) setStreamEnded(true);
+  }, [streamMeta]);
+
+  useEffect(() => {
+    if (streamEnded) {
+      queryClient.invalidateQueries({ queryKey: ['liveStreams'] });
+    }
+  }, [streamEnded, queryClient]);
+
+  const { data: chats = [], isLoading } = useLiveStreamChats(streamEnded ? '' : streamId);
+  const { mutateAsync: sendChatMessageAsync, isPending } = useSendLiveStreamMessage(
+    streamEnded ? '' : streamId
+  );
+
+  useEffect(() => {
+    if (streamEnded) setActivePanel('none');
+  }, [streamEnded]);
+
+  useEffect(() => {
+    const formatted = (chats || []).map((msg: any) => ({
+      id: msg.id.toString(),
+      user: msg.user?.fullname || 'User',
+      message: msg.message,
+      avatar: msg.user?.profile_picture_url || 'https://ui-avatars.com/api/?name=User',
+      hasGift: msg.type === 'gift',
+      giftCount: msg.amount,
+    }));
+    setChatMessages(formatted);
   }, [chats]);
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
-    sendChatMessage({message:message.trim()});
-    setMessage('');
+  const exitViewer = useCallback(async () => {
+    await leaveLiveStream();
+    router.back();
+  }, [leaveLiveStream, router]);
+
+  const sendMessage = async () => {
+    if (!message.trim() || streamEnded) return;
+    try {
+      await sendChatMessageAsync({ message: message.trim() });
+      setMessage('');
+    } catch (e: any) {
+      if (e?.status === 410) setStreamEnded(true);
+      Alert.alert('Chat', e?.message || 'Failed to send message');
+    }
   };
 
   const handleGiftSelect = (gift: GiftItem, quantity: number = 1) => {
@@ -132,7 +210,7 @@ const User_liveViewMain: React.FC = () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token found');
 
-      const response = await fetch('https://api.gympaddy.com/api/user/top-up', {
+      const response = await fetch(API_ENDPOINTS.USER.WALLETS.TopUp, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -151,6 +229,7 @@ const User_liveViewMain: React.FC = () => {
 
       const data = await response.json();
       console.log('✅ Top-up recorded:', data);
+      queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
 
       // Update local balance
       setBalance(prevBalance => prevBalance + amount);
@@ -161,14 +240,42 @@ const User_liveViewMain: React.FC = () => {
     }
   };
 
-  const handleSendSuccess = (amount: number) => {
-    setBalance(prevBalance => prevBalance - (amount*10));
+  const refreshWalletBalance = async () => {
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) return;
+      const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        setBalance(Number(result.balance));
+      }
+    } catch (e) {
+      console.warn('refreshWalletBalance', e);
+    }
+  };
+
+  const handleSendSuccess = async (amount: number) => {
+    const coins = amount * 10;
     setActivePanel('none');
-    console.log("selected gift ",selectedGift)
     const giftText = `Sent ${selectedGift?.emoji} x${amount}`;
-    // Add gift message to chat
-    sendChatMessage({message:giftText,type:"gift",amount:amount*10})
-   
+    if (streamEnded) return;
+    try {
+      await sendChatMessageAsync({
+        message: giftText,
+        type: 'gift',
+        amount: String(coins),
+      });
+      await refreshWalletBalance();
+    } catch (e: any) {
+      if (e?.status === 410) setStreamEnded(true);
+      Alert.alert('Gift', e?.message || 'Failed to send gift');
+    }
   };
 
   const closePanel = () => {
@@ -207,6 +314,7 @@ const User_liveViewMain: React.FC = () => {
     });
   };
   const renderPanel = () => {
+    if (hideIosMonetization) return null;
     switch (activePanel) {
       case 'gifts':
         return (
@@ -243,7 +351,11 @@ const User_liveViewMain: React.FC = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: themeStyles.backgroundColor }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: themeStyles.backgroundColor }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => {
+            exitViewer();
+          }}
+        >
           <Icon name="chevron-back" size={24} color={themeStyles.textColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: themeStyles.textColor }]}>
@@ -253,11 +365,21 @@ const User_liveViewMain: React.FC = () => {
 
       {/* Video Background */}
       <View style={[styles.videoContainer]}>
-        {channelName ? (
+        {streamEnded ? (
+          <View style={styles.endedPlaceholder}>
+            <Icon name="radio-outline" size={48} color="#888" />
+            <Text style={styles.endedTitle}>Live ended</Text>
+            <Text style={styles.endedSubtitle}>The host has ended this stream.</Text>
+            <TouchableOpacity style={styles.endedButton} onPress={() => exitViewer()}>
+              <Text style={styles.endedButtonText}>Leave</Text>
+            </TouchableOpacity>
+          </View>
+        ) : channelName ? (
           <WebView
+            originWhitelist={['*']}
             source={{
-              // Pass role=audience so web player knows this is a viewer, not host
-              uri: `https://skillverse.com.pk/live.html?channel=${channelName}&role=audience`,
+              html: buildLiveStreamWebHtml(String(channelName), 'audience'),
+              baseUrl: 'https://skillverse.com.pk/',
             }}
             javaScriptEnabled
             domStorageEnabled
@@ -265,6 +387,13 @@ const User_liveViewMain: React.FC = () => {
             mediaPlaybackRequiresUserAction={false}
             allowsFullscreenVideo
             style={{ flex: 1 }}
+            onMessage={(ev) => {
+              const m = ev.nativeEvent.data;
+              if (m === 'stream_ended' || m === '"stream_ended"') {
+                setStreamEnded(true);
+                leaveLiveStream();
+              }
+            }}
           />
         ) : (
           <Text style={{ color: 'white', textAlign: 'center', marginTop: 20 }}>
@@ -280,15 +409,22 @@ const User_liveViewMain: React.FC = () => {
               : { top: 90 },
           ]}
         >
-          <ScrollView style={styles.chatContainer} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.chatContainer}
+            showsVerticalScrollIndicator
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
             {chatMessages.map((chat) => (
               <View key={chat.id} style={styles.chatMessage}>
                 <Image source={{ uri: chat.avatar }} style={styles.avatar} />
                 <View style={[styles.messageContainer, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
                   <Text style={styles.username}>{chat.user}</Text>
-                  <View style={styles.messageRow}>
-                    <Text style={styles.messageText}>{chat.message}</Text>
-                    {chat.hasGift && (
+                  <View style={styles.messageColumn}>
+                    <Text style={styles.messageText} selectable>
+                      {chat.message}
+                    </Text>
+                    {chat.hasGift && !hideIosMonetization && (
                       <View style={styles.giftContainer}>
                         <Text style={styles.giftEmoji}>🎁</Text>
                         <View style={styles.giftBadge}>
@@ -304,49 +440,66 @@ const User_liveViewMain: React.FC = () => {
         </View>
       </View>
 
-      {activePanel !== 'none' && (
-        <Modal
-          visible={activePanel !== 'none'}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={closePanel}
-        >
-          {/* <View style={{flex:1}}> */}
-          <Pressable style={styles.modalBackdrop} onPress={closePanel} />
-          <View style={styles.bottomPanelContainer}>
-            {renderPanel()}
-          </View>
-          {/* </View> */}
-        </Modal>
-      )}
+      <Modal
+        isVisible={!hideIosMonetization && activePanel !== 'none'}
+        onBackdropPress={closePanel}
+        onBackButtonPress={closePanel}
+        onSwipeComplete={closePanel}
+        swipeDirection="down"
+        propagateSwipe
+        avoidKeyboard
+        style={styles.giftSheetModal}
+        backdropOpacity={0.45}
+        useNativeDriverForBackdrop
+        animationIn="slideInUp"
+        animationOut="slideOutDown"
+      >
+        <View style={styles.bottomPanelContainer}>
+          <View style={styles.giftSheetHandle} />
+          {renderPanel()}
+        </View>
+      </Modal>
 
       {/* Bottom Input - Only show when no panel is active */}
-      {activePanel === 'none' && (
-        <KeyboardAvoidingView 
+      {activePanel === 'none' && !streamEnded && (
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <View style={[styles.bottomContainer, { backgroundColor: themeStyles.backgroundColor }]}>
             <View style={styles.inputRow}>
               <TextInput
-                style={[styles.textInput, {
-                  backgroundColor: themeStyles.secondaryBackground,
-                  color: themeStyles.textColor
-                }]}
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: themeStyles.secondaryBackground,
+                    color: themeStyles.textColor,
+                  },
+                ]}
                 placeholder="Type a message"
                 placeholderTextColor={themeStyles.textColorSecondary}
                 value={message}
                 onChangeText={setMessage}
+                multiline
+                maxLength={1000}
+                editable={!streamEnded}
               />
-              <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+              <TouchableOpacity
+                style={[styles.sendButton, isPending && { opacity: 0.6 }]}
+                onPress={() => sendMessage()}
+                disabled={isPending || streamEnded}
+              >
                 <Icon name="send" size={20} color="white" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.giftButton}
-                onPress={() => setActivePanel('gifts')}
-              >
-                <Icon name="gift" size={24} color="#940304" />
-              </TouchableOpacity>
+              {!hideIosMonetization && (
+                <TouchableOpacity
+                  style={styles.giftButton}
+                  onPress={() => setActivePanel('gifts')}
+                  disabled={streamEnded}
+                >
+                  <Icon name="gift" size={24} color="#940304" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -367,17 +520,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  // Add to your StyleSheet.create
-  modalBackdrop: {
-    height: 300,
-    // backgroundColor:"red",
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    // position: 'absolute',
-    // top: 0,
-    // left: 0,
-    // right: 0,
-    // bottom: 0,
-    zIndex: 1,
+  giftSheetModal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+  giftSheetHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(120, 120, 120, 0.55)',
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 4,
   },
   headerTitle: {
     position: 'absolute',
@@ -404,8 +558,8 @@ const styles = StyleSheet.create({
   chatOverlay: {
     position: 'absolute',
     left: 12,
-    width: '70%',
-    maxHeight: 220,
+    width: '72%',
+    maxHeight: Platform.OS === 'ios' ? 240 : 220,
   },
   chatContainer: {
     flex: 1,
@@ -437,10 +591,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  messageColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 6,
+    minWidth: 0,
+    width: '100%',
+  },
   messageText: {
     color: 'white',
     fontSize: 14,
+    flexShrink: 1,
+    width: '100%',
+  },
+  endedPlaceholder: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#111',
+    padding: 24,
+  },
+  endedTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 16,
+  },
+  endedSubtitle: {
+    color: '#aaa',
+    fontSize: 15,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  endedButton: {
+    backgroundColor: '#940304',
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  endedButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
   },
   giftContainer: {
     flexDirection: 'row',
@@ -500,13 +693,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     padding: 8,
   },
+  /** Must set a real height budget: maxHeight alone + flex children collapses to 0 on RN. */
   bottomPanelContainer: {
-    flex: 1,
+    width: '100%',
+    minHeight: height * 0.52,
+    maxHeight: height * 0.88,
     backgroundColor: 'rgba(0, 0, 0, 0)',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    // padding: 16,
-    // paddingBottom: 32,
+    overflow: 'hidden',
   },
 });
 

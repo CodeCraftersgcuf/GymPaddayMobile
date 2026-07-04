@@ -12,6 +12,7 @@ import logoNew from '../../assets/images/logo-old.png';
 import * as SecureStore from 'expo-secure-store';
 import { Feather } from '@expo/vector-icons';
 import { API_ENDPOINTS } from '@/apiConfig';
+import { navigateToUserProfile } from '@/utils/navigateToProfile';
 
 
 interface TabHeaderProps {
@@ -34,6 +35,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
 
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 const [userId, setUserId] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchUnreadCount = async () => {
@@ -87,6 +89,7 @@ const [userId, setUserId] = useState<string | null>(null);
         if (userDataStr) {
           const userData = JSON.parse(userDataStr);
           setUserId(userData.id.toString());
+          setUsername(userData.username || null);
           if (userData.profile_picture_url) {
             setProfileImage(userData.profile_picture_url);
           } else {
@@ -122,25 +125,25 @@ const [userId, setUserId] = useState<string | null>(null);
     },
   });
 
-  const hanldeViewProfile = (id: any) => {
-    // router.push({
-    //   pathname: '/UserProfile',
-    //   params: { user_id: id },
-    // })
-router.push({ pathname: '/UserProfile', params: { user_id: userId?.toString() } })
-    // router.push('/EditProfile');
+  const hanldeViewProfile = () => {
+    if (!userId) return;
+    navigateToUserProfile(router, {
+      user_id: userId,
+      username: username || undefined,
+      profile_picture: profileImage || undefined,
+    });
   }
 
   return (
     <ThemedView darkColor="black" style={styles.header}>
 <Image source={logoNew} style={styles.logo} resizeMode="contain" />
       <ThemedView style={styles.alignCenter}>
+        {children}
         {admin?.profile && (
           <Pressable onPress={() => hanldeViewProfile()}>
             <Image source={{ uri: profileImage }} style={styles.UserImage} />
           </Pressable>
         )}
-        {children}
        {notificationID && (
   <View style={{ flexDirection: 'row', gap: 10 }}>
     <Pressable onPress={() => router.push('/search')}>

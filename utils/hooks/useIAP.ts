@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform, Alert } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
+import { API_ENDPOINTS } from '@/apiConfig';
 
-const MINIMUM_AMOUNT_IOS = 100; // Minimum 100 Naira for iOS
+const MINIMUM_AMOUNT_IOS = 100;
 
-// Try to import InAppPurchases, but handle gracefully if module is not available
 let InAppPurchases: any = null;
 try {
   InAppPurchases = require('expo-in-app-purchases');
@@ -12,7 +13,13 @@ try {
   console.warn('expo-in-app-purchases module not available:', error);
 }
 
+export function gpCreditFromStoreMicros(priceAmountMicros: number): number {
+  if (!Number.isFinite(priceAmountMicros) || priceAmountMicros <= 0) return 0;
+  return Math.round(priceAmountMicros / 1_000_000);
+}
+
 export const useIAP = () => {
+  const queryClient = useQueryClient();
   const [isAvailable, setIsAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
@@ -23,15 +30,12 @@ export const useIAP = () => {
     if (Platform.OS === 'ios' && InAppPurchases) {
       initializeIAP();
     } else if (Platform.OS === 'ios' && !InAppPurchases) {
-      console.warn('In-App Purchases module not available. Please rebuild the app with expo prebuild or use a development build.');
       setIsAvailable(false);
     }
     return () => {
       if (Platform.OS === 'ios' && isAvailable && InAppPurchases) {
         try {
-          if (purchaseListenerRef.current) {
-            purchaseListenerRef.current.remove();
-          }
+          purchaseListenerRef.current?.remove();
           InAppPurchases.disconnectAsync();
         } catch (error) {
           console.error('Error cleaning up IAP:', error);
@@ -39,6 +43,44 @@ export const useIAP = () => {
       }
     };
   }, []);
+
+  const handlePurchaseSuccess = useCallback(
+    async (amount: number) => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) {
+          Alert.alert('Error', 'Authentication required');
+          setIsLoading(false);
+          return false;
+        }
+
+        const response = await fetch(API_ENDPOINTS.USER.WALLETS.TopUp, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ amount }),
+        });
+
+        if (!response.ok) {
+          const errRes = await response.json();
+          throw new Error(errRes.message || 'Top-up API call failed');
+        }
+
+        await response.json();
+        queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
+        setIsLoading(false);
+        return true;
+      } catch (error: any) {
+        Alert.alert('Error', error?.message || 'Failed to update wallet. Please contact support.');
+        setIsLoading(false);
+        return false;
+      }
+    },
+    [queryClient],
+  );
 
   const initializeIAP = async () => {
     if (!InAppPurchases) {
@@ -49,13 +91,11 @@ export const useIAP = () => {
     try {
       const available = await InAppPurchases.isAvailableAsync();
       setIsAvailable(available);
-      
+
       if (available) {
         await InAppPurchases.connectAsync();
-        
-        // Set up purchase listener
         purchaseListenerRef.current = InAppPurchases.setPurchaseListener(
-          async ({ responseCode, results, errorCode }: any) => {
+          async ({ responseCode, errorCode }: any) => {
             if (responseCode === InAppPurchases.IAPResponseCode.OK) {
               const amount = pendingAmountRef.current;
               if (amount) {
@@ -71,7 +111,7 @@ export const useIAP = () => {
               setIsLoading(false);
               pendingAmountRef.current = null;
             }
-          }
+          },
         );
       }
     } catch (error) {
@@ -105,63 +145,13 @@ export const useIAP = () => {
     pendingAmountRef.current = amount;
 
     try {
-      // Apple IAP doesn't support quantity parameter
-      // Using the product ID created in App Store Connect
-      // Product ID: "com.pejul.gympaddy.gp_coin_100" - Price: 100 Naira
-      // Apple charges: 100 Naira (product price)
-      // Backend credits: User-entered amount (via API call)
       const productId = 'com.pejul.gympaddy.gp_coin_100';
-
       await InAppPurchases.purchaseItemAsync(productId);
-      
-      // The purchase listener will handle the success/failure
-      // After purchase succeeds, we call the API with the user-entered amount
-      // The backend will credit the correct amount regardless of what Apple charged
       return true;
     } catch (error: any) {
-      console.error('Purchase error:', error);
       Alert.alert('Error', error?.message || 'Failed to process purchase');
       setIsLoading(false);
       pendingAmountRef.current = null;
-      return false;
-    }
-  };
-
-  const handlePurchaseSuccess = async (amount: number) => {
-    try {
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!token) {
-        Alert.alert('Error', 'Authentication required');
-        setIsLoading(false);
-        return false;
-      }
-
-      // Call the same topup API endpoint that Flutterwave uses
-      // Using the same endpoint format as userLiveViewMain: /api/user/top-up
-      const response = await fetch('https://api.gympaddy.com/api/user/top-up', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ amount }),
-      });
-
-      if (!response.ok) {
-        const errRes = await response.json();
-        console.error('❌ Top-up API error:', errRes);
-        throw new Error(errRes.message || 'Top-up API call failed');
-      }
-
-      const data = await response.json();
-      console.log('✅ Top-up successful:', data);
-      setIsLoading(false);
-      return true;
-    } catch (error: any) {
-      console.error('Topup API error:', error);
-      Alert.alert('Error', error?.message || 'Failed to update wallet. Please contact support.');
-      setIsLoading(false);
       return false;
     }
   };
@@ -172,6 +162,14 @@ export const useIAP = () => {
     products,
     purchaseProduct,
     MINIMUM_AMOUNT_IOS,
+    iosWalletProductId: undefined,
+    iosIapInitializing: false,
+    iosWalletProductReady: true,
+    iosWalletGpCredit: 0,
+    iosLocalizedPrice: undefined,
+    iosWalletTitle: undefined,
+    iosWalletDescription: undefined,
+    iosPriceCurrencyCode: undefined,
+    refreshIosWalletProduct: async () => null,
   };
 };
-

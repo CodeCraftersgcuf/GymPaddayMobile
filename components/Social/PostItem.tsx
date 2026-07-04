@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   TouchableOpacity,
   Modal,
@@ -15,7 +14,9 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
+  Image,
 } from "react-native";
+import { Image as ExpoImage } from 'expo-image';
 import ThemedView from "../ThemedView";
 import ThemeText from "../ThemedText";
 import { useTheme } from "@/contexts/themeContext";
@@ -24,6 +25,8 @@ import PostDetailBottomsheet from "./PostDetailBottomsheet";
 import { formatDistanceToNow } from 'date-fns';
 
 import { useRouter } from "expo-router";
+import { navigateToUserProfile, prefetchUserProfile } from "@/utils/navigateToProfile";
+import { useFeedVideoOptional } from "@/contexts/FeedVideoContext";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
 import { useQuery } from "@tanstack/react-query";
 import { getLikenDislikePost, createShare } from "@/utils/queries/socialMedia";
@@ -70,8 +73,10 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const router = useRouter();
   const isFeedManaged = isFeedFocused !== undefined;
   const isActive = !isFeedManaged || Boolean(isFeedFocused);
-  const [isMuted, setIsMuted] = useState(true);
-  const toggleMute = React.useCallback(() => setIsMuted(prev => !prev), []);
+  const feedVideo = useFeedVideoOptional();
+  const [localMuted, setLocalMuted] = useState(true);
+  const isMuted = feedVideo?.isMuted ?? localMuted;
+  const toggleMute = feedVideo?.toggleMuted ?? (() => setLocalMuted((prev) => !prev));
 
   const [token, setToken] = useState<string | null>(null);
 
@@ -171,6 +176,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
     setImagesData(mediaArray);
     setVideoFallbackUrls({});
+    setVideoLoaded({});
+    setIsBuffering({});
+    setIsPlaying({});
   }, [post]);
 
   useEffect(() => {
@@ -442,9 +450,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     <View style={styles.postContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push({ pathname: '/UserProfile', params: { user_id: post.user.id.toString() } })}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPressIn={() => prefetchUserProfile(post.user.id).catch(() => {})}
+          onPress={() =>
+            navigateToUserProfile(router, {
+              user_id: post.user.id,
+              username: post.user.username,
+              profile_picture: post.user.profile_picture,
+            })
+          }
+        >
           <View style={styles.headerLeft}>
-            <Image
+            <ExpoImage
               source={
                 post.user.profile_picture
                   ? { uri: post.user.profile_picture }
@@ -454,6 +472,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                 styles.profileImage,
                 isDefaultImage && { tintColor: 'black' },
               ]}
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
 
             <View>
@@ -493,9 +513,11 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
               const isVideo = index === 0 && Boolean(post.videoUrl);
               const videoSource =
                 videoFallbackUrls[index]
-                || (isFeedManaged && post.videoMp4Url ? post.videoMp4Url : null)
                 || post.videoUrl
+                || post.videoMp4Url
                 || item;
+              const showVideoPoster =
+                Boolean(post.videoThumbnailUrl) && !videoLoaded[index];
 
               return isVideo ? (
                 <View style={styles.carouselVideoWrapper}>
@@ -536,9 +558,10 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     }}
                     onError={(error) => {
                       console.error('Video playback error:', error);
+                      const current = videoFallbackUrls[index] || videoSource;
                       if (
                         post.videoMp4Url &&
-                        (videoFallbackUrls[index] || videoSource) !== post.videoMp4Url
+                        current !== post.videoMp4Url
                       ) {
                         setVideoFallbackUrls((prev) => ({
                           ...prev,
@@ -559,19 +582,19 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     }}
                   />
 
+                  {showVideoPoster && (
+                    <ExpoImage
+                      source={{ uri: post.videoThumbnailUrl! }}
+                      style={styles.videoPosterOverlay}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  )}
+
                   {!isActive && (
-                    <>
-                      {post.videoThumbnailUrl ? (
-                        <Image
-                          source={{ uri: post.videoThumbnailUrl }}
-                          style={styles.videoPosterOverlay}
-                          resizeMode="cover"
-                        />
-                      ) : null}
-                      <View style={styles.playButton} pointerEvents="none">
-                        <Image source={images.playIcon} style={styles.playIcon} />
-                      </View>
-                    </>
+                    <View style={styles.playButton} pointerEvents="none">
+                      <Image source={images.playIcon} style={styles.playIcon} />
+                    </View>
                   )}
 
                   {isActive && isBuffering[index] && (
@@ -705,8 +728,12 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                   style={styles.likeUserItem}
                   activeOpacity={0.7}
                   onPress={() => {
-                    setLikeModalVisible(false); // Close modal before navigating
-                    router.push({ pathname: '/UserProfile', params: { user_id: item.id.toString() } });
+                    setLikeModalVisible(false);
+                    navigateToUserProfile(router, {
+                      user_id: item.id,
+                      username: item.username,
+                      profile_picture: item.profile_picture_url,
+                    });
                   }}
                 >
                   <Image source={{ uri: item.profile_picture_url }} style={styles.likeUserImage} />
@@ -1058,9 +1085,9 @@ const styles = StyleSheet.create({
   },
   carouselVideoWrapper: {
     width: width - 20,
-    height: width - 20, // Make it square like images for consistency
+    height: width - 20,
     borderRadius: 18,
-    backgroundColor: '#000',
+    backgroundColor: '#1a1a1a',
     alignSelf: 'center',
     overflow: 'hidden',
     justifyContent: 'center',

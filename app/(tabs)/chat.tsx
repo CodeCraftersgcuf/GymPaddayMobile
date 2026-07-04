@@ -14,7 +14,7 @@ import ThemedView from '@/components/ThemedView';
 
 // Integration
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchConnectedUsers } from '@/utils/queries/chat';
+import { fetchConnectedUsers, fetchChatMessages } from '@/utils/queries/chat';
 import * as SecureStore from 'expo-secure-store';
 
 export default function Chat() {
@@ -46,6 +46,9 @@ export default function Chat() {
       if (!token) throw new Error('No token found');
       return fetchConnectedUsers(token);
     },
+    placeholderData: (previousData) => previousData,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
   // console.log("The data from API:", data?.conversations);
 
@@ -104,12 +107,20 @@ export default function Chat() {
     });
 
   // AvatarList: use users from context (not API)
+  const handleConversationPressIn = (conversationId: string) => {
+    const found = apiConversations.find((conv) => conv.id === conversationId);
+    if (found) {
+      prefetchConversationMessages(found.conversation_id);
+    }
+  };
+
   const handleAvatarPress = (userId: string) => {
     // Find conversation with this user
     const found = apiConversations.find(
       (conv) => conv.user.id === userId
     );
     if (found) {
+      prefetchConversationMessages(found.conversation_id);
       router.push({
         pathname: '/messageChat',
         params: {
@@ -123,11 +134,23 @@ export default function Chat() {
   // Conversation press: pass conversation_id and other_user id.
   // Also optimistically clear the unreadCount for this conversation in the local cache
   // so the badge resets immediately when user opens the chat.
+  const prefetchConversationMessages = (conversationId: string | number) => {
+    getToken().then((token) => {
+      if (!token) return;
+      queryClient.prefetchQuery({
+        queryKey: ['chatMessages', String(conversationId)],
+        queryFn: () => fetchChatMessages(token, conversationId),
+        staleTime: 30 * 1000,
+      });
+    });
+  };
+
   const handleConversationPress = (conversationId: string) => {
     const found = apiConversations.find(
       (conv) => conv.id === conversationId
     );
     if (found) {
+      prefetchConversationMessages(found.conversation_id);
       // Optimistically zero-out unread count in conversations query cache
       queryClient.setQueryData<any>(['conversations'], (old) => {
         if (!old || !Array.isArray(old.conversations)) return old;
@@ -172,18 +195,18 @@ export default function Chat() {
         <Header onBack={() => router.back()} onOpenSocials={() => setShowSocialModal(true)} />
         <SearchBar query={searchQuery} onChange={setSearchQuery} />
         {/* Show loading indicator while users are loading */}
-        {isLoading ? (
+        {isLoading && !data ? (
           <View style={{ paddingVertical: 24 }}>
-            <ActivityIndicator size="large" color={dark ? 'white' : 'black'} />
+            <ActivityIndicator size="small" color="#940304" />
           </View>
         ) : (
           <AvatarList users={apiUsers} onAvatarPress={handleAvatarPress} />
         )}
 
         <ThemedView style={styles.conversationsWrapper} darkColor={dark ? '#202020' : 'white'}>
-          {isLoading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color={dark ? 'white' : 'black'} />
+          {isLoading && !data ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+              <ActivityIndicator size="small" color="#940304" />
             </View>
           ) : (
 
@@ -198,6 +221,7 @@ export default function Chat() {
               <ConversationList
                 conversations={filteredConversations}
                 onConversationPress={handleConversationPress}
+                onConversationPressIn={handleConversationPressIn}
               />
             </ScrollView>
 

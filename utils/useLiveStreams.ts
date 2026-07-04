@@ -5,7 +5,11 @@ import * as SecureStore from 'expo-secure-store';
 export const useLiveStreams = () => {
   return useQuery({
     queryKey: ['liveStreams'],
-    refetchInterval: 15_000,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchInterval: 12_000,
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');

@@ -6,6 +6,7 @@ import {
   StatusBar,
   Alert,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
@@ -22,12 +23,12 @@ import { useLocalSearchParams } from 'expo-router';
 //Code related to integration
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPost, updatePost } from '@/utils/mutations/posts';
+import { getPostById, patchPostInUserPostsInfiniteCache } from '@/utils/queries/posts';
 import {
   notifyUploadFailed,
   notifyUploadReceived,
   notifyUploadStarted,
 } from '@/utils/backgroundUpload';
-import { getPostById } from '@/utils/queries/posts';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -42,9 +43,12 @@ export interface GalleryMedia {
 }
 
 export default function CreatePostScreen() {
-  const { postId } = useLocalSearchParams<{ postId?: string }>();
-  const isEditMode = Boolean(postId);
-  console.log("is Edit mode ", isEditMode);
+  const params = useLocalSearchParams<{ postId?: string | string[] }>();
+  const postIdRaw = params.postId;
+  const postId =
+    postIdRaw === undefined ? undefined : Array.isArray(postIdRaw) ? postIdRaw[0] : postIdRaw;
+  const postIdNumeric = postId ? parseInt(String(postId), 10) : NaN;
+  const isEditMode = Boolean(postId && Number.isFinite(postIdNumeric));
 
   const [galleryMedia, setGalleryMedia] = useState<GalleryMedia[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<GalleryMedia[]>([]);
@@ -59,15 +63,22 @@ export default function CreatePostScreen() {
   const dark = theme?.dark ?? false; // Safety check in case theme context isn't initialized
   const router = useRouter();
   const queryClient = useQueryClient();
-  const  tokenn = async ()=>{
-    const token = await SecureStore.getItemAsync('auth_token');
-    return token;
-  }
-  // Fetch existing post data if in edit mode
-  const { data: existingPost, isLoading: isLoadingPost } = useQuery({
+
+  // Fetch existing post data if in edit mode (must await token — passing tokenn() was a Promise → Bearer [object Object])
+  const {
+    data: existingPost,
+    isLoading: isLoadingPost,
+    isError: isPostLoadError,
+    error: postLoadError,
+    refetch: refetchPost,
+  } = useQuery({
     queryKey: ['post', postId],
-    queryFn: () => getPostById(parseInt(postId), tokenn()),
-    enabled: isEditMode && !!postId,
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('Not authenticated');
+      return getPostById(postIdNumeric, token);
+    },
+    enabled: isEditMode && !!postId && Number.isFinite(postIdNumeric),
   });
 
   // Populate form with existing post data
@@ -96,8 +107,9 @@ export default function CreatePostScreen() {
   // Create post mutation
   const createPostMutation = useMutation({
     mutationFn: createPost,
-    onSuccess: (data) => {
-      console.log('🎉 Post Created Successfully:', data);
+    onSuccess: async () => {
+      await notifyUploadReceived('post');
+      await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
       Toast.show({
         type: 'success',
         text1: 'Post Created!',
@@ -106,9 +118,10 @@ export default function CreatePostScreen() {
       });
       setTimeout(() => router.back(), 600);
     },
-    onError: (error: any) => {
+    onError: async (error: any) => {
+      await notifyUploadFailed('post', error?.message);
       console.error('❌ Post Creation Error:', error);
-      setIsSubmittingLocal(false); // Re-enable input on error
+      setIsSubmittingLocal(false);
       handleMutationError(error, 'Failed to Create Post');
     },
   });
@@ -119,14 +132,25 @@ export default function CreatePostScreen() {
   // }
   const updatePostMutation = useMutation({
     mutationFn: updatePost,
-    onSuccess: (data) => {
-      console.log('🎉 Post Updated Successfully:', data);
+    onSuccess: async (updatedPost: unknown) => {
+      if (postId) {
+        patchPostInUserPostsInfiniteCache(
+          queryClient,
+          postId,
+          updatedPost as Record<string, unknown>
+        );
+        await queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+      await queryClient.refetchQueries({ queryKey: ['userPosts'] });
+      await queryClient.invalidateQueries({ queryKey: ['postComments'] });
       Toast.show({
         type: 'success',
         text1: 'Post Updated!',
         text2: 'Your post has been updated successfully',
         visibilityTime: 500,
       });
+      setIsSubmittingLocal(false);
       setTimeout(() => router.back(), 600);
     },
     onError: (error: any) => {
@@ -534,41 +558,6 @@ export default function CreatePostScreen() {
       });
 
       // Call appropriate mutation based on mode
-      const hasNewMedia =
-        selectedMedia.length > 0 &&
-        selectedMedia.some((m) => !isEditMode || !m.id.startsWith('existing_'));
-
-      if (hasNewMedia) {
-        notifyUploadStarted('post');
-        router.replace('/(tabs)');
-
-        const uploadTask = isEditMode && postId
-          ? updatePost({ postId, data: formData, token })
-          : createPost({ data: formData, token });
-
-        uploadTask
-          .then(async (result) => {
-            await notifyUploadReceived('post');
-            queryClient.invalidateQueries({ queryKey: ['userPosts'] });
-            if (!result?.async) {
-              Toast.show({
-                type: 'success',
-                text1: 'Post published!',
-                text2: 'Your post is live.',
-                visibilityTime: 3000,
-              });
-            }
-          })
-          .catch(async (error: any) => {
-            console.error('Background upload failed:', error);
-            await notifyUploadFailed('post', error?.message);
-          })
-          .finally(() => {
-            setIsSubmittingLocal(false);
-          });
-        return;
-      }
-
       if (isEditMode && postId) {
         console.log('🔄 Updating post with ID:', postId);
         updatePostMutation.mutate({
@@ -578,7 +567,7 @@ export default function CreatePostScreen() {
         });
       } else {
         console.log('✨ Creating new post');
-        console.log('🌐 API Endpoint:', 'https://api.gympaddy.com/api/user/posts');
+        notifyUploadStarted('post');
         createPostMutation.mutate({
           data: formData,
           token,
@@ -597,13 +586,36 @@ export default function CreatePostScreen() {
   };
 
   // Show loading state while fetching post data in edit mode
-  if ((isEditMode && isLoadingPost)) {
+  if (isEditMode && isLoadingPost) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>
             {isEditMode ? 'Loading post data...' : 'Loading gallery...'}
           </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isEditMode && isPostLoadError && !isLoadingPost) {
+    const errMsg =
+      postLoadError instanceof Error && postLoadError.message === 'Not authenticated'
+        ? 'Please sign in again to edit this post.'
+        : 'Could not load this post. Check your connection or try again.';
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
+        <View style={[styles.loadingContainer, { paddingHorizontal: 24 }]}>
+          <Text style={[styles.loadingText, { textAlign: 'center', marginBottom: 20 }]}>{errMsg}</Text>
+          <TouchableOpacity
+            style={styles.errorActionBtn}
+            onPress={() => refetchPost()}
+          >
+            <Text style={styles.errorActionBtnText}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.errorActionBtn, styles.errorActionBtnSecondary]} onPress={() => router.back()}>
+            <Text style={[styles.errorActionBtnText, { color: dark ? '#fff' : '#333' }]}>Go back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -631,6 +643,15 @@ export default function CreatePostScreen() {
         isEditMode={isEditMode}
       />
       <UserSection postText={postText} onTextChange={setPostText} disabled={isSubmitting} />
+      <Text
+        style={[
+          styles.mediaHint,
+          { color: theme.dark ? '#aaa' : '#666' },
+        ]}
+      >
+        Tip: Photos and videos are shown in full in the feed (letterboxed if needed). Use tall or wide shots
+        without important details at the very edges.
+      </Text>
       <SelectedMedia
         selectedMedia={selectedMedia}
         onRemoveMedia={handleMediaRemove}
@@ -656,6 +677,13 @@ export default function CreatePostScreen() {
 }
 
 const styles = StyleSheet.create({
+  mediaHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    marginTop: 4,
+  },
   container: {
     flex: 1,
   },
@@ -667,6 +695,25 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#666',
+  },
+  errorActionBtn: {
+    backgroundColor: '#940304',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    marginBottom: 12,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  errorActionBtnSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  errorActionBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   permissionContainer: {
     flex: 1,

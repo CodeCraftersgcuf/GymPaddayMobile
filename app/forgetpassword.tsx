@@ -25,6 +25,7 @@ import ThemedView from "@/components/ThemedView";
 import { useMutation } from "@tanstack/react-query";
 import { forgotPassword } from "@/utils/mutations/auth";
 import Toast from "react-native-toast-message";
+import { Ionicons } from "@expo/vector-icons";
 
 
 
@@ -56,6 +57,11 @@ const forgetpassword = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ThemedView style={{ flex: 1 }}>
+        {Platform.OS === "ios" && (
+          <TouchableOpacity style={styles.backButton} onPress={() => route.back()}>
+            <Ionicons name="chevron-back" size={24} color={dark ? "#fff" : "#111"} />
+          </TouchableOpacity>
+        )}
         <LinearGradient
           colors={["#940304", "#840000"]}
           start={{ x: 0, y: 0 }}
@@ -185,6 +191,13 @@ const forgetpassword = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  backButton: {
+    position: "absolute",
+    top: 8,
+    left: 12,
+    zIndex: 20,
+    padding: 8,
   },
   card: {
     marginTop: 20,

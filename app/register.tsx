@@ -8,6 +8,7 @@ import {
   ScrollView,
   Text,
   Linking,
+  Platform,
 } from "react-native";
 import { useTheme } from "../contexts/themeContext";
 import { Image } from "expo-image";
@@ -23,6 +24,7 @@ import FloatingLabelGenderPicker from "@/components/login/FloatingLabelGenderPic
 import { images } from "@/constants";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
+import { Ionicons } from "@expo/vector-icons";
 
 //Code Related to the integration
 import { useMutation } from "@tanstack/react-query";
@@ -140,6 +142,13 @@ export default function Register() {
 
   const styles = StyleSheet.create({
     container: { flex: 1 },
+    backButton: {
+      position: "absolute",
+      top: 8,
+      left: 8,
+      zIndex: 10,
+      padding: 8,
+    },
     headerGradient: { height: 150 },
     cardContainer: {
       marginHorizontal: 20,
@@ -324,6 +333,11 @@ export default function Register() {
         nestedScrollEnabled
       >
         <SafeAreaView style={styles.container}>
+          {Platform.OS === "ios" && (
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color={themedark ? "#fff" : "#111"} />
+            </TouchableOpacity>
+          )}
           <ThemedView>
             <LinearGradient
               colors={["#940304", "#840000"]}

@@ -22,6 +22,8 @@ const API_ENDPOINTS = {
   USER: {
     PROFILE: {
       PROFILE: (userId: number) => `${API_DOMAIN}/user/userDetails/${userId}`,
+      /** Authenticated user's profile — refresh after edit / deposit name. */
+      Me: API_DOMAIN + "/user/profile",
       EditProfile: API_DOMAIN + "/user/edit-profile",
       DeleteAccount: API_DOMAIN + "/user/delete-account",
     },

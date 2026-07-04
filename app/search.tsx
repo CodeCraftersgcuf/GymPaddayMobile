@@ -13,6 +13,7 @@ import { useTheme } from '@/contexts/themeContext';
 import { useQuery } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
+import { navigateToUserProfile } from '@/utils/navigateToProfile';
 import PostContainer from '@/components/Social/PostContainer';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -130,9 +131,10 @@ const SearchScreen = () => {
                                     <TouchableOpacity
                                         style={[styles.userItem]}
                                         onPress={() =>
-                                            router.push({
-                                                pathname: '/UserProfile',
-                                                params: { user_id: item.id },
+                                            navigateToUserProfile(router, {
+                                                user_id: item.id,
+                                                username: item.username,
+                                                profile_picture: item.profile_picture_url,
                                             })
                                         }
                                     >

@@ -6,10 +6,10 @@ import { images } from '@/constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
-import { useFocusEffect } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { API_ENDPOINTS } from '@/apiConfig';
 import { UNREAD_MESSAGES_QUERY_KEY } from '@/utils/queries/chat';
+import { prefetchTabData } from '@/utils/prefetchNavigation';
 
 const getTabIconBg = (isFocused: boolean, dark: boolean) => {
   if (isFocused) return dark ? '#FFAAAA' : '#FFAAAA';
@@ -41,18 +41,13 @@ export default function TabLayout() {
   const tabBackgroundColor = isDarkMode ? '#252525' : '#FFFFFF';
   const tabViewBackgroundColor = 'transparent';
 
-  const { data: unreadCount = 0, refetch: refetchUnread } = useQuery({
+  const { data: unreadCount = 0 } = useQuery({
     queryKey: UNREAD_MESSAGES_QUERY_KEY,
     queryFn: fetchUnreadCount,
     placeholderData: 0,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
-
-  // Refresh when TabLayout gains focus (e.g. returning from message chat)
-  useFocusEffect(
-    React.useCallback(() => {
-      refetchUnread();
-    }, [refetchUnread])
-  );
 
   return (
     <SafeAreaProvider>
@@ -87,6 +82,11 @@ export default function TabLayout() {
         >
           <Tabs.Screen
             name="index"
+            listeners={{
+              tabPress: () => {
+                prefetchTabData('index').catch(() => {});
+              },
+            }}
             options={{
               title: 'Socials',
               tabBarIcon: ({ color, size, focused }) => (
@@ -99,6 +99,11 @@ export default function TabLayout() {
 
           <Tabs.Screen
             name="market"
+            listeners={{
+              tabPress: () => {
+                prefetchTabData('market').catch(() => {});
+              },
+            }}
             options={{
               title: 'Market',
               tabBarIcon: ({ color, size, focused }) => (
@@ -135,6 +140,11 @@ export default function TabLayout() {
 
           <Tabs.Screen
             name="chat"
+            listeners={{
+              tabPress: () => {
+                prefetchTabData('chat').catch(() => {});
+              },
+            }}
             options={{
               title: 'Messages',
               tabBarIcon: ({ color, size, focused }) => (

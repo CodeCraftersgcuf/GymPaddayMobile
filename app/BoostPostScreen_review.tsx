@@ -22,11 +22,13 @@ import { useLocalSearchParams } from 'expo-router';
 
 
 //Code Related to the integration
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBoostedPost, createBoostedListing } from '@/utils/mutations/posts';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { updateBoostedMarketplace, updateBoostedPost } from '@/utils/mutations/boost';
+import { API_ENDPOINTS } from '@/apiConfig';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 // If you have a type for your navigation stack, use that instead of `any`
 type RootStackParamList = {
@@ -43,11 +45,17 @@ type RootStackParamList = {
 const ReviewAdScreen: React.FC = () => {
     const { dark } = useTheme();
     const isDark = dark;
-    const [token, setToken] = useState<string | null>(null);
+    const queryClient = useQueryClient();
 
     const theme = isDark ? colors.dark : colors.light;
     const route = useRouter();
     const params = useLocalSearchParams();
+    const { hidden, loading: iosStatusLoading } = useIosMonetizationHidden();
+
+    useEffect(() => {
+        if (!iosStatusLoading && hidden) route.replace('/(tabs)/more');
+    }, [route, iosStatusLoading, hidden]);
+
     const [loadingBalance, setLoadingBalance] = useState(true);
     const [balance, setBalance] = useState<number>(0);
     let audienceArray: (string | number)[] = [];
@@ -66,7 +74,7 @@ const ReviewAdScreen: React.FC = () => {
                 const token = await SecureStore.getItemAsync('auth_token');
                 if (!token) throw new Error('No token founds');
 
-                const response = await fetch('https://api.gympaddy.com/api/user/balance', {
+                const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
                     method: 'GET',
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -99,17 +107,14 @@ const ReviewAdScreen: React.FC = () => {
         duration = 1,
         location = '',
         postId = '',
-        isMarket = false,   // NEW: 8th param
-        isEditable = false,
-        boostType = '',
-        campaignId = '',
-
+        isMarketFromAudience = false,
     ] = Array.isArray(audienceArray) ? audienceArray : [];
-    // Convert isMarket to boolean in case it arrives as "true"/"false" string
-    const isMarketBool = typeof isMarket === 'string'
-        ? isMarket === 'true'
-        : !!isMarket;
 
+    const isMarketFromAudienceBool =
+        isMarketFromAudience === true ||
+        isMarketFromAudience === 1 ||
+        isMarketFromAudience === 'true' ||
+        isMarketFromAudience === '1';
     const audience = {
         selectedGender,
         minAge,
@@ -119,35 +124,38 @@ const ReviewAdScreen: React.FC = () => {
         location,
         postId,
     };
-    const getToken = async () => {
-        const storedToken = await SecureStore.getItemAsync('auth_token');
-        setToken(storedToken);
-    };
-    useEffect(() => {
-        getToken();
-    }, []);
     const isEditableBool =
-        typeof isEditable === 'string'
-            ? isEditable === 'true'
-            : !!isEditable;
+        typeof params.isEditable === 'string'
+            ? params.isEditable === 'true'
+            : !!params.isEditable;
+
+    const dailyBudgetGp = Math.round(Number(audience.budget) || 0);
+    const durationDays = Math.max(1, Math.round(Number(audience.duration) || 1));
+    const totalGpCharge = isEditableBool ? 0 : dailyBudgetGp * durationDays;
+    const canAffordBoost = isEditableBool || balance >= totalGpCharge;
+    const estimatedReachMin = Math.max(0, dailyBudgetGp * 10);
+    const estimatedReachMax = Math.max(0, dailyBudgetGp * 20);
+    const estimatedReachText = `${estimatedReachMin.toLocaleString()} - ${estimatedReachMax.toLocaleString()} Accounts`;
 
     const boostMutation = useMutation({
         mutationFn: async () => {
+            const token = await SecureStore.getItemAsync('auth_token');
             if (!token) throw new Error('No auth token');
             const id = Number(audience.postId);
 
-            // Always get these from params:
-            const isEditableBool = params.isEditable === true || params.isEditable === 'true';
-            const isMarketBool = params.isMarket === true || params.isMarket === 'true';
+            const editMode = params.isEditable === true || params.isEditable === 'true';
+            const marketListing =
+                params.isMarket === true ||
+                params.isMarket === 'true' ||
+                isMarketFromAudienceBool;
             console.log('Boost Mutation Params:', {
-                isEditableBool,
-                isMarketBool,
+                editMode,
+                marketListing,
                 id,
                 audience,
-                token,
             });
 
-            if (isEditableBool) {
+            if (editMode) {
                 // --- EDIT MODE ---
                 const updateData = {
                     budget: Math.round(Number(audience.budget)),
@@ -159,7 +167,7 @@ const ReviewAdScreen: React.FC = () => {
                 };
                 // Add ONLY the fields user can edit.
 
-                if (isMarketBool) {
+                if (marketListing) {
                     console.log('[EDIT] updateBoostedMarketplace', { id, data: updateData });
                     return await updateBoostedMarketplace({ id, data: updateData, token });
                 } else {
@@ -176,7 +184,7 @@ const ReviewAdScreen: React.FC = () => {
                     age_max: Number(audience.maxAge) || null,
                     gender: (audience.selectedGender || '').toLowerCase(),
                 };
-                if (isMarketBool) {
+                if (marketListing) {
                     console.log('[CREATE] createBoostedListing', { id, data: createData });
                     return await createBoostedListing({ id, data: createData, token });
                 } else {
@@ -186,6 +194,7 @@ const ReviewAdScreen: React.FC = () => {
             }
         },
         onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['userTransactions'] });
             Toast.show({
                 type: 'success',
                 text1: isEditableBool ? 'Ad updated!' : 'Boosted!',
@@ -274,7 +283,7 @@ const ReviewAdScreen: React.FC = () => {
                             pathname: '/AdPreview',
                             params: {
                                 postId: audience.postId,
-                                campaignId: campaignId
+                                campaignId: (params.campaignId as string) ?? String(audience.postId),
                             }
                         });
                     }}
@@ -284,32 +293,43 @@ const ReviewAdScreen: React.FC = () => {
 
                 <ReviewItem
                     icon="attach-money"
-                    title={`NGN ${audience?.budget?.toLocaleString() || '2,000'} for ${audience?.duration || 1} day`}
+                    title={
+                        isEditableBool
+                            ? `GP ${dailyBudgetGp.toLocaleString()}/day · ${durationDays} day(s)`
+                            : `GP ${dailyBudgetGp.toLocaleString()}/day × ${durationDays} days = ${totalGpCharge.toLocaleString()} GP`
+                    }
                     value=""
                     onEdit={() => route.back()}
                 />
 
                 <View style={[styles.walletContainer, { backgroundColor: theme.walletCard }]}>
                     <View style={styles.walletHeader}>
-                        <Text style={[styles.walletLabel, { color: theme.textSecondary }]}>Wallet Balance</Text>
+                        <Text style={[styles.walletLabel, { color: theme.textSecondary }]}>Wallet balance (GP)</Text>
                         <TouchableOpacity style={styles.topUpButton} onPress={() => route.push('/topup')}>
                             <Text style={styles.topUpText}>TopUp</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text style={[styles.walletAmount, { color: theme.text }]}>{balance}</Text>
+                    <Text style={[styles.walletAmount, { color: theme.text }]}>
+                        {loadingBalance ? '…' : balance.toLocaleString()}
+                    </Text>
+                    {!isEditableBool && !loadingBalance && !canAffordBoost && (
+                        <Text style={{ color: '#B91C1C', marginTop: 8, fontSize: 14 }}>
+                            You need {totalGpCharge.toLocaleString()} GP to start this boost. Top up to continue.
+                        </Text>
+                    )}
                 </View>
 
                 <View style={[styles.reachContainer, { backgroundColor: theme.reachCard }]}>
                     <Text style={[styles.reachLabel, { color: theme.background }]}>Estimated Reach</Text>
-                    <Text style={[styles.reachValue, { color: theme.background }]}>1k - 2k Accounts</Text>
+                    <Text style={[styles.reachValue, { color: theme.background }]}>{estimatedReachText}</Text>
                 </View>
             </ScrollView>
 
             <Button
-                title={boostMutation.isPending ? "Boosting..." : "Boost Post"}
+                title={boostMutation.isPending ? "Boosting..." : isEditableBool ? "Update boost" : "Boost Post"}
                 onPress={handleBoostPost}
                 isDark={isDark}
-                disabled={boostMutation.isPending}
+                disabled={boostMutation.isPending || loadingBalance || (!isEditableBool && !canAffordBoost)}
             />
         </View>
     );

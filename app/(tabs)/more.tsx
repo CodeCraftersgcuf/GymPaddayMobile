@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,12 +32,15 @@ import { useMutation } from '@tanstack/react-query';
 import { topUpWallet } from '@/utils/mutations/wallets';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
+import { resolveLatestUserSnapshot } from '@/utils/resolveLatestUserProfile';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 import * as Clipboard from 'expo-clipboard';
 import { WebView } from 'react-native-webview';
 
 
 
 export default function More() {
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const [fontsLoaded] = useFonts({
     Caveat_400Regular,
     Caveat_700Bold,
@@ -64,8 +67,8 @@ export default function More() {
   const [depositorName, setDepositorName] = useState('');
   const [useMyDetails, setUseMyDetails] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [userName, setUserName] = useState('John Doe');
-  const [userEmail, setUserEmail] = useState('test@example.com');
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [currentView, setCurrentView] = useState<'deposit' | 'payment' | 'flutterwave'>('deposit');
   const [webViewUri, setWebViewUri] = useState<string | null>(null);
   const webViewRef = React.useRef<WebView>(null);
@@ -74,35 +77,33 @@ export default function More() {
   React.useEffect(() => {
     (async () => {
       try {
-        const userDataStr = await SecureStore.getItemAsync('user_data');
-        if (userDataStr) {
-          const userData = JSON.parse(userDataStr);
-          if (userData.profile_picture_url) {
-            setProfileImage(userData.profile_picture_url);
-          } else {
-            setProfileImage(defatulImage); // fallback to prop
-          }
-          const name = userData.fullname || userData.username || 'John Doe';
-          const email = userData.email || 'test@example.com';
-          setUserName(name);
-          setUserEmail(email);
+        const snap = await resolveLatestUserSnapshot();
+        setUserName(snap.displayName);
+        setUserEmail(snap.email);
+        if (snap.profilePictureUrl) {
+          setProfileImage(snap.profilePictureUrl);
         } else {
-          setProfileImage(defatulImage); // fallback to prop
+          setProfileImage(defatulImage);
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
-        setProfileImage(defatulImage); // fallback to prop
+        console.error('Error loading user snapshot:', error);
+        setProfileImage(defatulImage);
       }
     })();
   }, []);
+
   React.useEffect(() => {
+    if (hideIosMonetization) {
+      setLoadingBalance(false);
+      return;
+    }
     (async () => {
       try {
-        setLoadingBalance(true); // start loading
+        setLoadingBalance(true);
         const token = await SecureStore.getItemAsync('auth_token');
         if (!token) throw new Error('No token founds');
 
-        const response = await fetch('https://api.gympaddy.com/api/user/balance', {
+        const response = await fetch(API_ENDPOINTS.USER.BALANCE, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -111,12 +112,10 @@ export default function More() {
         });
 
         const result = await response.json();
-        console.log('Balance fetch result:', result);
 
         if (response.ok && result.status === 'success') {
           setBalance(Number(result.balance));
         } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
-          // Admin-created users may not have a wallet yet; show 0 and let backend create on next request
           setBalance(0);
         } else {
           Alert.alert('Error', result.message || 'Failed to fetch balance');
@@ -125,39 +124,39 @@ export default function More() {
         console.error('Balance fetch error:', error);
         setBalance(0);
       } finally {
-        setLoadingBalance(false); // stop loading
+        setLoadingBalance(false);
       }
     })();
-  }, []);
+  }, [hideIosMonetization]);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      setLoadingBalance(true);
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!token) throw new Error('No token found');
-
-      const response = await fetch('https://api.gympaddy.com/api/user/balance', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-
-      const result = await response.json();
-      if (response.ok && result.status === 'success') {
-        setBalance(Number(result.balance));
-      } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
-        setBalance(0);
+      const snap = await resolveLatestUserSnapshot();
+      setUserName(snap.displayName);
+      setUserEmail(snap.email);
+      if (snap.profilePictureUrl) {
+        setProfileImage(snap.profilePictureUrl);
       }
 
-      // Also refresh user profile data including profile image
-      const userDataStr = await SecureStore.getItemAsync('user_data');
-      if (userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        if (userData.profile_picture_url) {
-          setProfileImage(userData.profile_picture_url);
+      if (!hideIosMonetization) {
+        setLoadingBalance(true);
+        const token = await SecureStore.getItemAsync('auth_token');
+        if (!token) throw new Error('No token found');
+
+        const response = await fetch(API_ENDPOINTS.USER.BALANCE, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        const result = await response.json();
+        if (response.ok && result.status === 'success') {
+          setBalance(Number(result.balance));
+        } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
+          setBalance(0);
         }
       }
     } catch (error) {
@@ -166,7 +165,7 @@ export default function More() {
       setLoadingBalance(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [hideIosMonetization]);
 
 
   const userProfile = {
@@ -277,7 +276,7 @@ export default function More() {
     const email = "${paymentEmail}";
 
     FlutterwaveCheckout({
-      public_key: "FLWPUBK_TEST-dd1514f7562b1d623c4e63fb58b6aedb-X",
+      public_key: "FLWPUBK-40e0f9f66bc483c5234bc8ca12529396-X",
       tx_ref: "txref_" + Date.now(),
       amount: parseFloat(amount),
       currency: "NGN",
@@ -518,6 +517,7 @@ export default function More() {
         </ThemedView>
 
         {/* Wallet Card */}
+        {!hideIosMonetization && (
         <WalletCard
           balance={balance}
           isBalanceHidden={isBalanceHidden}
@@ -525,10 +525,11 @@ export default function More() {
           onTopup={handleTopup}
           onWithdraw={handleWithdraw}
           onTransaction={handleTransaction}
-          userName={userProfile.name}
-          userImage={profileImage} // Use profileImage state instead of userProfile.image
+          userName={userName || userProfile.name}
+          userImage={profileImage}
           loading={loadingBalance}
         />
+        )}
 
         {/* Settings Section */}
         <View style={styles.settingsSection}>

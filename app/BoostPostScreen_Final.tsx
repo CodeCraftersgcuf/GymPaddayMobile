@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { colors } from '@/components/Social/Boost/colors';
@@ -10,6 +10,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { useTheme } from '@/contexts/themeContext';
 import { useRouter } from 'expo-router';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 // Replace with your actual stack definition
 type RootStackParamList = {
@@ -23,6 +24,11 @@ const BoostSuccessScreen: React.FC = () => {
     const isDark = dark;
     const theme = isDark ? colors.dark : colors.light;
     const navigation = useRouter();
+    const { hidden, loading: iosStatusLoading } = useIosMonetizationHidden();
+
+    useEffect(() => {
+        if (!iosStatusLoading && hidden) navigation.replace('/(tabs)/more');
+    }, [navigation, iosStatusLoading, hidden]);
 
     const handleHome = () => {
         navigation.push('/(tabs)');

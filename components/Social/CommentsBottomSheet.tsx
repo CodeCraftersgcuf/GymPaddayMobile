@@ -57,6 +57,8 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const [newComment, setNewComment] = React.useState('');
   const [localComments, setLocalComments] = React.useState<Comment[]>(comments);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
+  const [currentUsername, setCurrentUsername] = React.useState('You');
+  const [currentUserImage, setCurrentUserImage] = React.useState('');
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<FlatList>(null);
@@ -75,6 +77,8 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
         if (parsed?.id) {
           setCurrentUserId(parsed.id.toString());
         }
+        setCurrentUsername(parsed?.username || parsed?.fullname || 'You');
+        setCurrentUserImage(parsed?.profile_picture_url || '');
       } catch (err) {
         console.error('Failed to load user id', err);
       }
@@ -157,8 +161,41 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
 
   const handleSendComment = () => {
     if (newComment.trim() && postId !== null && onAddComment) {
-      onAddComment(newComment, postId, replyToCommentId);
+      const text = newComment.trim();
+      const optimisticComment: Comment = {
+        id: `temp_${Date.now()}`,
+        userId: currentUserId || 'current_user',
+        username: currentUsername,
+        profileImage: currentUserImage,
+        text,
+        timestamp: new Date().toISOString(),
+        likes: 0,
+        replies: [],
+      };
+
+      const insertReply = (items: Comment[]): Comment[] =>
+        items.map((item) => {
+          if (item.id?.toString() === replyToCommentId?.toString()) {
+            return {
+              ...item,
+              replies: [...(item.replies || []), optimisticComment],
+            };
+          }
+          return {
+            ...item,
+            replies: item.replies ? insertReply(item.replies) : item.replies,
+          };
+        });
+
+      setLocalComments((prev) => {
+        if (!replyToCommentId) return [...prev, optimisticComment];
+        return insertReply(prev);
+      });
+
+      onAddComment(text, postId, replyToCommentId || undefined);
       setNewComment(''); // Clear input immediately
+      setReplyToCommentId(null);
+      setReplyToUsername(null);
 
       // Scroll to bottom to show the new comment
       setTimeout(() => {

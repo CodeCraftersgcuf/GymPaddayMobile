@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, StatusBar, ScrollView } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text, StatusBar, ScrollView, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import * as SecureStore from 'expo-secure-store';
 import { useLocalSearchParams } from 'expo-router';
 import PostItem from '@/components/Social/PostItem';
@@ -10,22 +11,45 @@ import { createComment } from '@/utils/mutations/comments';
 import { getPostById } from '@/utils/queries/posts';
 import { mapPostFromApi } from '@/utils/mapFeedPost';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { STALE_TIMES } from '@/utils/queryClient';
+import { findRawPostInAppCache, postQueryKey } from '@/utils/postCache';
+
+const { width } = Dimensions.get('window');
 
 export default function SinglePostScreen() {
-  const { postId } = useLocalSearchParams();
-  const [post, setPost] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
+  const { postId, videoThumbnail } = useLocalSearchParams<{
+    postId?: string;
+    videoThumbnail?: string;
+  }>();
+  const numericPostId = Number(postId);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const cachedPost = findRawPostInAppCache(numericPostId);
 
-  const getToken = async () => {
-    const storedToken = await SecureStore.getItemAsync('auth_token');
-    setToken(storedToken);
-  };
+  const {
+    data: rawPost,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: postQueryKey(numericPostId),
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token || !numericPostId) throw new Error('No token or postId');
+      return getPostById(numericPostId, token);
+    },
+    enabled: !!numericPostId,
+    initialData: cachedPost,
+    placeholderData: cachedPost,
+    staleTime: STALE_TIMES.feed,
+  });
 
-  useEffect(() => {
-    getToken();
-  }, []);
+  const post = useMemo(() => {
+    if (!rawPost) return null;
+    const mapped = mapPostFromApi(rawPost);
+    if (videoThumbnail && !mapped.videoThumbnailUrl) {
+      mapped.videoThumbnailUrl = resolveMediaUrl(String(videoThumbnail));
+    }
+    return mapped;
+  }, [rawPost, videoThumbnail]);
 
   const {
     data: commentData,
@@ -71,22 +95,6 @@ export default function SinglePostScreen() {
     }));
   };
 
-  const fetchPost = async () => {
-    if (!token || !postId) return;
-    try {
-      const rawPost = await getPostById(Number(postId), token);
-      setPost(mapPostFromApi(rawPost));
-    } catch (error) {
-      console.error('Failed to load post:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPost();
-  }, [token, postId]);
-
   const handleCommentPress = (comments: any[], postId: number) => {
     setCommentModalVisible(true);
     refetchComments();
@@ -98,31 +106,45 @@ export default function SinglePostScreen() {
 
   const handleMenu = (userId: number, postId: number) => {
     console.log('Top menu pressed', userId, postId);
-    // optionally open a bottomsheet or action sheet
   };
 
-  if (loading) {
+  if (isLoading && !post) {
+    const thumbUri = videoThumbnail ? resolveMediaUrl(String(videoThumbnail)) : null;
     return (
       <View style={styles.center}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        <ActivityIndicator size="large" color="#940304" />
-        <Text style={{ color: '#000', marginTop: 10 }}>Loading post...</Text>
+        {thumbUri ? (
+          <Image
+            source={{ uri: thumbUri }}
+            style={styles.loadingPoster}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <>
+            <ActivityIndicator size="large" color="#940304" />
+            <Text style={{ color: '#000', marginTop: 10 }}>Loading post...</Text>
+          </>
+        )}
+      </View>
+    );
+  }
+
+  if (!post && !isLoading) {
+    return (
+      <View style={styles.center}>
+        <Text>{isError ? 'Failed to load post' : 'Post not found'}</Text>
       </View>
     );
   }
 
   if (!post) {
-    return (
-      <View style={styles.center}>
-        <Text>Post not found</Text>
-      </View>
-    );
+    return null;
   }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-        <View style={[{backgroundColor:'white',marginTop:100}]}>
-
+      <View style={styles.postWrap}>
       <PostItem
         post={post}
         onCommentPress={() => handleCommentPress(post.recent_comments, post.id)}
@@ -137,22 +159,28 @@ export default function SinglePostScreen() {
         onAddComment={handleAddComment}
         loading={isLoadingComments || isAddingComment}
       />
-              </View>
-
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    height:'100%',
+    flexGrow: 1,
     backgroundColor: '#fff',
-    // alignItems: 'center',
+  },
+  postWrap: {
+    backgroundColor: '#fff',
+    paddingTop: 8,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingPoster: {
+    width: width - 20,
+    height: width - 20,
+    borderRadius: 18,
   },
 });

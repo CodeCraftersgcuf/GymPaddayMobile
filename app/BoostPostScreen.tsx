@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, ViewStyle, TextStyle } from 'react-native';
 import { colors } from '@/components/Social/Boost/colors';
 import Header from '@/components/Social/Boost/Header';
@@ -7,12 +7,18 @@ import PostPreview from '@/components/Social/Boost/PostPreview';
 import Button from '@/components/Social/Boost/Button';
 import { useTheme } from '@/contexts/themeContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 const BoostPostScreen: React.FC = () => {
   const { dark } = useTheme();
   const isDark = dark;
   const theme = isDark ? colors.dark : colors.light;
   const router = useRouter();
+  const { hidden, loading: iosStatusLoading } = useIosMonetizationHidden();
+
+  useEffect(() => {
+    if (!iosStatusLoading && hidden) router.replace('/(tabs)/more');
+  }, [router, iosStatusLoading, hidden]);
 
   // Get id and image from navigation params
   const params = useLocalSearchParams();

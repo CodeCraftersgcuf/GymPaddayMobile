@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     SafeAreaView,
     ScrollView,
+    RefreshControl,
     Alert,
     Modal,
     Platform,
@@ -27,18 +28,32 @@ import { topUpWallet } from '@/utils/mutations/wallets';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { useIAP } from '@/utils/hooks/useIAP';
-
+import { useFocusEffect } from '@react-navigation/native';
+import { resolveLatestDepositorName, resolveLatestUserSnapshot } from '@/utils/resolveLatestUserProfile';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 
 type ViewMode = 'deposit' | 'payment' | 'flutterwave';
 
 export default function TopupScreen() {
+    const { hidden: hideIosMonetization, loading: iosMonetizationLoading } = useIosMonetizationHidden();
+    useEffect(() => {
+        if (!iosMonetizationLoading && hideIosMonetization) {
+            router.replace('/(tabs)/more');
+        }
+    }, [iosMonetizationLoading, hideIosMonetization]);
+
     const [currentView, setCurrentView] = useState<ViewMode>('deposit');
     const [amount, setAmount] = useState('');
     const [depositorName, setDepositorName] = useState('');
     const [useMyDetails, setUseMyDetails] = useState(false);
+    const useMyDetailsRef = useRef(useMyDetails);
+    useEffect(() => {
+        useMyDetailsRef.current = useMyDetails;
+    }, [useMyDetails]);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
-    const [userName, setUserName] = useState('John Doe'); // Default name for the checkbox
-    const [userEmail, setUserEmail] = useState('test@example.com'); // User email for Flutterwave
+    const [userName, setUserName] = useState('');
+    const [userEmail, setUserEmail] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
     const [webViewUri, setWebViewUri] = useState<string | null>(null);
     const webViewRef = useRef<WebView>(null);
     const { dark } = useTheme();
@@ -52,29 +67,38 @@ export default function TopupScreen() {
         reason: 'Connect VIP subscription',
     };
     const hasPaymentDetails = !!paymentDetails.accountNumber;
-    // ✅ Load user_data from SecureStore on mount
-    React.useEffect(() => {
-        (async () => {
-            try {
-                const userDataStr = await SecureStore.getItemAsync('user_data');
-                if (userDataStr) {
-                    const userData = JSON.parse(userDataStr);
-                    const name = userData.fullname || userData.username || 'John Doe';
-                    const email = userData.email || 'test@example.com';
-                    console.log('User name from SecureStore:', name); // ✅ Debug log
-                    console.log('User email from SecureStore:', email); // ✅ Debug log
-                    setUserName(name);
-                    setUserEmail(email);
-                } else {
-                    console.log('No user_data found in SecureStore');
+
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            (async () => {
+                const snap = await resolveLatestUserSnapshot();
+                if (cancelled) return;
+                setUserName(snap.depositorName || snap.displayName);
+                setUserEmail(snap.email);
+                if (useMyDetailsRef.current) {
+                    setDepositorName(snap.depositorName);
                 }
-            } catch (error) {
-                console.error('Failed to load user data from SecureStore:', error);
+            })();
+            return () => {
+                cancelled = true;
+            };
+        }, []),
+    );
+
+    const onRefreshProfile = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            const snap = await resolveLatestUserSnapshot();
+            setUserName(snap.depositorName || snap.displayName);
+            setUserEmail(snap.email);
+            if (useMyDetailsRef.current) {
+                setDepositorName(snap.depositorName);
             }
-        })();
+        } finally {
+            setRefreshing(false);
+        }
     }, []);
-
-
 
     const createTransactionMutation = useMutation({
         mutationFn: async () => {
@@ -168,7 +192,7 @@ export default function TopupScreen() {
     const email = "${paymentEmail}";
 
     FlutterwaveCheckout({
-      public_key: "FLWPUBK_TEST-dd1514f7562b1d623c4e63fb58b6aedb-X",
+      public_key: "FLWPUBK-40e0f9f66bc483c5234bc8ca12529396-X",
       tx_ref: "txref_" + Date.now(),
       amount: parseFloat(amount),
       currency: "NGN",
