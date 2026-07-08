@@ -1,3 +1,4 @@
+import { InteractionManager } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { queryClient } from '@/utils/queryClient';
 import { flushQueryCache } from '@/utils/queryPersistence';
@@ -11,11 +12,11 @@ import {
   prefetchUserProfilePages,
   prefetchChatMessagesForTopConversations,
 } from '@/utils/prefetchNavigation';
-import { warmAllMediaFromCache } from '@/utils/mediaWarm';
-import { prefetchStoryMusicLibrary } from '@/utils/storyMusicApi';
+import { warmAllMediaFromCache, warmDeferredMediaFromCache } from '@/utils/mediaWarm';
+import { getMediaBudgets, shouldDeferBackgroundWarm } from '@/utils/networkQuality';
 
 export type PreloadOptions = {
-  /** Max wait during cold boot splash (ms). Default 8000. */
+  /** Max wait during cold boot splash (ms). Default 3000. */
   timeoutMs?: number;
   /** Persist cache to disk after preload. Default true on cold boot. */
   persistAfter?: boolean;
@@ -39,58 +40,96 @@ function hasFeedCache(): boolean {
   return Boolean(feed?.pages?.length);
 }
 
+function scheduleDeferredPreload(token: string, ownUserId: number | null): void {
+  if (shouldDeferBackgroundWarm()) return;
+
+  InteractionManager.runAfterInteractions(() => {
+    setTimeout(() => {
+      const budgets = getMediaBudgets();
+      const deferred: Promise<unknown>[] = [];
+
+      if (budgets.prefetchChatThreads > 0) {
+        deferred.push(prefetchConversations());
+        deferred.push(
+          prefetchChatMessagesForTopConversations(budgets.prefetchChatThreads),
+        );
+      }
+      deferred.push(prefetchMarketplace());
+      if (ownUserId) {
+        deferred.push(prefetchUserProfilePages(ownUserId, 1));
+      }
+
+      Promise.allSettled(deferred).then(() => {
+        warmDeferredMediaFromCache();
+      });
+    }, 2000);
+  });
+}
+
 /**
- * Instagram-style boot preload: feed (2 pages), stories, chats, market, unread badge.
- * On cold boot waits up to timeoutMs; on warm resume runs without blocking UI.
+ * Critical boot path: feed page 1 + stories + unread badge only.
+ * Marketplace, chat threads, music library deferred after first paint.
  */
 export async function preloadAppData(
   token?: string | null,
-  options: PreloadOptions = {}
+  options: PreloadOptions = {},
 ): Promise<void> {
   const authToken = token ?? (await SecureStore.getItemAsync('auth_token'));
   if (!authToken) return;
 
-  const timeoutMs = options.timeoutMs ?? 8000;
+  const timeoutMs = options.timeoutMs ?? 3000;
   const persistAfter = options.persistAfter ?? false;
+  const budgets = getMediaBudgets();
 
   const userDataStr = await SecureStore.getItemAsync('user_data');
   const ownUserId = userDataStr ? JSON.parse(userDataStr)?.id : null;
 
-  const preloadTasks = Promise.allSettled([
-    prefetchFeedPages(6),
+  const feedPages = Math.max(1, budgets.prefetchFeedPagesOnBoot);
+
+  const criticalTasks = Promise.allSettled([
+    prefetchFeedPages(feedPages),
     prefetchStories(),
-    prefetchConversations(),
-    prefetchChatMessagesForTopConversations(10),
-    prefetchMarketplace(),
-    prefetchStoryMusicLibrary(),
     queryClient.prefetchQuery({
       queryKey: UNREAD_MESSAGES_QUERY_KEY,
       staleTime: 30 * 1000,
       queryFn: () => fetchUnreadCount(authToken),
     }),
-    ...(ownUserId ? [prefetchUserProfilePages(ownUserId, 2)] : []),
   ]);
 
-  // If we already have cached feed from disk, don't block the whole boot on network.
-  const waitMs = hasFeedCache() ? Math.min(timeoutMs, 3000) : timeoutMs;
+  const waitMs = hasFeedCache() ? Math.min(timeoutMs, 1500) : timeoutMs;
 
   await Promise.race([
-    preloadTasks,
+    criticalTasks,
     new Promise<void>((resolve) => setTimeout(resolve, waitMs)),
   ]);
 
   warmAllMediaFromCache();
+  scheduleDeferredPreload(authToken, ownUserId ?? null);
 
   if (persistAfter) {
     await flushQueryCache().catch(() => {});
   }
 }
 
-/** Silent refresh when returning from background — never blocks UI. */
+/** Silent refresh when returning from background — tier-aware, never blocks UI. */
 export async function softRefreshAppData(): Promise<void> {
   const token = await SecureStore.getItemAsync('auth_token');
   if (!token) return;
 
-  await preloadAppData(token, { timeoutMs: 0, persistAfter: true });
+  const budgets = getMediaBudgets();
+
+  await Promise.allSettled([
+    prefetchFeedPages(Math.max(1, budgets.prefetchFeedPagesOnBoot)),
+    prefetchStories(),
+  ]);
+
+  if (!shouldDeferBackgroundWarm()) {
+    warmAllMediaFromCache();
+    scheduleDeferredPreload(token, null);
+  } else {
+    warmAllMediaFromCache();
+  }
+
   queryClient.refetchQueries({ type: 'active', stale: true }).catch(() => {});
+  flushQueryCache().catch(() => {});
 }

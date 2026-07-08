@@ -8,9 +8,15 @@ import { fetchUserProfile } from '@/utils/queries/profile';
 import { getNextFeedPage } from '@/utils/feedPagination';
 import { findRawPostInAppCache, postQueryKey, seedPostCache } from '@/utils/postCache';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
-import { prefetchVideoForPostId, prefetchVideoFromRawPost, REELS_PREFETCH_AHEAD } from '@/utils/videoPrefetch';
+import {
+  prefetchVideoForPostId,
+  prefetchVideoFromRawPost,
+  getReelsPrefetchAhead,
+} from '@/utils/videoPrefetch';
 import { Image } from 'expo-image';
 import type { Router } from 'expo-router';
+import { getMediaBudgets } from '@/utils/networkQuality';
+import { warmFeedVideosFromCache } from '@/utils/mediaWarm';
 
 function thumbnailFromRawPost(post: any): string | undefined {
   const video = post?.media?.find((m: any) => m.media_type === 'video');
@@ -18,7 +24,7 @@ function thumbnailFromRawPost(post: any): string | undefined {
   return resolveMediaUrl(video.thumbnail_url || video.thumbnail) ?? undefined;
 }
 
-export async function prefetchFeedPages(pages = 4): Promise<void> {
+export async function prefetchFeedPages(pages = 1): Promise<void> {
   const token = await SecureStore.getItemAsync('auth_token');
   if (!token) return;
 
@@ -31,28 +37,7 @@ export async function prefetchFeedPages(pages = 4): Promise<void> {
     pages,
   });
 
-  // Warm the first batch of feed/reels video segments right at boot so opening
-  // Reels (or scrolling the feed) plays instantly instead of cold-loading.
-  warmFeedVideosFromCache(REELS_PREFETCH_AHEAD);
-}
-
-/** Read cached feed posts and prefetch HLS segments for the first N video posts. */
-export function warmFeedVideosFromCache(count = REELS_PREFETCH_AHEAD): void {
-  try {
-    const cache = queryClient.getQueryData<any>(['userPosts']);
-    const rawPosts: any[] = cache?.pages?.flatMap((p: any) => p?.data ?? []) ?? [];
-    let warmed = 0;
-    for (const raw of rawPosts) {
-      if (warmed >= count) break;
-      const hasVideo = raw?.media?.some((m: any) => m.media_type === 'video');
-      if (hasVideo) {
-        prefetchVideoFromRawPost(raw);
-        warmed++;
-      }
-    }
-  } catch {
-    /* best-effort */
-  }
+  warmFeedVideosFromCache(getReelsPrefetchAhead());
 }
 
 export async function prefetchStories(): Promise<void> {
@@ -67,9 +52,6 @@ export async function prefetchStories(): Promise<void> {
 
   const { prefetchStoriesFromCache } = await import('@/utils/storyPrefetch');
   prefetchStoriesFromCache();
-
-  const { warmMarketImagesFromCache } = await import('@/utils/mediaWarm');
-  warmMarketImagesFromCache();
 }
 
 export async function prefetchMarketplace(): Promise<void> {
@@ -94,9 +76,12 @@ export async function prefetchConversations(): Promise<void> {
   });
 }
 
-export async function prefetchChatMessagesForTopConversations(limit = 10): Promise<void> {
+export async function prefetchChatMessagesForTopConversations(limit?: number): Promise<void> {
   const token = await SecureStore.getItemAsync('auth_token');
   if (!token) return;
+
+  const threadLimit = limit ?? getMediaBudgets().prefetchChatThreads;
+  if (threadLimit <= 0) return;
 
   let conversations = queryClient.getQueryData<any>(['conversations'])?.conversations;
   if (!Array.isArray(conversations) || conversations.length === 0) {
@@ -105,7 +90,7 @@ export async function prefetchChatMessagesForTopConversations(limit = 10): Promi
   }
 
   await Promise.allSettled(
-    conversations.slice(0, limit).map((conv: any) =>
+    conversations.slice(0, threadLimit).map((conv: any) =>
       queryClient.prefetchQuery({
         queryKey: ['chatMessages', String(conv.conversation_id)],
         queryFn: async () => {
@@ -171,7 +156,6 @@ export async function prefetchPost(postId: number): Promise<void> {
   });
 }
 
-/** Open a single post — uses feed/profile cache for instant render, fetches in background if needed. */
 export function openSinglePost(
   router: Router,
   postId: number,
@@ -203,23 +187,22 @@ export function openSinglePost(
 
 export type PrefetchTab = 'index' | 'market' | 'chat';
 
-/** Warm cache before a tab screen mounts (tab press / navigation). */
 export async function prefetchTabData(tab: PrefetchTab): Promise<void> {
+  const budgets = getMediaBudgets();
   switch (tab) {
     case 'index':
-      await Promise.allSettled([prefetchFeedPages(6), prefetchStories()]);
+      await Promise.allSettled([
+        prefetchFeedPages(Math.max(1, budgets.prefetchFeedPagesOnBoot)),
+        prefetchStories(),
+      ]);
       break;
     case 'market':
       await prefetchMarketplace();
-      {
-        const { warmMarketImagesFromCache } = await import('@/utils/mediaWarm');
-        warmMarketImagesFromCache();
-      }
       break;
     case 'chat':
       await Promise.allSettled([
         prefetchConversations(),
-        prefetchChatMessagesForTopConversations(10),
+        prefetchChatMessagesForTopConversations(budgets.prefetchChatThreads),
       ]);
       break;
   }

@@ -43,7 +43,6 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   getCachedFeedVideoUri,
   pickFeedVideoPlaybackUrl,
-  prefetchFeedVideoMp4,
 } from '@/utils/feedVideoCache';
 
 
@@ -232,12 +231,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       return;
     }
 
-    if (post.videoMp4Url) {
-      prefetchFeedVideoMp4(post.id, post.videoMp4Url);
-    }
-
     let cancelled = false;
-    pickFeedVideoPlaybackUrl(post.id, post.videoMp4Url, post.videoUrl, 800).then((uri) => {
+    pickFeedVideoPlaybackUrl(post.id, post.videoMp4Url, post.videoUrl).then((uri) => {
       if (!cancelled && uri) {
         setPlaybackUri(uri);
       }

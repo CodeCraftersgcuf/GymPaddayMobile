@@ -16,6 +16,7 @@ export interface StoryItem {
   full_thumbnail_url?: string | null;
   processing_status?: 'pending' | 'processing' | 'ready' | 'failed';
   viewed_by_me?: boolean;
+  is_followed?: boolean;
   created_at: string;
   expires_at: string;
   user: User;

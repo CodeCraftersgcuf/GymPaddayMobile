@@ -42,7 +42,7 @@ export const apiCall = async (
   // For FormData, React Native will automatically set Content-Type with boundary
 
   // ✅ Increase timeout for file uploads (FormData requests) and slow connections
-  const timeout = isFormData ? 600000 : 30000; // 10 min for uploads, 30s for regular requests
+  const timeout = isFormData ? 600000 : 12000;
 
   try {
     let response: AxiosResponse | undefined;

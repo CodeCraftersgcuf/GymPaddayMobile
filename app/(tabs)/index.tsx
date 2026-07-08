@@ -40,7 +40,8 @@ import { useFeedSession } from '@/contexts/FeedSessionContext';
 import { useSilentInfiniteScroll } from '@/utils/useSilentInfiniteScroll';
 import { getNextFeedPage } from '@/utils/feedPagination';
 import { seedPostCaches } from '@/utils/postCache';
-import { prefetchFeedVideos, prefetchFeedVideosFromIndex, FEED_PREFETCH_AHEAD } from '@/utils/videoPrefetch';
+import { prefetchFeedVideos, prefetchFeedVideosFromIndex, getFeedPrefetchAhead } from '@/utils/videoPrefetch';
+import { setActiveFeedPostId } from '@/utils/feedVideoCache';
 import { prefetchGroupedStories } from '@/utils/storyPrefetch';
 import { sortGroupedStoriesUnseenFirst } from '@/utils/storyViews';
 import { prefetchProfilesForFeedPosts, warmFeedImagesFromCache } from '@/utils/mediaWarm';
@@ -413,8 +414,12 @@ export default function SocialFeedScreen() {
   }, [data?.pages]);
 
   useEffect(() => {
-    prefetchFeedVideos(posts, activePostId, FEED_PREFETCH_AHEAD);
+    prefetchFeedVideos(posts, activePostId, getFeedPrefetchAhead());
   }, [posts, activePostId]);
+
+  useEffect(() => {
+    setActiveFeedPostId(activePostId);
+  }, [activePostId]);
 
   const handleReelsLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -433,7 +438,7 @@ export default function SocialFeedScreen() {
       isFetchingNextPage,
       fetchNextPage,
       thresholdFromEnd: 8,
-      bootstrapPages: 4,
+      bootstrapPages: 2,
       loadedPageCount: data?.pages?.length ?? 0,
       chainPrefetch: true,
       autoPrefetchSecondPage: false,
@@ -491,7 +496,7 @@ export default function SocialFeedScreen() {
       setActivePostId((prev) => (prev === nextId ? prev : nextId));
 
       const maxIndex = Math.max(...visible.map((entry) => entry.index ?? 0));
-      prefetchFeedVideosFromIndex(posts, maxIndex, FEED_PREFETCH_AHEAD);
+      prefetchFeedVideosFromIndex(posts, maxIndex, getFeedPrefetchAhead());
     },
     [posts],
   );

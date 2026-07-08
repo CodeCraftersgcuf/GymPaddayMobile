@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import { images } from '@/constants';
 import type { FeedPostVideo } from '@/contexts/FeedVideoPoolContext';
-import { prefetchFeedVideosFromIndex, REELS_PREFETCH_AHEAD } from '@/utils/videoPrefetch';
+import { prefetchFeedVideosFromIndex, getReelsPrefetchAhead } from '@/utils/videoPrefetch';
 import { downloadMedia } from '@/utils/downloadMedia';
 import ReelsActionRail from '@/components/Social/reels/ReelsActionRail';
 import ReelsMoreSheet from '@/components/Social/reels/ReelsMoreSheet';
@@ -203,7 +203,7 @@ export default function FeedReelsViewer({
     }
     setActiveIndex(initialIndex);
     activeIndexRef.current = initialIndex;
-    prefetchFeedVideosFromIndex(videoPosts, initialIndex, REELS_PREFETCH_AHEAD);
+    prefetchFeedVideosFromIndex(videoPosts, initialIndex, getReelsPrefetchAhead());
   }, [visible, initialIndex, videoPosts]);
 
   useEffect(() => {
@@ -224,7 +224,7 @@ export default function FeedReelsViewer({
 
   useEffect(() => {
     if (!visible) return;
-    prefetchFeedVideosFromIndex(videoPosts, activeIndex, REELS_PREFETCH_AHEAD);
+    prefetchFeedVideosFromIndex(videoPosts, activeIndex, getReelsPrefetchAhead());
     const post = videoPosts[activeIndex];
     if (post?.id != null) {
       onActivePostChange?.(post.id);

@@ -4,10 +4,11 @@ import { GroupedUserStories, StoryItem } from '@/utils/types/story';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
 import { queryClient } from '@/utils/queryClient';
 import { prefetchVideoUrl } from '@/utils/videoPrefetch';
+import { downloadMediaFile } from '@/utils/mediaDownload';
+import { getMediaBudgets } from '@/utils/networkQuality';
 
 const STORY_CACHE_DIR = `${FileSystem.cacheDirectory}story-media/`;
-const MAX_CONCURRENT = 4;
-const DEFAULT_PRIORITY_USERS = 999;
+const DEFAULT_PRIORITY_USERS = 6;
 
 type StoryWithMusic = StoryItem & {
   music_url?: string | null;
@@ -80,8 +81,16 @@ function enqueue(task: PrefetchTask): void {
   drainQueue();
 }
 
+function maxConcurrent(): number {
+  return Math.max(1, getMediaBudgets().concurrentDownloads);
+}
+
+function prefetchImageLow(uri: string): void {
+  if (!uri) return;
+  Image.prefetch(uri).catch(() => {});
+}
 function drainQueue(): void {
-  while (inFlight < MAX_CONCURRENT && queue.length > 0) {
+  while (inFlight < maxConcurrent() && queue.length > 0) {
     const task = queue.shift()!;
     inFlight += 1;
     task
@@ -107,33 +116,7 @@ async function downloadToCache(
   localPath: string,
   minBytes = 1,
 ): Promise<string | null> {
-  const info = await FileSystem.getInfoAsync(localPath);
-  if (info.exists && (info.size ?? 0) >= minBytes) {
-    return normalizeLocalUri(localPath);
-  }
-  if (info.exists) {
-    await FileSystem.deleteAsync(localPath, { idempotent: true });
-  }
-
-  try {
-    const result = await FileSystem.downloadAsync(remoteUrl, localPath);
-    if (!result?.uri) return null;
-    if (typeof result.status === 'number' && result.status >= 400) {
-      await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
-      return null;
-    }
-
-    const saved = await FileSystem.getInfoAsync(localPath);
-    if (!saved.exists || (saved.size ?? 0) < minBytes) {
-      await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
-      return null;
-    }
-
-    return normalizeLocalUri(result.uri || localPath);
-  } catch {
-    await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
-    return null;
-  }
+  return downloadMediaFile(remoteUrl, localPath, { minBytes });
 }
 
 async function prefetchStoryVideo(story: StoryItem, url: string): Promise<void> {
@@ -288,7 +271,28 @@ export function resolveStoryMusicPlaybackUrl(story?: StoryWithMusic | null): str
   return remote ?? undefined;
 }
 
-export function prefetchStoryItem(story: StoryItem, priority = 0): void {
+export function prefetchStoryItem(
+  story: StoryItem,
+  priority = 0,
+  options?: { fullMedia?: boolean },
+): void {
+  const fullMedia = options?.fullMedia ?? true;
+  const thumb = getStoryThumbnailUrl(story);
+  if (thumb) {
+    const thumbKey = `thumb-${story.id}-${thumb}`;
+    if (!prefetchedKeys.has(thumbKey)) {
+      enqueue({
+        key: thumbKey,
+        priority: priority + 50,
+        run: async () => {
+          prefetchImageLow(thumb);
+        },
+      });
+    }
+  }
+
+  if (!fullMedia) return;
+
   const url = storyMediaUrl(story);
   if (!url) return;
 
@@ -300,7 +304,7 @@ export function prefetchStoryItem(story: StoryItem, priority = 0): void {
       key,
       priority,
       run: async () => {
-        await Image.prefetch(url);
+        prefetchImageLow(url);
       },
     });
   } else if (isStoryVideo(story) || !isStoryPhoto(story)) {
@@ -355,8 +359,7 @@ async function pruneStaleStoryCache(activeStoryIds: Set<number>): Promise<void> 
 }
 
 /**
- * WhatsApp/Instagram-style warm: avatars + every slide for the first N users,
- * then remaining users in the background.
+ * Warm avatars + thumbnails for all rings; full video/music only for first N users (tier budget).
  */
 export function prefetchGroupedStories(
   groups: GroupedUserStories[],
@@ -364,12 +367,14 @@ export function prefetchGroupedStories(
 ): void {
   if (!groups.length) return;
 
-  const priorityUserCount = options?.priorityUserCount ?? DEFAULT_PRIORITY_USERS;
+  const priorityUserCount =
+    options?.priorityUserCount ?? getMediaBudgets().storyUsersFullMedia;
   const activeIds = new Set<number>();
 
   groups.forEach((group, userIndex) => {
     const userPriority =
       userIndex < priorityUserCount ? 200 - userIndex * 10 : 40 - Math.min(userIndex, 20);
+    const fullMedia = userIndex < priorityUserCount;
 
     const avatar = group.user?.profile_picture_url;
     if (avatar) {
@@ -380,7 +385,7 @@ export function prefetchGroupedStories(
           key: avatarKey,
           priority: userPriority + 80,
           run: async () => {
-            await Image.prefetch(resolvedAvatar);
+            prefetchImageLow(resolvedAvatar);
           },
         });
       }
@@ -390,7 +395,7 @@ export function prefetchGroupedStories(
     stories.forEach((story, storyIndex) => {
       activeIds.add(story.id);
       const slidePriority = userPriority + (stories.length - storyIndex) * 2;
-      prefetchStoryItem(story, slidePriority);
+      prefetchStoryItem(story, slidePriority, { fullMedia });
     });
   });
 
@@ -411,14 +416,14 @@ export function prefetchAdjacentStories(stories: StoryItem[], currentIndex: numb
   for (let offset = 0; offset <= 3; offset += 1) {
     const idx = currentIndex + offset;
     if (idx < stories.length) {
-      prefetchStoryItem(stories[idx], 300 - offset * 10);
+      prefetchStoryItem(stories[idx], 300 - offset * 10, { fullMedia: true });
     }
   }
 
   for (let offset = 1; offset <= 2; offset += 1) {
     const idx = currentIndex - offset;
     if (idx >= 0) {
-      prefetchStoryItem(stories[idx], 250 - offset * 10);
+      prefetchStoryItem(stories[idx], 250 - offset * 10, { fullMedia: true });
     }
   }
 }

@@ -33,17 +33,29 @@ export async function markStoryViewed(storyId: number): Promise<void> {
   }).catch(() => {});
 }
 
-export function sortGroupedStoriesUnseenFirst<T extends { stories?: Array<{ viewed_by_me?: boolean; id: number }> }>(
+export function sortGroupedStoriesUnseenFirst<T extends {
+  stories?: Array<{ viewed_by_me?: boolean; id: number; is_followed?: boolean }>;
+}>(
   groups: T[],
   viewedIds?: Set<number>,
 ): T[] {
   return [...groups].sort((a, b) => {
-    const aUnseen = hasUnseenStories(a, viewedIds);
-    const bUnseen = hasUnseenStories(b, viewedIds);
-    if (aUnseen && !bUnseen) return -1;
-    if (!aUnseen && bUnseen) return 1;
-    return 0;
+    const aScore = groupSortScore(a, viewedIds);
+    const bScore = groupSortScore(b, viewedIds);
+    return bScore - aScore;
   });
+}
+
+function groupSortScore(
+  group: { stories?: Array<{ viewed_by_me?: boolean; id: number; is_followed?: boolean }> },
+  viewedIds?: Set<number>,
+): number {
+  const isFollowed = group.stories?.some((s) => s.is_followed) ?? false;
+  const unseen = hasUnseenStories(group, viewedIds);
+  if (isFollowed && unseen) return 4;
+  if (!isFollowed && unseen) return 3;
+  if (isFollowed && !unseen) return 2;
+  return 1;
 }
 
 function hasUnseenStories(

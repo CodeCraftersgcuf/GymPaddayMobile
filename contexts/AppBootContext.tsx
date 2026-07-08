@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { getLastRoute, type SavedRoute } from '@/utils/sessionPersistence';
 import { initAppLifecycle, isColdStart, markBootCompleted, onWarmResume } from '@/utils/appLifecycle';
 import { softRefreshAppData } from '@/utils/preloadAppData';
+import { initNetworkQuality } from '@/utils/networkQuality';
 
 export type BootPhase = 'idle' | 'prefetching' | 'ready';
 
@@ -38,11 +39,13 @@ export function AppBootProvider({ children, cacheHydrated }: Props) {
   const [boot, setBoot] = useState<BootState>(defaultState);
 
   useEffect(() => {
+    const teardownNetwork = initNetworkQuality();
     const teardown = initAppLifecycle();
     const unsubResume = onWarmResume(() => {
       softRefreshAppData().catch(() => {});
     });
     return () => {
+      teardownNetwork();
       teardown();
       unsubResume();
     };
@@ -79,7 +82,7 @@ export function AppBootProvider({ children, cacheHydrated }: Props) {
 
         if (cold && hasToken) {
           const { preloadAppData } = await import('@/utils/preloadAppData');
-          preloadAppData(token, { timeoutMs: 8000, persistAfter: true }).catch(() => {});
+          preloadAppData(token, { timeoutMs: 3000, persistAfter: true }).catch(() => {});
         }
       } catch {
         if (!cancelled) {

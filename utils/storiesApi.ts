@@ -4,8 +4,10 @@ import { groupStoriesByUser } from '@/utils/groupStories';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 function normalizeStory(story: StoryItem): StoryItem {
+  const raw = story as StoryItem & { is_followed?: boolean };
   return {
     ...story,
+    is_followed: Boolean(raw.is_followed),
     full_media_url: resolveMediaUrl(story.full_media_url) || story.full_media_url,
     full_thumbnail_url:
       resolveMediaUrl((story as StoryItem & { full_thumbnail_url?: string }).full_thumbnail_url) ||

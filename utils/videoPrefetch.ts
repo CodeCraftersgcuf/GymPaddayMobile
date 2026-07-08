@@ -1,22 +1,32 @@
-import { resolveMediaUrl, resolveVideoPlaybackUrl } from '@/utils/mediaUrl';
+import { resolveVideoPlaybackUrl } from '@/utils/mediaUrl';
 import { findRawPostInAppCache } from '@/utils/postCache';
-import { prefetchFeedVideoMp4 } from '@/utils/feedVideoCache';
+import { getMediaBudgets } from '@/utils/networkQuality';
 
 const prefetchedUrls = new Set<string>();
 const inFlightUrls = new Set<string>();
 
-// Instagram-style aggressive prefetch: warm many videos ahead so scrolling is
-// instant. Nearest items are queued first (see prefetchFeedVideosFromIndex),
-// so the currently-visible video is always prioritized before far-ahead ones.
-const MAX_CONCURRENT = 4;
-const SEGMENTS_TO_PREFETCH = 10;
-
-/** How many upcoming video posts to warm in the main feed. */
-export const FEED_PREFETCH_AHEAD = 30;
-/** How many upcoming reels to warm in the fullscreen viewer. */
-export const REELS_PREFETCH_AHEAD = 15;
-
 const queue: string[] = [];
+
+function segmentsToPrefetch(): number {
+  return getMediaBudgets().hlsSegmentsPerVideo;
+}
+
+function maxConcurrent(): number {
+  return Math.max(1, getMediaBudgets().concurrentDownloads);
+}
+
+export function getFeedPrefetchAhead(): number {
+  return getMediaBudgets().feedVideosAhead;
+}
+
+export function getReelsPrefetchAhead(): number {
+  return Math.min(getMediaBudgets().feedVideosAhead, 6);
+}
+
+/** @deprecated Use getFeedPrefetchAhead() — tier-aware budget. */
+export const FEED_PREFETCH_AHEAD = 6;
+/** @deprecated Use getReelsPrefetchAhead() — tier-aware budget. */
+export const REELS_PREFETCH_AHEAD = 6;
 
 function resolveUrl(baseUrl: string, line: string): string {
   if (line.startsWith('http://') || line.startsWith('https://')) {
@@ -67,10 +77,12 @@ async function fetchText(url: string, signal: AbortSignal): Promise<string | nul
   return res.text();
 }
 
-/** Fetch master or media playlist, then warm first N HLS segments (lowest bitrate variant). */
 async function warmVideoUrl(url: string): Promise<void> {
+  const segmentLimit = segmentsToPrefetch();
+  if (segmentLimit <= 0) return;
+
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), 12_000);
 
   try {
     const firstText = await fetchText(url, controller.signal);
@@ -90,7 +102,7 @@ async function warmVideoUrl(url: string): Promise<void> {
       mediaText = variantText;
     }
 
-    const segments = parseMediaSegmentUrls(mediaText, mediaPlaylistUrl, SEGMENTS_TO_PREFETCH);
+    const segments = parseMediaSegmentUrls(mediaText, mediaPlaylistUrl, segmentLimit);
     await Promise.allSettled(
       segments.map((segmentUrl) => fetch(segmentUrl, { signal: controller.signal })),
     );
@@ -102,7 +114,9 @@ async function warmVideoUrl(url: string): Promise<void> {
 }
 
 function drainPrefetchQueue(): void {
-  while (inFlightUrls.size < MAX_CONCURRENT && queue.length > 0) {
+  if (segmentsToPrefetch() <= 0) return;
+
+  while (inFlightUrls.size < maxConcurrent() && queue.length > 0) {
     const url = queue.shift()!;
     if (prefetchedUrls.has(url) || inFlightUrls.has(url)) continue;
 
@@ -122,20 +136,17 @@ function drainPrefetchQueue(): void {
 /** Buffer HLS manifest + first segments in the background. */
 export function prefetchVideoUrl(url?: string | null): void {
   if (!url) return;
+  if (segmentsToPrefetch() <= 0) return;
   if (prefetchedUrls.has(url) || inFlightUrls.has(url) || queue.includes(url)) return;
 
   queue.push(url);
   drainPrefetchQueue();
 }
 
+/** HLS warm only — no full MP4 download (avoids double-fetch on weak networks). */
 export function prefetchVideoFromRawPost(post: any): void {
   const video = post?.media?.find((m: any) => m.media_type === 'video');
   if (!video) return;
-  const postId = post?.id;
-  const mp4Url = video?.url ? resolveMediaUrl(video.url) : null;
-  if (postId && mp4Url) {
-    prefetchFeedVideoMp4(Number(postId), mp4Url);
-  }
   prefetchVideoUrl(resolveVideoPlaybackUrl(video));
 }
 
@@ -146,33 +157,27 @@ export function prefetchVideoForPostId(postId: number): void {
   }
 }
 
-/** Prefetch HLS for posts from startIndex through startIndex + ahead video posts. */
 export function prefetchFeedVideosFromIndex(
   posts: Array<{ id?: number; videoUrl?: string | null; videoMp4Url?: string | null }>,
   startIndex: number,
-  ahead = FEED_PREFETCH_AHEAD,
+  ahead?: number,
 ): void {
-  if (!posts.length || startIndex < 0) return;
+  const limit = ahead ?? getFeedPrefetchAhead();
+  if (!posts.length || startIndex < 0 || limit <= 0) return;
 
   let buffered = 0;
-  for (let i = startIndex; i < posts.length && buffered <= ahead; i++) {
+  for (let i = startIndex; i < posts.length && buffered < limit; i++) {
     const post = posts[i];
-    if (!post?.videoUrl && !post?.videoMp4Url) continue;
-    if (post.id && post.videoMp4Url) {
-      prefetchFeedVideoMp4(post.id, post.videoMp4Url);
-    }
-    if (post.videoUrl) {
-      prefetchVideoUrl(post.videoUrl);
-    }
+    if (!post?.videoUrl) continue;
+    prefetchVideoUrl(post.videoUrl);
     buffered++;
   }
 }
 
-/** Prefetch HLS for the active feed post and the next N video posts ahead. */
 export function prefetchFeedVideos(
   posts: Array<{ id?: number; videoUrl?: string | null; videoMp4Url?: string | null }>,
   activePostId: number | null,
-  ahead = FEED_PREFETCH_AHEAD,
+  ahead?: number,
 ): void {
   if (!posts.length) return;
 
@@ -184,12 +189,13 @@ export function prefetchFeedVideos(
   prefetchFeedVideosFromIndex(posts, start, ahead);
 }
 
-/** Prefetch HLS for profile grid tiles that are on screen (+ a few ahead). */
 export function prefetchProfileGridVideos(
   items: Array<{ postId: number; media_type: string }>,
   viewableItems: Array<{ index?: number | null; isViewable?: boolean }>,
   ahead = 3,
 ): void {
+  if (getFeedPrefetchAhead() <= 0) return;
+
   const indices = viewableItems
     .filter((v) => v.isViewable && v.index != null)
     .map((v) => v.index as number);
