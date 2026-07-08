@@ -13,6 +13,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Feather } from '@expo/vector-icons';
 import { API_ENDPOINTS } from '@/apiConfig';
 import { navigateToUserProfile } from '@/utils/navigateToProfile';
+import { CachedAvatar } from '@/components/media/CachedImage';
 
 
 interface TabHeaderProps {
@@ -141,7 +142,7 @@ const [userId, setUserId] = useState<string | null>(null);
         {children}
         {admin?.profile && (
           <Pressable onPress={() => hanldeViewProfile()}>
-            <Image source={{ uri: profileImage }} style={styles.UserImage} />
+            <CachedAvatar uri={profileImage} style={styles.UserImage} />
           </Pressable>
         )}
        {notificationID && (

@@ -31,6 +31,7 @@ import { useIAP } from '@/utils/hooks/useIAP';
 import { useFocusEffect } from '@react-navigation/native';
 import { resolveLatestDepositorName, resolveLatestUserSnapshot } from '@/utils/resolveLatestUserProfile';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
+import { MEDIA_CDN_URL } from '@/apiConfig';
 
 type ViewMode = 'deposit' | 'payment' | 'flutterwave';
 
@@ -183,6 +184,9 @@ export default function TopupScreen() {
   <title>Flutterwave Payment</title>
   <script src="https://checkout.flutterwave.com/v3.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #ffffff; }
+  </style>
 </head>
 <body>
 <script>
@@ -190,6 +194,7 @@ export default function TopupScreen() {
     const amount = ${amountValue};
     const order_id = "${orderId}";
     const email = "${paymentEmail}";
+    const customerName = ${JSON.stringify(userName || paymentEmail)};
 
     FlutterwaveCheckout({
       public_key: "FLWPUBK-40e0f9f66bc483c5234bc8ca12529396-X",
@@ -199,7 +204,7 @@ export default function TopupScreen() {
       payment_options: "card,ussd",
       customer: {
         email: email,
-        name: email
+        name: customerName
       },
       callback: function (response) {
         console.log("🔍 Flutterwave callback:", response);
@@ -220,9 +225,9 @@ export default function TopupScreen() {
         window.ReactNativeWebView.postMessage(JSON.stringify({ event: "closed" }));
       },
       customizations: {
-        title: "GymPaddy Payment",
-        description: \`Order ID: \${order_id}\`,
-        logo: "https://yourdomain.com/logo.png"
+        title: "GymPaddy",
+        description: \`Wallet top-up · Order \${order_id}\`,
+        logo: "${MEDIA_CDN_URL}/logo.png"
       }
     });
   }
@@ -761,9 +766,6 @@ const styles = StyleSheet.create({
     },
     webViewWrapper: {
         flex: 1,
-        marginHorizontal: 20,
-        marginBottom: 20,
-        borderRadius: 12,
         overflow: 'hidden',
     },
     webView: {

@@ -9,7 +9,10 @@ import {
   prefetchConversations,
   prefetchMarketplace,
   prefetchUserProfilePages,
+  prefetchChatMessagesForTopConversations,
 } from '@/utils/prefetchNavigation';
+import { warmAllMediaFromCache } from '@/utils/mediaWarm';
+import { prefetchStoryMusicLibrary } from '@/utils/storyMusicApi';
 
 export type PreloadOptions = {
   /** Max wait during cold boot splash (ms). Default 8000. */
@@ -54,10 +57,12 @@ export async function preloadAppData(
   const ownUserId = userDataStr ? JSON.parse(userDataStr)?.id : null;
 
   const preloadTasks = Promise.allSettled([
-    prefetchFeedPages(4),
+    prefetchFeedPages(6),
     prefetchStories(),
     prefetchConversations(),
+    prefetchChatMessagesForTopConversations(10),
     prefetchMarketplace(),
+    prefetchStoryMusicLibrary(),
     queryClient.prefetchQuery({
       queryKey: UNREAD_MESSAGES_QUERY_KEY,
       staleTime: 30 * 1000,
@@ -73,6 +78,8 @@ export async function preloadAppData(
     preloadTasks,
     new Promise<void>((resolve) => setTimeout(resolve, waitMs)),
   ]);
+
+  warmAllMediaFromCache();
 
   if (persistAfter) {
     await flushQueryCache().catch(() => {});

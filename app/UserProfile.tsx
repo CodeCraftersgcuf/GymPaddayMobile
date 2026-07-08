@@ -35,6 +35,7 @@ import { blockUser, restrictUser } from '@/utils/utils/userPrivacyStorage';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
 import { STALE_TIMES } from '@/utils/queryClient';
 import { useSilentInfiniteScroll } from '@/utils/useSilentInfiniteScroll';
+import { useSafeBack } from '@/utils/hooks/useSafeBack';
 import { openSinglePost } from '@/utils/prefetchNavigation';
 import { seedPostCaches } from '@/utils/postCache';
 import {
@@ -151,6 +152,7 @@ function getVideoPostsForGrid(posts: any[]): ProfileGridItem[] {
 
 export default function ProfileScreen() {
   const { dark } = useTheme();
+  const goBack = useSafeBack();
   const theme = {
     background: dark ? '#000000' : '#FAFAFA',
     secondary: dark ? '#181818' : '#f5f5f5',
@@ -498,6 +500,8 @@ export default function ProfileScreen() {
               style={styles.gridImage}
               contentFit="cover"
               cachePolicy="memory-disk"
+              recyclingKey={`${item.postId}-${item.mediaIndex}`}
+              transition={150}
             />
             <View style={styles.playButton}>
               <Icon name="play" size={24} color="#fff" />
@@ -509,6 +513,8 @@ export default function ProfileScreen() {
             style={styles.gridImage}
             contentFit="cover"
             cachePolicy="memory-disk"
+            recyclingKey={`${item.postId}-${item.mediaIndex}`}
+            transition={150}
           />
         )}
       </TouchableOpacity>
@@ -703,7 +709,7 @@ export default function ProfileScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.background }]}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={goBack}>
             <Icon name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>{ }</Text>
@@ -725,6 +731,10 @@ export default function ProfileScreen() {
           onViewableItemsChanged={onGridViewableItemsChanged}
           viewabilityConfig={prefetchViewabilityConfig}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={12}
+          maxToRenderPerBatch={9}
+          windowSize={7}
+          removeClippedSubviews
           contentContainerStyle={styles.gridListContent}
           columnWrapperStyle={mediaArray.length ? styles.gridRow : undefined}
           refreshControl={

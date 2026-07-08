@@ -1,26 +1,26 @@
-import React, { use, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import Story from './Story';
-// import { GroupedUserStories } from '@/types/story';
-import { dummyImage } from '@/constants/help';
 import ThemeText from '../ThemedText';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CachedAvatar } from '@/components/media/CachedImage';
 import { useTheme } from '@/contexts/themeContext';
 import { useRouter } from 'expo-router';
 import { GroupedUserStories } from '@/utils/types/story';
+import { prefetchGroupedStories } from '@/utils/storyPrefetch';
 
 import * as SecureStore from 'expo-secure-store';
 
 interface Props {
   stories: GroupedUserStories[];
-  refreshing?: boolean; // Add refreshing prop
+  refreshing?: boolean;
 }
 
 const StoryContainer: React.FC<Props> = ({ stories, refreshing }) => {
   const router = useRouter();
   const { dark } = useTheme();
   const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
-  const [user,setUser]=useState();
+  const [user, setUser] = useState<any>();
   const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
 
   React.useEffect(() => {
@@ -33,43 +33,78 @@ const StoryContainer: React.FC<Props> = ({ stories, refreshing }) => {
           if (userData.profile_picture_url) {
             setProfileImage(userData.profile_picture_url);
           } else {
-            setProfileImage(defatulImage); // fallback to prop
+            setProfileImage(defatulImage);
           }
         } else {
-          setProfileImage(defatulImage); // fallback to prop
+          setProfileImage(defatulImage);
         }
       } catch (error) {
         console.error('Error loading user data:', error);
-        setProfileImage(defatulImage); // fallback to prop
+        setProfileImage(defatulImage);
       }
     })();
-  }, [refreshing]); // Add refreshing as dependency
+  }, [refreshing]);
+
+  const myStoryGroup = useMemo(
+    () => stories.find((s) => String(s.user.id) === String(user?.id)),
+    [stories, user?.id],
+  );
+
+  const otherStories = useMemo(
+    () => stories.filter((s) => String(s.user.id) !== String(user?.id)),
+    [stories, user?.id],
+  );
+
+  const hasMyStory = (myStoryGroup?.stories?.length ?? 0) > 0;
+
+  const openMyStory = useCallback(() => {
+    if (!myStoryGroup) return;
+    prefetchGroupedStories([myStoryGroup], { priorityUserCount: 1 });
+    router.push({
+      pathname: '/UserStoryPreview',
+      params: {
+        userId: String(myStoryGroup.user.id),
+        startIndex: '0',
+        selected: JSON.stringify(myStoryGroup.stories),
+      },
+    });
+  }, [myStoryGroup, router]);
+
+  const openAddStory = useCallback(() => router.push('/AddToStoryScreen'), [router]);
+
+  const renderMyStory = useCallback(() => (
+    <View style={styles.storyItem}>
+      <TouchableOpacity
+        onPress={hasMyStory ? openMyStory : openAddStory}
+        activeOpacity={0.85}
+      >
+        <LinearGradient colors={['#940304', '#0000FF']} style={styles.gradientBorder}>
+          <CachedAvatar uri={profileImage} size={56} style={styles.myStoryImage} />
+        </LinearGradient>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={openAddStory}
+        style={[styles.addButton, { backgroundColor: dark ? '#222' : 'red' }]}
+        hitSlop={6}
+      >
+        <ThemeText style={styles.addButtonText}>+</ThemeText>
+      </TouchableOpacity>
+      <ThemeText style={styles.storyName}>
+        {hasMyStory ? 'My Story' : 'Add Story'}
+      </ThemeText>
+    </View>
+  ), [dark, hasMyStory, openAddStory, openMyStory, profileImage]);
 
   return (
     <View style={styles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {/* My Story */}
-        <TouchableOpacity onPress={() => router.push('/AddToStoryScreen')} style={styles.storyItem}>
-          <LinearGradient
-            colors={['#940304', '#0000FF']}
-            style={styles.gradientBorder}
-          >
-            <Image source={{ uri: profileImage }} style={styles.myStoryImage} />
-          </LinearGradient>
-          <View style={[styles.addButton, { backgroundColor: dark ? '#222' : 'red' }]}>
-            <ThemeText style={styles.addButtonText}>+</ThemeText>
-          </View>
-          <ThemeText style={styles.storyName}>Add Story</ThemeText>
-        </TouchableOpacity>
-
-        {/* Other User Stories */}
-        <FlatList
-          data={stories}
-          keyExtractor={(item) => item.user.id.toString()}
-          horizontal
-          renderItem={({ item }) => <Story story={item} userId={user?.id} />}
-        />
-      </ScrollView>
+      <FlatList
+        horizontal
+        data={otherStories}
+        keyExtractor={(item) => item.user.id.toString()}
+        showsHorizontalScrollIndicator={false}
+        ListHeaderComponent={renderMyStory}
+        renderItem={({ item }) => <Story story={item} userId={user?.id} />}
+      />
     </View>
   );
 };

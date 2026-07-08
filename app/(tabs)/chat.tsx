@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/themeContext';
 import { useMessages } from '@/components/messages/MessageContext';
@@ -209,22 +209,13 @@ export default function Chat() {
               <ActivityIndicator size="small" color="#940304" />
             </View>
           ) : (
-
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 30 }}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl refreshing={refreshing || isRefetching} onRefresh={onRefresh} />
-              }
-            >
-              <ConversationList
-                conversations={filteredConversations}
-                onConversationPress={handleConversationPress}
-                onConversationPressIn={handleConversationPressIn}
-              />
-            </ScrollView>
-
+            <ConversationList
+              conversations={filteredConversations}
+              onConversationPress={handleConversationPress}
+              onConversationPressIn={handleConversationPressIn}
+              refreshing={refreshing || isRefetching}
+              onRefresh={onRefresh}
+            />
           )}
         </ThemedView>
       </ThemedView>

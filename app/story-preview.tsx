@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Image,
@@ -20,8 +20,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, Audio, ResizeMode } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
-import { useQueryClient } from '@tanstack/react-query';
-import { STORY_MUSIC_LIBRARY, MUSIC_CATEGORIES, getMusicByGenre, StoryMusic } from '@/constants/storyMusic';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { MUSIC_CATEGORIES, getMusicByGenre, StoryMusic, STORY_MUSIC_LIBRARY } from '@/constants/storyMusic';
+import { prefetchStoriesFromCache } from '@/utils/storyPrefetch';
+import { uploadStoryMedia, optimisticallyAddMyStory } from '@/utils/storyUpload';
+import { fetchStoryMusicLibrary } from '@/utils/storyMusicApi';
 import { Ionicons } from '@expo/vector-icons';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -40,9 +43,18 @@ export default function StoryPreview() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedMusicMap, setSelectedMusicMap] = useState<Record<number, StoryMusic>>({});
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [musicSearchQuery, setMusicSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [isPreviewingMusic, setIsPreviewingMusic] = useState(false);
+
+  const { data: musicLibrary = STORY_MUSIC_LIBRARY } = useQuery({
+    queryKey: ['storyMusicLibrary'],
+    queryFn: fetchStoryMusicLibrary,
+    staleTime: 30 * 60 * 1000,
+    placeholderData: STORY_MUSIC_LIBRARY,
+  });
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -53,6 +65,7 @@ export default function StoryPreview() {
   }, []);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const videoRef = useRef<Video>(null);
+  const videoPlaybackStartedRef = useRef(false);
 
   const mediaList = useMemo(() => {
     try {
@@ -69,7 +82,7 @@ export default function StoryPreview() {
   // Filter music based on search and category
   const filteredMusic = useMemo(() => {
     try {
-      let music = getMusicByGenre(selectedCategory);
+      let music = getMusicByGenre(selectedCategory, musicLibrary);
       if (!Array.isArray(music)) {
         console.error('getMusicByGenre returned non-array:', music);
         return [];
@@ -94,7 +107,7 @@ export default function StoryPreview() {
       console.error('Error filtering music:', error);
       return [];
     }
-  }, [selectedCategory, musicSearchQuery]);
+  }, [selectedCategory, musicSearchQuery, musicLibrary]);
 
   const handleNext = () => {
     if (currentIndex < mediaList.length - 1) {
@@ -108,32 +121,54 @@ export default function StoryPreview() {
     }
   };
 
+  const syncPreviewMusicWithVideo = useCallback(async () => {
+    const activeSound = soundRef.current;
+    if (!activeSound || !selectedMusicMap[currentIndex]?.preview) return;
+    try {
+      const status = await activeSound.getStatusAsync();
+      if (status.isLoaded && !status.isPlaying) {
+        await activeSound.setPositionAsync(0);
+        await activeSound.playAsync();
+      }
+    } catch {
+      /* noop */
+    }
+  }, [currentIndex, selectedMusicMap]);
+
   useEffect(() => {
     if (!currentMedia) return;
     progressAnim.setValue(1);
+    videoPlaybackStartedRef.current = false;
     if (isVideo && videoRef.current) {
       videoRef.current.setPositionAsync(0);
     }
 
-    if (sound) {
-      sound.stopAsync();
-      sound.unloadAsync();
+    if (soundRef.current) {
+      soundRef.current.stopAsync();
+      soundRef.current.unloadAsync();
+      soundRef.current = null;
       setSound(null);
     }
 
-    // Optional: auto-play selected music on story open
     const currentMusic = selectedMusicMap[currentIndex];
     if (currentMusic?.preview) {
       Audio.Sound.createAsync(
         { uri: currentMusic.preview },
-        { shouldPlay: true }
-      ).then(({ sound: newSound }) => {
-        setSound(newSound);
-      }).catch(console.error);
+        { shouldPlay: !isVideo, isLooping: true, volume: 0.5 },
+      )
+        .then(({ sound: newSound }) => {
+          soundRef.current = newSound;
+          setSound(newSound);
+          if (isVideo && videoPlaybackStartedRef.current) {
+            syncPreviewMusicWithVideo();
+          }
+        })
+        .catch(console.error);
     }
   }, [currentIndex]);
 
   const handleMusicSelect = async (item: StoryMusic) => {
+    if (isPreviewingMusic) return;
     if (!item || !item.id || !item.title) {
       console.error('Invalid music item:', item);
       Toast.show({
@@ -145,17 +180,18 @@ export default function StoryPreview() {
     }
 
     try {
+      setIsPreviewingMusic(true);
       // Stop any currently playing sound
-      if (sound) {
+      if (soundRef.current) {
         try {
-          await sound.stopAsync();
-          await sound.unloadAsync();
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
         } catch (e) {
-          // Silently ignore cleanup errors
           if (__DEV__) {
             console.warn('Error stopping previous sound:', e);
           }
         }
+        soundRef.current = null;
         setSound(null);
       }
 
@@ -164,9 +200,13 @@ export default function StoryPreview() {
         try {
           const { sound: newSound } = await Audio.Sound.createAsync(
             { uri: item.preview },
-            { shouldPlay: true, volume: 0.5 }
+            { shouldPlay: !isVideo, isLooping: true, volume: 0.5 },
           );
+          soundRef.current = newSound;
           setSound(newSound);
+          if (isVideo && videoPlaybackStartedRef.current) {
+            await syncPreviewMusicWithVideo();
+          }
           console.log('✅ Music preview playing:', item.title);
         } catch (previewError: any) {
           // Only log non-network errors
@@ -204,7 +244,6 @@ export default function StoryPreview() {
       });
     } catch (err: any) {
       console.error('Unexpected error in handleMusicSelect:', err);
-      // Still try to add the music even if there's an error
       setSelectedMusicMap((prev) => ({
         ...prev,
         [currentIndex]: item,
@@ -216,13 +255,16 @@ export default function StoryPreview() {
         text2: `${item.title} by ${item.artist || 'Unknown Artist'}`,
         visibilityTime: 1500,
       });
+    } finally {
+      setIsPreviewingMusic(false);
     }
   };
 
   const removeMusicFromStory = async () => {
-    if (sound) {
-      await sound.stopAsync();
-      await sound.unloadAsync();
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
       setSound(null);
     }
     setSelectedMusicMap((prev) => {
@@ -239,50 +281,13 @@ export default function StoryPreview() {
 
   useEffect(() => {
     return () => {
-      if (sound) {
-        sound.stopAsync();
-        sound.unloadAsync();
+      if (soundRef.current) {
+        soundRef.current.stopAsync();
+        soundRef.current.unloadAsync();
+        soundRef.current = null;
       }
     };
-  }, [sound]);
-
-  const uploadOneStory = async (
-    media: { id: string | number; uri: string; mediaType: string },
-    index: number,
-    token: string
-  ) => {
-    const formData = new FormData();
-    formData.append('media', {
-      uri: media.uri,
-      name: `story_${media.id}.${media.mediaType === 'video' ? 'mp4' : 'jpg'}`,
-      type: media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-    } as any);
-    formData.append('media_type', media.mediaType);
-    formData.append('caption', '');
-
-    if (selectedMusicMap[index]?.title && selectedMusicMap[index]?.preview) {
-      formData.append('music_title', selectedMusicMap[index].title);
-      formData.append('music_url', selectedMusicMap[index].preview);
-      if (selectedMusicMap[index].artist) {
-        formData.append('music_artist', selectedMusicMap[index].artist!);
-      }
-    }
-
-    const response = await fetch('https://api.gympaddy.com/api/user/stories', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-      body: formData,
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result?.message || 'Upload failed');
-    }
-    return result;
-  };
+  }, []);
 
   const handleUpload = async () => {
     try {
@@ -290,6 +295,9 @@ export default function StoryPreview() {
       setUploadProgress({ done: 0, total: Math.max(1, mediaList.length) });
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('User not authenticated.');
+
+      const userData = await SecureStore.getItemAsync('user_data');
+      const user = userData ? JSON.parse(userData) : null;
 
       Toast.show({
         type: 'info',
@@ -300,15 +308,27 @@ export default function StoryPreview() {
 
       let completed = 0;
       await Promise.all(
-        mediaList.map(async (media: any, i: number) => {
-          await uploadOneStory(media, i, token);
-          completed += 1;
-          setUploadProgress({ done: completed, total: mediaList.length });
-        })
+        mediaList.map((media, index) =>
+          uploadStoryMedia(media, token, selectedMusicMap[index]).then((result) => {
+            completed += 1;
+            setUploadProgress({ done: completed, total: mediaList.length });
+            if (user?.id && result?.story) {
+              optimisticallyAddMyStory(queryClient, result, media.uri, user);
+            }
+            return result;
+          }),
+        ),
       );
 
+      queryClient.invalidateQueries({ queryKey: ['groupedStories'] });
+      prefetchStoriesFromCache();
       queryClient.invalidateQueries({ queryKey: ['userPosts'] });
-      Toast.show({ type: 'success', text1: 'Stories uploaded!' });
+
+      Toast.show({
+        type: 'success',
+        text1: 'Story uploaded!',
+        text2: 'Finishing up in the background…',
+      });
       setIsUploading(false);
       router.replace('/(tabs)');
     } catch (error: any) {
@@ -371,9 +391,15 @@ export default function StoryPreview() {
             source={{ uri: currentMedia.uri }}
             style={styles.video}
             resizeMode={ResizeMode.CONTAIN}
-            isMuted={false}
+            isMuted={Boolean(selectedMusicMap[currentIndex])}
             shouldPlay={true}
             useNativeControls={false}
+            onPlaybackStatusUpdate={(status) => {
+              if (!status.isLoaded || !status.isPlaying) return;
+              if (videoPlaybackStartedRef.current) return;
+              videoPlaybackStartedRef.current = true;
+              syncPreviewMusicWithVideo();
+            }}
           />
         ) : (
           <Image source={{ uri: currentMedia.uri }} style={styles.image} resizeMode="contain" />

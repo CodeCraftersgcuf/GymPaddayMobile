@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 
 type FeedSessionContextValue = {
   registerFeedScroll: (getOffset: () => number) => void;
@@ -24,15 +24,18 @@ export function FeedSessionProvider({ children }: { children: React.ReactNode })
   const getFeedScrollOffset = useCallback(() => scrollGetter.current(), []);
   const getActivePostId = useCallback(() => activePostGetter.current(), []);
 
+  const value = useMemo(
+    () => ({
+      registerFeedScroll,
+      registerActivePostId,
+      getFeedScrollOffset,
+      getActivePostId,
+    }),
+    [registerFeedScroll, registerActivePostId, getFeedScrollOffset, getActivePostId]
+  );
+
   return (
-    <FeedSessionContext.Provider
-      value={{
-        registerFeedScroll,
-        registerActivePostId,
-        getFeedScrollOffset,
-        getActivePostId,
-      }}
-    >
+    <FeedSessionContext.Provider value={value}>
       {children}
     </FeedSessionContext.Provider>
   );

@@ -8,7 +8,7 @@ import { fetchUserProfile } from '@/utils/queries/profile';
 import { getNextFeedPage } from '@/utils/feedPagination';
 import { findRawPostInAppCache, postQueryKey, seedPostCache } from '@/utils/postCache';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
-import { prefetchVideoForPostId, prefetchVideoFromRawPost } from '@/utils/videoPrefetch';
+import { prefetchVideoForPostId, prefetchVideoFromRawPost, REELS_PREFETCH_AHEAD } from '@/utils/videoPrefetch';
 import { Image } from 'expo-image';
 import type { Router } from 'expo-router';
 
@@ -30,6 +30,29 @@ export async function prefetchFeedPages(pages = 4): Promise<void> {
     getNextPageParam: getNextFeedPage,
     pages,
   });
+
+  // Warm the first batch of feed/reels video segments right at boot so opening
+  // Reels (or scrolling the feed) plays instantly instead of cold-loading.
+  warmFeedVideosFromCache(REELS_PREFETCH_AHEAD);
+}
+
+/** Read cached feed posts and prefetch HLS segments for the first N video posts. */
+export function warmFeedVideosFromCache(count = REELS_PREFETCH_AHEAD): void {
+  try {
+    const cache = queryClient.getQueryData<any>(['userPosts']);
+    const rawPosts: any[] = cache?.pages?.flatMap((p: any) => p?.data ?? []) ?? [];
+    let warmed = 0;
+    for (const raw of rawPosts) {
+      if (warmed >= count) break;
+      const hasVideo = raw?.media?.some((m: any) => m.media_type === 'video');
+      if (hasVideo) {
+        prefetchVideoFromRawPost(raw);
+        warmed++;
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
 }
 
 export async function prefetchStories(): Promise<void> {
@@ -41,6 +64,12 @@ export async function prefetchStories(): Promise<void> {
     staleTime: STALE_TIMES.stories,
     queryFn: () => fetchGroupedStories(token),
   });
+
+  const { prefetchStoriesFromCache } = await import('@/utils/storyPrefetch');
+  prefetchStoriesFromCache();
+
+  const { warmMarketImagesFromCache } = await import('@/utils/mediaWarm');
+  warmMarketImagesFromCache();
 }
 
 export async function prefetchMarketplace(): Promise<void> {
@@ -65,7 +94,7 @@ export async function prefetchConversations(): Promise<void> {
   });
 }
 
-export async function prefetchChatMessagesForTopConversations(limit = 3): Promise<void> {
+export async function prefetchChatMessagesForTopConversations(limit = 10): Promise<void> {
   const token = await SecureStore.getItemAsync('auth_token');
   if (!token) return;
 
@@ -79,7 +108,16 @@ export async function prefetchChatMessagesForTopConversations(limit = 3): Promis
     conversations.slice(0, limit).map((conv: any) =>
       queryClient.prefetchQuery({
         queryKey: ['chatMessages', String(conv.conversation_id)],
-        queryFn: () => fetchChatMessages(token, conv.conversation_id),
+        queryFn: async () => {
+          try {
+            return await fetchChatMessages(token, conv.conversation_id);
+          } catch (err: any) {
+            if (err?.statusCode === 403 || err?.statusCode === 401) {
+              return { messages: [] };
+            }
+            throw err;
+          }
+        },
         staleTime: 30 * 1000,
       }),
     ),
@@ -169,15 +207,19 @@ export type PrefetchTab = 'index' | 'market' | 'chat';
 export async function prefetchTabData(tab: PrefetchTab): Promise<void> {
   switch (tab) {
     case 'index':
-      await Promise.allSettled([prefetchFeedPages(4), prefetchStories()]);
+      await Promise.allSettled([prefetchFeedPages(6), prefetchStories()]);
       break;
     case 'market':
       await prefetchMarketplace();
+      {
+        const { warmMarketImagesFromCache } = await import('@/utils/mediaWarm');
+        warmMarketImagesFromCache();
+      }
       break;
     case 'chat':
       await Promise.allSettled([
         prefetchConversations(),
-        prefetchChatMessagesForTopConversations(3),
+        prefetchChatMessagesForTopConversations(10),
       ]);
       break;
   }

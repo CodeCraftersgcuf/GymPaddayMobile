@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
 import { formatNaira } from '@/utils/formatters';
 import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl';
+import { CachedImage } from '@/components/media/CachedImage';
 
 //Code Related to the integration
 import { useQuery } from '@tanstack/react-query';
@@ -209,54 +210,57 @@ export default function MarketplaceScreen() {
     others: 'others',
   };
 
-  const apiListings = Array.isArray(data?.data)
-    ? data.data.map((item: any) => {
-      let imageUrl = dummyImage;
-      if (Array.isArray(item.media_urls) && item.media_urls.length > 0) {
-        imageUrl = resolveMediaUrls(item.media_urls)[0] || dummyImage;
-      }
+  const apiListings = useMemo(() => (
+    Array.isArray(data?.data)
+      ? data.data.map((item: any) => {
+        let imageUrl = dummyImage;
+        if (Array.isArray(item.media_urls) && item.media_urls.length > 0) {
+          imageUrl = resolveMediaUrls(item.media_urls)[0] || dummyImage;
+        }
 
-      let sellerAvatar = dummyImage;
-      if (item.user?.profile_picture_url) {
-        sellerAvatar = resolveMediaUrl(item.user.profile_picture_url) || dummyImage;
-      }
+        let sellerAvatar = dummyImage;
+        if (item.user?.profile_picture_url) {
+          sellerAvatar = resolveMediaUrl(item.user.profile_picture_url) || dummyImage;
+        }
 
-      const categoryName = item.category?.name || '';
-      const sellerName = item.user?.name || 'User';
-      // Use created_at for timeAgo
-      const timeAgo = item.created_at ? getTimeAgo(item.created_at) : 'Just now';
+        const categoryName = item.category?.name || '';
+        const sellerName = item.user?.name || 'User';
+        // Use created_at for timeAgo
+        const timeAgo = item.created_at ? getTimeAgo(item.created_at) : 'Just now';
 
-      return {
-        id: String(item.id),
-        title: item.title,
-        price: typeof item.price === 'number' ? item.price : Number(item.price) || 0,
-        category: categoryName,
-        image: imageUrl,
-        isTopAd: !!item.isTopAd,
-        sellerAvatar: sellerAvatar,
-        seller: sellerName,
-        timeAgo: timeAgo,
-        is_featured: item.is_featured,
-        location: item.location || item.user?.location || ''
-      };
-    })
-    : [];
-  // console.log("apiListings",apiListings)
+        return {
+          id: String(item.id),
+          title: item.title,
+          price: typeof item.price === 'number' ? item.price : Number(item.price) || 0,
+          category: categoryName,
+          image: imageUrl,
+          isTopAd: !!item.isTopAd,
+          sellerAvatar: sellerAvatar,
+          seller: sellerName,
+          timeAgo: timeAgo,
+          is_featured: item.is_featured,
+          location: item.location || item.user?.location || ''
+        };
+      })
+      : []
+  ), [data?.data]);
 
   // --- Filtering ---
-  const filteredListings = apiListings.filter((item) => {
-    const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredListings = useMemo(() => (
+    apiListings.filter((item) => {
+      const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCategory =
-      selectedCategory === 'all' || item.category === categoryIdToApiName[selectedCategory];
+      const matchesCategory =
+        selectedCategory === 'all' || item.category === categoryIdToApiName[selectedCategory];
 
-    const matchesLocation =
-      selectedLocation === 'all' || (item.location?.toLowerCase?.() === selectedLocation);
+      const matchesLocation =
+        selectedLocation === 'all' || (item.location?.toLowerCase?.() === selectedLocation);
 
-    return matchesSearch && matchesCategory && matchesLocation;
-  });
+      return matchesSearch && matchesCategory && matchesLocation;
+    })
+  ), [apiListings, searchQuery, selectedCategory, selectedLocation]);
 
-  const topListings = filteredListings.filter((item) => item.is_featured);
+  const topListings = useMemo(() => filteredListings.filter((item) => item.is_featured), [filteredListings]);
   const allListings = filteredListings;
   // console.log("topListings", filteredListings)
   const handleItemPress = (item: any) => {
@@ -281,39 +285,19 @@ export default function MarketplaceScreen() {
     router.push("/marketProfile");
   }
 
-  // Image helper: show a small loader only on the very first load for this
-  // image. Subsequent re-renders (e.g. while filtering/searching) will NOT
-  // re-show the spinner, so the UI feels stable on iOS.
-  function ImageWithLoading({ source, style, ...props }) {
-    const [loading, setLoading] = useState(true);
-    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-
+  // Cached image wrapper: expo-image gives memory+disk caching (no re-download
+  // on scroll-back / filtering) plus a smooth crossfade instead of a spinner.
+  function ImageWithLoading({ source, style }: { source: { uri?: string }; style?: any }) {
     return (
-      <View style={[style, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eee' }]}>
-        <Image
-          source={source}
-          style={[StyleSheet.absoluteFill, style]}
-          onLoadStart={() => {
-            if (!hasLoadedOnce) setLoading(true);
-          }}
-          onLoadEnd={() => {
-            setLoading(false);
-            setHasLoadedOnce(true);
-          }}
-          {...props}
-        />
-        {loading && !hasLoadedOnce && (
-          <ActivityIndicator
-            size="small"
-            color="#940304"
-            style={{ position: 'absolute' }}
-          />
-        )}
-      </View>
+      <CachedImage
+        uri={source?.uri}
+        resolve={false}
+        style={[style, { backgroundColor: '#eee' }]}
+      />
     );
   }
 
-  const renderListingItem = ({ item }: { item: any }) => (
+  const renderListingItem = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.listingCard, { backgroundColor: theme.cardBackground }]}
       onPressIn={() => prefetchListing(Number(item.id))}
@@ -351,7 +335,7 @@ export default function MarketplaceScreen() {
     </TouchableOpacity>
       </View >
     </TouchableOpacity >
-  );
+  ), [theme]);
 
   // --- Loading state ---
   if (isLoading && !data) {

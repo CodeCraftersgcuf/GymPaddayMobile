@@ -74,9 +74,9 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
-            "buildToolsVersion": "35.0.0",
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
             "gradleProperties": {
               "android.enable16KbPageSize": "true"
             },
@@ -110,7 +110,16 @@
           "cameraPermission": "GymPaddy needs access to your camera to take photos and share content. For example, you can take a profile photo when creating your account or capture workout moments to share with friends."
         }
       ],
-      "./plugins/remove-background-audio.js"
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "GymPaddy needs access to your photos and videos to create posts and stories. For example, you can select workout photos or videos from your library to share.",
+          "savePhotosPermission": "GymPaddy needs permission to save photos and videos to your gallery when you download content.",
+          "granularPermissions": ["photo", "video"]
+        }
+      ],
+      "./plugins/remove-background-audio.js",
+      "expo-secure-store"
     ],
     "web": {
       "bundler": "metro",

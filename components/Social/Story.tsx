@@ -1,23 +1,31 @@
 import React from 'react';
-import { TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import ThemeText from '../ThemedText';
+import { CachedAvatar } from '@/components/media/CachedImage';
 import { GroupedUserStories } from '@/utils/types/story';
+import { prefetchGroupedStories } from '@/utils/storyPrefetch';
 
 interface Props {
   story: GroupedUserStories;
   userId?: string; // Logged-in user's ID
 }
 
-const Story: React.FC<Props> = ({ story, userId }) => {
+const StoryComponent: React.FC<Props> = ({ story, userId }) => {
   const router = useRouter();
 // console.log("story",story)
+  const handlePressIn = () => {
+    prefetchGroupedStories([story], { priorityUserCount: 1 });
+  };
+
   const handlePress = () => {
-    console.log('Story pressed:', story.stories);
+    prefetchGroupedStories([story], { priorityUserCount: 1 });
     router.push({
       pathname: '/UserStoryPreview',
       params: {
+        userId: String(story.user.id),
+        startIndex: '0',
         selected: JSON.stringify(story.stories),
       },
     });
@@ -27,9 +35,13 @@ const Story: React.FC<Props> = ({ story, userId }) => {
   const isCurrentUser = story.user.id?.toString() === userId?.toString();
 
   return (
-    <TouchableOpacity style={styles.container} onPress={handlePress}>
+    <TouchableOpacity
+      style={styles.container}
+      onPressIn={handlePressIn}
+      onPress={handlePress}
+    >
       <LinearGradient colors={["#940304", "#0000FF"]} style={styles.gradient}>
-        <Image source={{ uri: story.user.profile_picture_url }} style={styles.avatar} />
+        <CachedAvatar uri={story.user.profile_picture_url} size={56} style={styles.avatar} />
       </LinearGradient>
       <ThemeText style={styles.name}>
         {isCurrentUser ? 'My Story' : story.user.username}
@@ -62,5 +74,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+const Story = React.memo(StoryComponent);
 
 export default Story;

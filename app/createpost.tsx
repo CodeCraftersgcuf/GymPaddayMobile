@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
 import { MediaType } from 'expo-media-library';
+import { requestMediaLibraryReadPermissions } from '@/utils/mediaLibraryPermissions';
 import Header from '@/components/Social/createpost/Header';
 import UserSection from '@/components/Social/createpost/UserSection';
 import SelectedMedia from '@/components/Social/createpost/SelectedMedia';
@@ -29,6 +30,10 @@ import {
   notifyUploadReceived,
   notifyUploadStarted,
 } from '@/utils/backgroundUpload';
+import {
+  addPendingPost,
+  pollUntilPublished,
+} from '@/utils/pendingPosts';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -107,15 +112,40 @@ export default function CreatePostScreen() {
   // Create post mutation
   const createPostMutation = useMutation({
     mutationFn: createPost,
-    onSuccess: async () => {
-      await notifyUploadReceived('post');
-      await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
-      Toast.show({
-        type: 'success',
-        text1: 'Post Created!',
-        text2: 'Your post has been shared successfully',
-        visibilityTime: 500,
-      });
+    onSuccess: async (response: any) => {
+      const isAsync = Boolean(response?.async);
+      const postId = Number(response?.post?.id);
+
+      if (isAsync && Number.isFinite(postId)) {
+        await notifyUploadReceived('post');
+        const firstThumb = selectedMedia.find((m) => m.mediaType === 'photo')?.uri
+          ?? selectedMedia[0]?.uri
+          ?? null;
+        await addPendingPost({
+          postId,
+          createdAt: Date.now(),
+          caption: postText.trim() || undefined,
+          thumbnailUri: firstThumb,
+        });
+        pollUntilPublished(postId).catch(() => {});
+        Toast.show({
+          type: 'success',
+          text1: 'Upload received',
+          text2: 'Processing your post — it will appear in your feed shortly.',
+          visibilityTime: 2500,
+        });
+      } else {
+        await notifyUploadReceived('post');
+        await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+        await queryClient.refetchQueries({ queryKey: ['userPosts'] });
+        Toast.show({
+          type: 'success',
+          text1: 'Post Created!',
+          text2: 'Your post has been shared successfully',
+          visibilityTime: 500,
+        });
+      }
+      setIsSubmittingLocal(false);
       setTimeout(() => router.back(), 600);
     },
     onError: async (error: any) => {
@@ -209,11 +239,13 @@ export default function CreatePostScreen() {
       }
 
       // Request permission for mobile platforms
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      setPermissionStatus(status);
-      console.log('Media library permission status:', status);
+      const granted = await requestMediaLibraryReadPermissions();
+      setPermissionStatus(
+        granted ? MediaLibrary.PermissionStatus.GRANTED : MediaLibrary.PermissionStatus.DENIED,
+      );
+      console.log('Media library permission status:', granted ? 'granted' : 'denied');
 
-      if (status === MediaLibrary.PermissionStatus.GRANTED) {
+      if (granted) {
         await loadGalleryMedia();
       } else {
         Alert.alert(
@@ -221,7 +253,7 @@ export default function CreatePostScreen() {
           'This app needs access to your photo library to display media.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Settings', onPress: () => MediaLibrary.requestPermissionsAsync() },
+            { text: 'Settings', onPress: () => requestMediaLibraryReadPermissions() },
           ]
         );
       }

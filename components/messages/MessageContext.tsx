@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { mockUsers, generateDummyConversations ,User, Message, Conversation} from '../../constants/data';
 
 interface MessageContextType {
@@ -126,15 +126,19 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return users.find((user) => user.id === userId);
   };
 
-  const value = {
-    users,
-    conversations,
-    messages,
-    currentUserId,
-    sendMessage,
-    getMessagesForConversation,
-    getUser,
-  };
+  const value = useMemo(
+    () => ({
+      users,
+      conversations,
+      messages,
+      currentUserId,
+      sendMessage,
+      getMessagesForConversation,
+      getUser,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [users, conversations, messages]
+  );
 
   return <MessageContext.Provider value={value}>{children}</MessageContext.Provider>;
 };

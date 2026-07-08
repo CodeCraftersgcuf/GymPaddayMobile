@@ -22,6 +22,7 @@ export function mapPostFromApi(post: any) {
       ? resolveMediaUrl(videoMedia.thumbnail_url || videoMedia.thumbnail)
       : null,
     timestamp: post.created_at,
+    is_liked: Boolean(post.is_liked),
     likes_count: post.likes_count ?? post.likes?.length ?? 0,
     comments_count:
       post.all_comments_count ?? post.comments_count ?? post.comments?.length ?? 0,

@@ -2,6 +2,7 @@ import { images } from '@/constants';
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import { CachedAvatar } from '@/components/media/CachedImage';
 
 interface Comment {
   id: string;
@@ -22,10 +23,18 @@ interface CommentItemProps {
   onDeletePress?: (commentId: string, userId: string) => void;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = false, onReplyPress, onDeletePress }) => {
+const CommentItemComponent: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = false, onReplyPress, onDeletePress }) => {
   const textColor = darkMode ? '#FFFFFF' : '#000000';
   const subtextColor = darkMode ? '#AAAAAA' : '#777777';
   const replyPadding = isReply ? 40 : 0;
+
+  const relativeTime = React.useMemo(() => {
+    try {
+      return formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true });
+    } catch {
+      return '';
+    }
+  }, [comment.timestamp]);
 
   return (
     <TouchableOpacity
@@ -34,14 +43,14 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, darkMode, isReply = 
       onLongPress={() => onDeletePress?.(comment.id, comment.userId)}
     >
       <View style={styles.commentHeader}>
-        <Image source={{ uri: comment.profileImage }} style={styles.avatar} />
+        <CachedAvatar uri={comment.profileImage} size={40} style={styles.avatar} />
         <View style={styles.commentContent}>
           <View style={styles.userInfo}>
             <Text style={[styles.username, { color: textColor }]}>
               {comment.username}
             </Text>
             <Text style={[styles.timestamp, { color: subtextColor }]}>
-              {formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}
+              {relativeTime}
             </Text>
           </View>
           <Text style={[styles.commentText, { color: textColor }]}>
@@ -143,5 +152,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
+const CommentItem = React.memo(CommentItemComponent);
 
 export default CommentItem;

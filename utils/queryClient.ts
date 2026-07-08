@@ -12,9 +12,11 @@ export const PERSISTED_QUERY_ROOT_KEYS = new Set([
   'userPosts',
   'groupedStories',
   'conversations',
+  'chatMessages',
   'marketplace-listings',
   'unread-messages-count',
   'userProfile',
+  'storyMusicLibrary',
 ]);
 
 export const queryClient = new QueryClient({

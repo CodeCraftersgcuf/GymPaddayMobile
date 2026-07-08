@@ -7,6 +7,10 @@ function normalizeStory(story: StoryItem): StoryItem {
   return {
     ...story,
     full_media_url: resolveMediaUrl(story.full_media_url) || story.full_media_url,
+    full_thumbnail_url:
+      resolveMediaUrl((story as StoryItem & { full_thumbnail_url?: string }).full_thumbnail_url) ||
+      (story as StoryItem & { full_thumbnail_url?: string }).full_thumbnail_url ||
+      null,
     user: {
       ...story.user,
       profile_picture_url:

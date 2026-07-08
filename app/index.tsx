@@ -1,6 +1,7 @@
 import React from 'react';
 import { Redirect } from 'expo-router';
 import { useAppBoot } from '@/contexts/AppBootContext';
+import { normalizeRestorableRoute } from '@/utils/safeNavigation';
 import Login from './login';
 
 /**
@@ -21,13 +22,16 @@ export default function Index() {
     return <Login />;
   }
 
-  if (boot.savedRoute?.params) {
+  const restorePath = normalizeRestorableRoute(boot.savedRoute?.pathname ?? '/(tabs)');
+  const restoreParams = boot.savedRoute?.params;
+
+  if (restoreParams && restorePath.startsWith('/(tabs)')) {
     return (
       <Redirect
-        href={{ pathname: boot.savedRoute.pathname as any, params: boot.savedRoute.params }}
+        href={{ pathname: restorePath as any, params: restoreParams }}
       />
     );
   }
 
-  return <Redirect href={(boot.savedRoute?.pathname ?? '/(tabs)') as any} />;
+  return <Redirect href={restorePath as any} />;
 }

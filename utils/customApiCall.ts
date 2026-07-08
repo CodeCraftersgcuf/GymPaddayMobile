@@ -73,30 +73,20 @@ export const apiCall = async (
 
     return response?.data;
   } catch (error) {
-    console.error('❌ Axios Error:', error);
+    if (axios.isAxiosError(error) && error.response) {
+      const status = error.response.status;
+      const responseData = error.response.data;
+      const apiErrorCode = responseData?.error?.code || responseData?.code;
+      const apiErrorMessage =
+        responseData?.error?.message ||
+        responseData?.message ||
+        'Something went wrong';
 
-    if (axios.isAxiosError(error)) {
-      console.error('Axios error details:', {
-        message: error.message,
-        code: error.code,
-        config: error.config,
-        request: error.request,
-        response: error.response,
-        toJSON: error.toJSON ? error.toJSON() : undefined,
-        isAxiosError: error.isAxiosError,
-      });
+      if (__DEV__ && status !== 403) {
+        console.warn(`API ${method} ${url} failed (${status}):`, apiErrorMessage);
+      }
 
-      if (error.response) {
-        const status = error.response.status;
-        const responseData = error.response.data;
-        const apiErrorCode = responseData?.error?.code || responseData?.code;
-        const apiErrorMessage =
-          responseData?.error?.message ||
-          responseData?.message ||
-          'Something went wrong';
-        
-        // Handle rate limiting (429) with user-friendly message
-        if (status === 429) {
+      if (status === 429) {
           const retryAfter = error.response.headers['retry-after'] || '60';
           const message = `Too many requests. Please wait ${retryAfter} seconds before trying again.`;
           
@@ -116,21 +106,18 @@ export const apiCall = async (
           );
         }
         
-        throw new ApiError(
-          responseData,
-          error.response.statusText,
-          apiErrorMessage,
-          status,
-          apiErrorCode
-        );
-      }
+      throw new ApiError(
+        responseData,
+        error.response.statusText,
+        apiErrorMessage,
+        status,
+        apiErrorCode
+      );
     }
 
-    console.error('Generic error details:', {
-      message: error.message,
-      stack: error.stack,
-      ...error
-    });
+    if (__DEV__) {
+      console.warn(`API ${method} ${url} network error:`, (error as Error)?.message);
+    }
 
     throw new ApiError(
       undefined,

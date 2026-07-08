@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   FlatList,
-  Image,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -10,6 +9,7 @@ import ThemeText from '@/components/ThemedText';
 import ThemedView from '@/components/ThemedView';
 import { format, isToday } from 'date-fns';
 import { useTheme } from '@/contexts/themeContext';
+import { CachedAvatar } from '@/components/media/CachedImage';
 
 type Conversation = {
   id: string;
@@ -77,20 +77,11 @@ export default function ConversationList({
           onPress={() => onConversationPress(item.id)}
         >
           <View style={styles.avatarWrapper}>
-            <Image
-              source={
-                item.other_user?.profile_picture_url?.trim()
-                  ? { uri: item.other_user.profile_picture_url }
-                  : require('@/assets/icons/more/User.png')
-              }
-              style={[
-                styles.avatar,
-                !item.other_user?.profile_picture_url?.trim() && { tintColor: 'black' }
-              ]}
+            <CachedAvatar
+              uri={item.other_user?.profile_picture_url}
+              size={50}
+              style={styles.avatar}
             />
-
-
-
             {item.user.online && <View style={styles.online} />}
           </View>
           <View style={styles.content}>

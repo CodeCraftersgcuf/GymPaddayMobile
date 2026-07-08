@@ -11,7 +11,9 @@ import {
   ActivityIndicator,
   Alert,
   ViewToken,
+  AppState,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostItem from '@/components/Social/PostItem';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
@@ -31,14 +33,28 @@ import { getPostComments } from '@/utils/queries/comments';
 import { createComment } from '@/utils/mutations/comments';
 import { fetchGroupedStories } from '@/utils/storiesApi';
 import { mapPostFromApi } from '@/utils/mapFeedPost';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 import { STALE_TIMES } from '@/utils/queryClient';
 import { getFeedScrollState } from '@/utils/sessionPersistence';
 import { useFeedSession } from '@/contexts/FeedSessionContext';
 import { useSilentInfiniteScroll } from '@/utils/useSilentInfiniteScroll';
 import { getNextFeedPage } from '@/utils/feedPagination';
 import { seedPostCaches } from '@/utils/postCache';
-import { prefetchFeedVideos } from '@/utils/videoPrefetch';
+import { prefetchFeedVideos, prefetchFeedVideosFromIndex, FEED_PREFETCH_AHEAD } from '@/utils/videoPrefetch';
+import { prefetchGroupedStories } from '@/utils/storyPrefetch';
+import { sortGroupedStoriesUnseenFirst } from '@/utils/storyViews';
+import { prefetchProfilesForFeedPosts, warmFeedImagesFromCache } from '@/utils/mediaWarm';
+import { FeedVideoPoolProvider, FeedVideoLayout } from '@/contexts/FeedVideoPoolContext';
+import FeedVideoOverlay from '@/components/Social/FeedVideoOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { CachedImage } from '@/components/media/CachedImage';
+import {
+  getPendingPosts,
+  subscribePendingPosts,
+  resumePendingPostPolling,
+  type PendingPost,
+} from '@/utils/pendingPosts';
 
 // LoadingIndicator component
 function LoadingIndicator({ text = "Loading..." }) {
@@ -70,6 +86,46 @@ export default function SocialFeedScreen() {
   const savedActivePostRef = useRef<number | null>(null);
   const activePostIdRef = useRef<number | null>(null);
   const { registerFeedScroll, registerActivePostId } = useFeedSession();
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  // Reels (fullscreen video detail) open state is owned here so we can fully
+  // pause the feed while the user is inside Reels — no video plays behind it.
+  const [reelsPostId, setReelsPostId] = useState<number | null>(null);
+  const openVideoDetail = useCallback((postId: number) => setReelsPostId(postId), []);
+  const closeVideoDetail = useCallback(() => setReelsPostId(null), []);
+  const feedActive = isFocused && appActive;
+  const reelsOpen = reelsPostId != null;
+  const playbackEnabled = feedActive && !reelsOpen;
+  const [pendingPosts, setPendingPosts] = useState<PendingPost[]>([]);
+
+  const refreshPendingPosts = useCallback(async () => {
+    const items = await getPendingPosts();
+    setPendingPosts(items);
+  }, []);
+
+  useEffect(() => {
+    refreshPendingPosts();
+    return subscribePendingPosts(() => {
+      refreshPendingPosts();
+    });
+  }, [refreshPendingPosts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPendingPosts();
+      resumePendingPostPolling(
+        () => refreshPendingPosts(),
+        () => refreshPendingPosts(),
+      ).catch(() => {});
+    }, [refreshPendingPosts]),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleBlockedOrUnauthorized = async (incomingError: any) => {
     if (logoutTriggeredRef.current) return;
@@ -172,6 +228,17 @@ export default function SocialFeedScreen() {
     gcTime: 24 * 60 * 60 * 1000,
   });
 
+  useEffect(() => {
+    if (groupedStories?.length) {
+      prefetchGroupedStories(groupedStories);
+    }
+  }, [groupedStories]);
+
+  const sortedGroupedStories = useMemo(
+    () => sortGroupedStoriesUnseenFirst(groupedStories ?? []),
+    [groupedStories],
+  );
+
   const getToken = async () => {
     return await SecureStore.getItemAsync('auth_token');
   };
@@ -188,9 +255,10 @@ export default function SocialFeedScreen() {
       return getPostComments(token, currentPostId);
     },
     enabled: !!currentPostId && commentModalVisible,
+    placeholderData: (previousData) => previousData,
+    staleTime: 60 * 1000,
   });
   // console.log("The Comments Data:", commentData);
-  console.log("post comments", commentData);
   const {
     mutate: addComment,
     isPending: isAddingComment,
@@ -218,7 +286,7 @@ export default function SocialFeedScreen() {
     }
   });
 
-  const handleAddComment = async (text: string, postId: number, parentId?: string) => {
+  const handleAddComment = useCallback(async (text: string, postId: number, parentId?: string) => {
     // Get current user data for optimistic comment
     const getCurrentUser = async () => {
       try {
@@ -279,24 +347,23 @@ export default function SocialFeedScreen() {
 
     // Send to backend
     addComment({ text, postId, tempId: tempComment.id, parentId });
+  }, [addComment]);
 
-    console.log('Adding comment to post:', postId, text);
-  };
-
-  const handleCommentPress = (comments: any[], postId: number) => {
+  const handleCommentPress = useCallback((comments: any[], postId: number) => {
     setCurrentPostId(postId);
     setCommentModalVisible(true);
-    // Clear any existing optimistic comments when opening new comment modal
+    // Clear any existing optimistic comments when opening new comment modal.
+    // Cached comments (from a prior open or feed seed) render instantly;
+    // react-query revalidates in the background instead of forcing a blank refetch.
     setOptimisticComments([]);
-    refetchComments();
-  };
+  }, []);
 
-  const handleCloseComments = () => {
+  const handleCloseComments = useCallback(() => {
     setCommentModalVisible(false);
     setCurrentPostId(null);
     // Clear optimistic comments when closing modal
     setOptimisticComments([]);
-  };
+  }, []);
 
   useEffect(() => {
     activePostIdRef.current = activePostId;
@@ -317,15 +384,47 @@ export default function SocialFeedScreen() {
     return formatted.filter((post: any) => !hiddenIdsSet.has(Number(post.id)));
   }, [data, hiddenPostIds]);
 
+  const feedData = useMemo(() => {
+    const publishedIds = new Set(posts.map((p: any) => Number(p.id)));
+    const placeholders = pendingPosts
+      .filter((p) => !publishedIds.has(p.postId))
+      .map((p) => ({
+        id: `pending-${p.postId}`,
+        isPending: true,
+        pendingPostId: p.postId,
+        caption: p.caption,
+        thumbnailUri: p.thumbnailUri,
+        user: posts[0]?.user ?? { username: 'You', profile_picture: '' },
+        content: p.caption || 'Processing your post…',
+        likes_count: 0,
+        comments_count: 0,
+        share_count: 0,
+        imagesUrl: p.thumbnailUri ? [p.thumbnailUri] : [],
+      }));
+    return [...placeholders, ...posts];
+  }, [posts, pendingPosts]);
+
   useEffect(() => {
     if (!data?.pages?.length) return;
     const rawPosts = data.pages.flatMap((page) => page?.data ?? []);
     seedPostCaches(rawPosts);
+    warmFeedImagesFromCache(2);
+    prefetchProfilesForFeedPosts(rawPosts.slice(0, 20), 10);
   }, [data?.pages]);
 
   useEffect(() => {
-    prefetchFeedVideos(posts, activePostId, 2);
+    prefetchFeedVideos(posts, activePostId, FEED_PREFETCH_AHEAD);
   }, [posts, activePostId]);
+
+  const handleReelsLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const handleReelsActivePostChange = useCallback((postId: number) => {
+    setActivePostId(postId);
+  }, []);
 
   const { loadMore, onPrefetchViewableItemsChanged, prefetchViewabilityConfig } =
     useSilentInfiniteScroll({
@@ -379,7 +478,7 @@ export default function SocialFeedScreen() {
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const visible = viewableItems
-        .filter((entry) => entry.isViewable && entry.item?.id != null)
+        .filter((entry) => entry.isViewable && entry.item?.id != null && !entry.item?.isPending)
         .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
       if (visible.length === 0) {
@@ -390,8 +489,11 @@ export default function SocialFeedScreen() {
       const center = visible[Math.floor(visible.length / 2)];
       const nextId = Number(center.item.id);
       setActivePostId((prev) => (prev === nextId ? prev : nextId));
+
+      const maxIndex = Math.max(...visible.map((entry) => entry.index ?? 0));
+      prefetchFeedVideosFromIndex(posts, maxIndex, FEED_PREFETCH_AHEAD);
     },
-    [],
+    [posts],
   );
 
   const onViewableItemsChangedRef = useRef(onViewableItemsChanged);
@@ -406,8 +508,8 @@ export default function SocialFeedScreen() {
   ).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-    minimumViewTime: 250,
+    itemVisiblePercentThreshold: 60,
+    minimumViewTime: 120,
   }).current;
 
   const viewabilityConfigCallbackPairs = useRef([
@@ -458,12 +560,11 @@ export default function SocialFeedScreen() {
     loadHiddenPosts();
   }, []);
 
-  const handleMenu = (userId: any, postId: any) => {
+  const handleMenu = useCallback((userId: any, postId: any) => {
     setPostType(userId == 100 ? 'userpost' : 'ViewerPost');
     setBottomIndex(1);
     setidCan({ userId, postId });
-    console.log('click bottom sheet', userId, postId);
-  };
+  }, []);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -477,65 +578,91 @@ export default function SocialFeedScreen() {
 
   const showFeedSkeleton = isLoading && posts.length === 0 && !data?.pages?.length;
 
-  const handleHidePost = async () => {
-    console.log('🔒 Hiding post:', idCan);
-    
-    if (idCan && 'postId' in idCan && idCan.postId) {
-      const postIdToHide = Number(idCan.postId);
-      
-      // Update hidden posts list first to ensure state is updated
-      setHiddenPostIds(prev => {
-        // Check if already hidden to avoid duplicates
-        if (prev.includes(postIdToHide)) {
-          console.log('⚠️ Post already in hidden list:', postIdToHide);
-          return prev;
-        }
-        
-        const updated = [...prev, postIdToHide];
-        
-        // Save to AsyncStorage
-        AsyncStorage.setItem('hidden_post_ids', JSON.stringify(updated))
-          .then(() => {
-            console.log('✅ Hidden post saved to storage:', postIdToHide);
-          })
-          .catch((err) => {
-            console.error('❌ Failed to persist hidden posts:', err);
-          });
-        
-        return updated;
+  const hidePostById = useCallback((postId: number) => {
+    const postIdToHide = Number(postId);
+    if (Number.isNaN(postIdToHide)) return;
+
+    setHiddenPostIds((prev) => {
+      if (prev.includes(postIdToHide)) return prev;
+      const updated = [...prev, postIdToHide];
+      AsyncStorage.setItem('hidden_post_ids', JSON.stringify(updated)).catch((err) => {
+        console.error('❌ Failed to persist hidden posts:', err);
       });
-      
+      return updated;
+    });
+  }, []);
+
+  const handleHidePost = async () => {
+    if (idCan && 'postId' in idCan && idCan.postId) {
+      hidePostById(Number(idCan.postId));
       // Close the bottom sheet
       setBottomIndex(-1);
-      
-      console.log('✅ Post hidden successfully:', postIdToHide);
     } else {
       console.warn('⚠️ No postId found in idCan:', idCan);
     }
   };
-  const mapApiCommentsToInternal = (apiComments: any[]): Comment[] => {
+  const mapApiCommentsToInternal = useCallback((apiComments: any[]): Comment[] => {
     return (apiComments || []).map((item) => ({
       id: item.id.toString(),
       userId: item.user?.id?.toString() || '',
       username: item.user?.username || 'Unknown',
-      profileImage: item.user?.profile_picture_url || '',
+      profileImage: resolveMediaUrl(item.user?.profile_picture_url) || '',
       text: item.content || '',
       timestamp: item.created_at,
       likes: 0,
       replies: mapApiCommentsToInternal(item.replies || [])
     }));
-  };
+  }, []);
+
+  const sheetComments = useMemo(
+    () => [...mapApiCommentsToInternal(commentData || []), ...optimisticComments],
+    [commentData, optimisticComments, mapApiCommentsToInternal]
+  );
+
+  const activeIndex = useMemo(
+    () => (activePostId != null ? feedData.findIndex((p: any) => p.id === activePostId) : -1),
+    [feedData, activePostId],
+  );
+
+  const renderPendingPost = useCallback(
+    (item: any) => (
+      <View style={[styles.pendingCard, { backgroundColor: dark ? '#111' : '#f5f5f5' }]}>
+        {item.thumbnailUri ? (
+          <CachedImage
+            uri={item.thumbnailUri}
+            resolve={false}
+            style={styles.pendingThumb}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.pendingThumb, styles.pendingThumbPlaceholder]} />
+        )}
+        <View style={styles.pendingOverlay}>
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={styles.pendingText}>Processing your post…</Text>
+        </View>
+      </View>
+    ),
+    [dark],
+  );
 
   const renderFeedPost = useCallback(
-    ({ item }: { item: any }) => (
-      <PostItem
-        post={item}
-        onCommentPress={handleCommentPress}
-        handleMenu={handleMenu}
-        isFeedFocused={item.id === activePostId}
-      />
-    ),
-    [activePostId, handleCommentPress, handleMenu]
+    ({ item, index }: { item: any; index: number }) => {
+      if (item.isPending) {
+        return renderPendingPost(item);
+      }
+      return (
+        <PostItem
+          post={item}
+          onCommentPress={handleCommentPress}
+          handleMenu={handleMenu}
+          isFeedFocused={item.id === activePostId}
+          feedPlaybackEnabled={playbackEnabled}
+          preloadVideo={activeIndex >= 0 && Math.abs(index - activeIndex) <= 2}
+        />
+      );
+    },
+    [activePostId, activeIndex, playbackEnabled, handleCommentPress, handleMenu, renderPendingPost]
   );
 
   const feedListHeader = useCallback(
@@ -568,7 +695,7 @@ export default function SocialFeedScreen() {
         )}
         {!isError && (
           <StoryContainer
-            stories={groupedStories ?? []}
+            stories={sortedGroupedStories}
             refreshing={refreshing || isFetchingStories}
           />
         )}
@@ -579,7 +706,7 @@ export default function SocialFeedScreen() {
         )}
       </>
     ),
-    [isError, posts.length, dark, error, refetch, groupedStories, refreshing, isFetchingStories]
+    [isError, posts.length, dark, error, refetch, sortedGroupedStories, refreshing, isFetchingStories]
   );
 
   const feedListFooter = useCallback(
@@ -629,46 +756,60 @@ export default function SocialFeedScreen() {
           />
         </TabHeader>
 
-        <FlatList
-          ref={flatListRef}
-          style={{ flex: 1 }}
-          data={isError && posts.length === 0 ? [] : posts}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderFeedPost}
-          extraData={activePostId}
-          ListHeaderComponent={feedListHeader}
-          ListFooterComponent={feedListFooter}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-          viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
-          initialNumToRender={4}
-          maxToRenderPerBatch={5}
-          windowSize={11}
-          updateCellsBatchingPeriod={50}
-          onScroll={(event) => {
-            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
-          }}
-          scrollEventThrottle={16}
-          onEndReached={loadMore}
-          onEndReachedThreshold={2}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#940304']}
-              tintColor={'#940304'}
-              title="Pull to refresh"
-              titleColor={dark ? '#ffffff' : '#000000'}
+        <FeedVideoPoolProvider
+          posts={posts}
+          activePostId={activePostId}
+          detailPostId={reelsPostId}
+          openVideoDetail={openVideoDetail}
+          closeVideoDetail={closeVideoDetail}
+          onReelsLoadMore={handleReelsLoadMore}
+          onReelsActivePostChange={handleReelsActivePostChange}
+          onReelsHidePost={hidePostById}
+        >
+          <FeedVideoLayout>
+            <FlatList
+              ref={flatListRef}
+              style={{ flex: 1 }}
+              data={isError && posts.length === 0 && pendingPosts.length === 0 ? [] : feedData}
+              keyExtractor={(item) => String(item.id)}
+              renderItem={renderFeedPost}
+              extraData={`${activePostId}-${playbackEnabled}-${pendingPosts.length}`}
+              ListHeaderComponent={feedListHeader}
+              ListFooterComponent={feedListFooter}
+              contentContainerStyle={{ paddingBottom: 100 }}
+              showsVerticalScrollIndicator={false}
+              viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+              initialNumToRender={4}
+              maxToRenderPerBatch={5}
+              windowSize={11}
+              updateCellsBatchingPeriod={50}
+              onScroll={(event) => {
+                scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+              }}
+              scrollEventThrottle={16}
+              onEndReached={loadMore}
+              onEndReachedThreshold={2}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#940304']}
+                  tintColor={'#940304'}
+                  title="Pull to refresh"
+                  titleColor={dark ? '#ffffff' : '#000000'}
+                />
+              }
             />
-          }
-        />
+            <FeedVideoOverlay paused={!feedActive} />
+          </FeedVideoLayout>
+        </FeedVideoPoolProvider>
         <CommentsBottomSheet
           visible={commentModalVisible}
-          comments={[...mapApiCommentsToInternal(commentData), ...optimisticComments]}
+          comments={sheetComments}
           postId={currentPostId}
           onClose={handleCloseComments}
           onAddComment={handleAddComment}
-          loading={false}
+          loading={isLoadingComments && !commentData}
         />
       </SafeAreaView>
 
@@ -745,7 +886,33 @@ const styles = StyleSheet.create({
   },
   floatingButtonText: {
     fontSize: 32,
-    color: '#fff', // White text color
+    color: '#fff',
     fontWeight: 'bold',
+  },
+  pendingCard: {
+    marginVertical: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    minHeight: 200,
+    position: 'relative',
+  },
+  pendingThumb: {
+    width: '100%',
+    height: 200,
+  },
+  pendingThumbPlaceholder: {
+    backgroundColor: '#222',
+  },
+  pendingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pendingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -88,6 +88,7 @@ export default function TabLayout() {
               },
             }}
             options={{
+              lazy: false,
               title: 'Socials',
               tabBarIcon: ({ color, size, focused }) => (
                 <View style={[styles.iconWrap, { backgroundColor: getTabIconBg(focused, isDarkMode) }]}>
@@ -105,6 +106,7 @@ export default function TabLayout() {
               },
             }}
             options={{
+              lazy: false,
               title: 'Market',
               tabBarIcon: ({ color, size, focused }) => (
                 <View style={[styles.iconWrap, { backgroundColor: getTabIconBg(focused, isDarkMode) }]}>
@@ -146,6 +148,7 @@ export default function TabLayout() {
               },
             }}
             options={{
+              lazy: false,
               title: 'Messages',
               tabBarIcon: ({ color, size, focused }) => (
                 <View style={[styles.iconWrap, { backgroundColor: getTabIconBg(focused, isDarkMode) }]}>

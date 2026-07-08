@@ -54,7 +54,6 @@ function BootAwareRoot({ token, userDetails }: { token: string | null; userDetai
         <Stack.Screen name="marketView" options={{ headerShown: false }} />
         <Stack.Screen name="addListing" options={{ headerShown: false }} />
         <Stack.Screen name="marketProfile" options={{ headerShown: false }} />
-        <Stack.Screen name="AgoraCallScreen" options={{ headerShown: false }} />
         <Stack.Screen name="UserListing" options={{ headerShown: false }} />
         <Stack.Screen name="UserProfile" options={{ headerShown: false }} />
         <Stack.Screen name="goLive" options={{ headerShown: false }} />

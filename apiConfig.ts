@@ -38,6 +38,8 @@ const API_ENDPOINTS = {
     STORIES: {
       List: API_DOMAIN + "/user/get/stories",
       Create: API_DOMAIN + "/user/stories",
+      View: API_DOMAIN + "/user/view-story",
+      Music: API_DOMAIN + "/user/story-music",
     },
     SEARCH: (query: string) =>
       `${API_DOMAIN}/user/search?q=${encodeURIComponent(query)}`,

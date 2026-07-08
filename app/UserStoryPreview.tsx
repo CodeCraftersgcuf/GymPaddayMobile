@@ -1,10 +1,8 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  Image,
   Dimensions,
-  TouchableWithoutFeedback,
   Animated,
   Platform,
   ActivityIndicator,
@@ -13,14 +11,23 @@ import {
   StatusBar,
 } from 'react-native';
 import { Audio, Video, ResizeMode } from 'expo-av';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { StoryItem } from '@/utils/types/story';
-import CachedImage from 'expo-cached-image';
+import { CachedImage } from '@/components/media/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
-import { prefetchVideoUrl } from '@/utils/videoPrefetch';
+import {
+  prefetchAdjacentStories,
+  pickStoryPlaybackUrl,
+  getStoryThumbnailUrl,
+  resolveStoryMusicPlaybackUrl,
+  clearCachedStoryVideo,
+} from '@/utils/storyPrefetch';
+import { markStoryViewed } from '@/utils/storyViews';
 
 const { width, height } = Dimensions.get('window');
-const STORY_DURATION = 4000; // Reduced from 5000ms to 4000ms for faster transitions
+const STORY_DURATION = 4000;
 
 const fixUrl = (url: string) =>
   url?.replace('https://api.gympaddy.com/storage//', 'https://api.gympaddy.com/storage/');
@@ -32,35 +39,139 @@ type StoryWithMusic = StoryItem & {
   musicUrl?: string | null;
 };
 
-const resolveStoryMusicUrl = (story?: StoryWithMusic): string | undefined => {
-  if (!story) return undefined;
-  const candidate =
-    story.music_url ??
-    story.music?.url ??
-    story.musicUrl ??
-    undefined;
-  if (!candidate || typeof candidate !== 'string') return undefined;
-  const trimmed = candidate.trim();
-  if (!trimmed) return undefined;
-  return fixUrl(trimmed);
+const resolveStoryMusicUrl = (story?: StoryWithMusic): string | undefined =>
+  resolveStoryMusicPlaybackUrl(story);
+
+const isStoryPhoto = (story?: StoryItem) =>
+  story?.media_type === 'photo' || (story as any)?.media_type === 'image';
+
+const isStoryVideo = (story?: StoryItem) => story?.media_type === 'video';
+
+function isValidMediaUri(uri?: string | null): uri is string {
+  if (!uri || typeof uri !== 'string') return false;
+  const trimmed = uri.trim();
+  return (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('file://') ||
+    trimmed.startsWith('/')
+  );
+}
+
+type GroupedStoryUser = {
+  user?: { id?: number | string };
+  stories?: StoryItem[];
 };
 
-const UserStoryPreview = () => {
-  const { selected } = useLocalSearchParams();
-  const router = useRouter();
+function resolveStoriesFromParams(
+  queryClient: ReturnType<typeof useQueryClient>,
+  params: {
+    selected?: string | string[];
+    userId?: string | string[];
+    startIndex?: string | string[];
+  },
+): StoryItem[] {
+  const userIdRaw = params.userId;
+  const userId = userIdRaw
+    ? String(Array.isArray(userIdRaw) ? userIdRaw[0] : userIdRaw)
+    : null;
 
-  const stories: StoryItem[] = JSON.parse(selected as string || '[]');
-  const [currentIndex, setCurrentIndex] = useState(0);
+  if (userId) {
+    const grouped = queryClient.getQueryData<GroupedStoryUser[]>(['groupedStories']);
+    const group = grouped?.find(
+      (g) => String(g.user?.id) === userId,
+    );
+    if (group?.stories?.length) {
+      return group.stories;
+    }
+  }
+
+  const selectedRaw = params.selected;
+  const selectedStr = selectedRaw
+    ? (Array.isArray(selectedRaw) ? selectedRaw[0] : selectedRaw)
+    : '[]';
+  try {
+    const parsed = JSON.parse(selectedStr || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+const UserStoryPreview = () => {
+  const params = useLocalSearchParams<{
+    selected?: string;
+    userId?: string;
+    startIndex?: string;
+  }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const stories = useMemo(
+    () => resolveStoriesFromParams(queryClient, params),
+    [queryClient, params.selected, params.userId],
+  );
+
+  const initialIndex = useMemo(() => {
+    const raw = params.startIndex;
+    const n = raw ? parseInt(String(raw), 10) : 0;
+    return Number.isFinite(n) && n >= 0 ? Math.min(n, Math.max(0, stories.length - 1)) : 0;
+  }, [params.startIndex, stories.length]);
+
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [playbackUrl, setPlaybackUrl] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [isResolvingUrl, setIsResolvingUrl] = useState(true);
   const [isMediaLoaded, setIsMediaLoaded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const resolveGenRef = useRef(0);
 
   const progress = useRef(new Animated.Value(0)).current;
   const videoRef = useRef<Video | null>(null);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const musicSoundRef = useRef<Audio.Sound | null>(null);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoPlaybackStartedRef = useRef(false);
 
   const currentStory = stories[currentIndex] as StoryWithMusic | undefined;
-  const fixedUrl = fixUrl(currentStory?.full_media_url || '');
   const fixedMusicUrl = resolveStoryMusicUrl(currentStory);
+
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex, params.userId]);
+
+  // Resolve best URL once per slide — cache only if verified, else CDN (no mid-play switch).
+  useEffect(() => {
+    if (!currentStory) {
+      setPlaybackUrl('');
+      setThumbnailUrl('');
+      setIsResolvingUrl(false);
+      return;
+    }
+
+    const gen = ++resolveGenRef.current;
+    setIsResolvingUrl(true);
+    setIsMediaLoaded(false);
+    setLoadFailed(false);
+    setThumbnailUrl(getStoryThumbnailUrl(currentStory));
+
+    pickStoryPlaybackUrl(currentStory)
+      .then((uri) => {
+        if (resolveGenRef.current !== gen) return;
+        setPlaybackUrl(uri);
+        setIsResolvingUrl(false);
+      })
+      .catch(() => {
+        if (resolveGenRef.current !== gen) return;
+        const fallback =
+          currentStory.full_media_url?.startsWith('http')
+            ? fixUrl(currentStory.full_media_url)
+            : '';
+        setPlaybackUrl(fallback);
+        setIsResolvingUrl(false);
+      });
+  }, [currentIndex, currentStory?.id]);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -69,61 +180,168 @@ const UserStoryPreview = () => {
       shouldDuckAndroid: true,
     }).catch(() => {});
   }, []);
-  const [musicSound, setMusicSound] = useState<Audio.Sound | null>(null);
+
+  const stopMusic = useCallback(async () => {
+    const sound = musicSoundRef.current;
+    if (!sound) return;
+    musicSoundRef.current = null;
+    try {
+      await sound.stopAsync();
+      await sound.unloadAsync();
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  const startMusic = useCallback(async (musicUri: string, autoPlay = true) => {
+    await stopMusic();
+    if (isPaused) return;
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: musicUri },
+        { shouldPlay: autoPlay, isLooping: true },
+      );
+      musicSoundRef.current = sound;
+    } catch {
+      /* best-effort — CDN clip may be missing */
+    }
+  }, [isPaused, stopMusic]);
+
+  const syncMusicWithVideo = useCallback(async () => {
+    if (isPaused || !fixedMusicUrl) return;
+    const existing = musicSoundRef.current;
+    if (existing) {
+      try {
+        const status = await existing.getStatusAsync();
+        if (status.isLoaded && !status.isPlaying) {
+          await existing.setPositionAsync(0);
+          await existing.playAsync();
+        }
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+    await startMusic(fixedMusicUrl, true);
+  }, [fixedMusicUrl, isPaused, startMusic]);
 
   useEffect(() => {
-    let isCancelled = false;
-
-    const cleanupMedia = async () => {
-      // Stop animation
-      if (animationRef.current) {
-        animationRef.current.stop();
-      }
-      
-      // Reset progress to 0
-      progress.setValue(0);
-      setIsMediaLoaded(false);
-
-      // Stop and cleanup music
-      if (musicSound) {
-        try {
-          await musicSound.stopAsync();
-          await musicSound.unloadAsync();
-        } catch (e) {
-          // Silently ignore cleanup errors
-          if (__DEV__) {
-            console.warn('Error cleaning up music:', e);
-          }
-        }
-        setMusicSound(null);
-      }
-    };
-
-    cleanupMedia();
-
-    return () => {
-      isCancelled = true;
-      cleanupMedia();
-    };
+    videoPlaybackStartedRef.current = false;
   }, [currentIndex]);
 
+  // Photos: music starts once image is loaded. Videos: preload paused, sync on first frame.
   useEffect(() => {
-    return () => {
-      if (musicSound) {
-        musicSound.stopAsync();
-        musicSound.unloadAsync();
-      }
-    };
-  }, [musicSound]);
+    if (!fixedMusicUrl || isPaused) {
+      stopMusic();
+      return;
+    }
 
-  // Start progress animation when media loads
+    if (isStoryPhoto(currentStory)) {
+      if (!isMediaLoaded) return;
+      startMusic(fixedMusicUrl, true);
+      return () => {
+        stopMusic();
+      };
+    }
+
+    if (isStoryVideo(currentStory)) {
+      startMusic(fixedMusicUrl, false);
+      return () => {
+        stopMusic();
+      };
+    }
+  }, [
+    currentIndex,
+    fixedMusicUrl,
+    isPaused,
+    isMediaLoaded,
+    currentStory,
+    startMusic,
+    stopMusic,
+  ]);
+
+  const clearLoadTimeout = useCallback(() => {
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleNext = useCallback(() => {
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+    clearLoadTimeout();
+    setIsMediaLoaded(false);
+    setLoadFailed(false);
+    progress.setValue(0);
+
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      router.back();
+    }
+  }, [currentIndex, stories.length, router, progress, clearLoadTimeout]);
+
+  const retryCurrentStory = useCallback(() => {
+    if (!currentStory) return;
+    if (currentStory.id) clearCachedStoryVideo(currentStory.id);
+    setLoadFailed(false);
+    setIsMediaLoaded(false);
+    setIsResolvingUrl(true);
+    progress.setValue(0);
+    const gen = ++resolveGenRef.current;
+    pickStoryPlaybackUrl(currentStory, 0).then((uri) => {
+      if (resolveGenRef.current !== gen) return;
+      setPlaybackUrl(uri);
+      setIsResolvingUrl(false);
+    });
+  }, [currentStory, progress]);
+
+  const handleVideoError = useCallback(() => {
+    clearLoadTimeout();
+    setLoadFailed(true);
+    setIsMediaLoaded(false);
+    animationRef.current?.stop();
+    videoRef.current?.pauseAsync?.().catch(() => {});
+    musicSoundRef.current?.pauseAsync?.().catch(() => {});
+  }, [clearLoadTimeout]);
+
+  useEffect(() => {
+    if (currentStory?.id) {
+      markStoryViewed(currentStory.id);
+    }
+  }, [currentStory?.id]);
+
+  useEffect(() => {
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+    progress.setValue(0);
+    setIsMediaLoaded(false);
+    setLoadFailed(false);
+    clearLoadTimeout();
+  }, [currentIndex, currentStory?.id, clearLoadTimeout]);
+
+  const handlePrev = useCallback(() => {
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+    clearLoadTimeout();
+    setIsMediaLoaded(false);
+    progress.setValue(0);
+
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    } else {
+      router.back();
+    }
+  }, [currentIndex, router, progress, clearLoadTimeout]);
+
   useEffect(() => {
     if (isMediaLoaded && !isPaused) {
-      if (currentStory?.media_type === 'photo') {
-        // Reset progress to 0 first
+      if (isStoryPhoto(currentStory)) {
         progress.setValue(0);
-        
-        // For photos, animate progress bar smoothly
         animationRef.current = Animated.timing(progress, {
           toValue: 1,
           duration: STORY_DURATION,
@@ -133,55 +351,22 @@ const UserStoryPreview = () => {
           if (finished) handleNext();
         });
       }
-      // For videos, progress is updated via onPlaybackStatusUpdate
     }
-  }, [isMediaLoaded, isPaused, currentStory?.media_type, currentIndex]);
-
-  const handleNext = useCallback(() => {
-    if (animationRef.current) {
-      animationRef.current.stop();
-    }
-    
-    // Reset states
-    setIsMediaLoaded(false);
-    progress.setValue(0);
-    
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      router.back();
-    }
-  }, [currentIndex, stories.length, router, progress]);
-
-  const handlePrev = useCallback(() => {
-    if (animationRef.current) {
-      animationRef.current.stop();
-    }
-    
-    // Reset states
-    setIsMediaLoaded(false);
-    progress.setValue(0);
-    
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
-    } else {
-      router.back();
-    }
-  }, [currentIndex, router, progress]);
+  }, [isMediaLoaded, isPaused, currentStory?.media_type, currentIndex, handleNext, progress]);
 
   const handlePressIn = () => {
     setIsPaused(true);
     animationRef.current?.stop();
     videoRef.current?.pauseAsync?.();
+    musicSoundRef.current?.pauseAsync?.();
   };
 
   const handlePressOut = () => {
     setIsPaused(false);
-    if (currentStory?.media_type === 'photo' && isMediaLoaded) {
-      // Get current progress value
+    if (isStoryPhoto(currentStory) && isMediaLoaded) {
       const currentProgress = (progress as any)._value || 0;
       const remaining = (1 - currentProgress) * STORY_DURATION;
-      
+
       if (remaining > 0) {
         animationRef.current = Animated.timing(progress, {
           toValue: 1,
@@ -192,119 +377,94 @@ const UserStoryPreview = () => {
           if (finished) handleNext();
         });
       } else {
-        // If no time remaining, go to next
         handleNext();
       }
-    } else if (currentStory?.media_type === 'video') {
-      // Resume video
+    } else if (isStoryVideo(currentStory)) {
       videoRef.current?.playAsync?.();
-    }
-  };
-  const playMusicAfterMediaLoads = useCallback(async () => {
-    const musicUri = fixedMusicUrl;
-    if (musicUri) {
-      try {
-        // Stop any existing music first
-        if (musicSound) {
-          try {
-            await musicSound.stopAsync();
-            await musicSound.unloadAsync();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-        }
-
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: musicUri },
-          { 
-            shouldPlay: true,
-            isLooping: true, // Loop music for story
-          }
-        );
-        setMusicSound(sound);
-      } catch (err: any) {
-        // Only log non-network errors or log silently for network issues
-        const errorMessage = err?.message || String(err);
-        const isNetworkError = 
-          errorMessage.includes('UnknownHostException') ||
-          errorMessage.includes('Unable to resolve host') ||
-          errorMessage.includes('Network request failed') ||
-          errorMessage.includes('ECONNREFUSED') ||
-          errorMessage.includes('ENOTFOUND') ||
-          errorMessage.includes('HttpDataSourceException');
-        
-        // Silently handle network errors (expected when offline or CDN unavailable)
-        if (!isNetworkError) {
-          // Only log unexpected errors
-          if (__DEV__) {
-            console.warn('Failed to play music (non-network error):', err);
-          }
-        }
-        // Network errors are expected and don't need logging
+      if (fixedMusicUrl) {
+        musicSoundRef.current?.playAsync?.();
       }
-    }
-  }, [fixedMusicUrl, musicSound]);
-// Enhanced preloading - preload next 2 stories for ultra-smooth transitions
-useEffect(() => {
-  const preloadStories = async () => {
-    // Preload next story
-    const nextStory = stories[currentIndex + 1];
-    if (nextStory) {
-      const nextUrl = fixUrl(nextStory.full_media_url);
-      if (nextStory.media_type === 'photo') {
-        Image.prefetch(nextUrl).catch(() => {}); // Silent fail
-      } else if (nextStory.media_type === 'video') {
-        prefetchVideoUrl(nextUrl);
-      }
-    }
-
-    // Also preload the story after next for even smoother experience
-    const nextNextStory = stories[currentIndex + 2];
-    if (nextNextStory) {
-      const nextNextUrl = fixUrl(nextNextStory.full_media_url);
-      if (nextNextStory.media_type === 'photo') {
-        Image.prefetch(nextNextUrl).catch(() => {});
-      }
+    } else if (fixedMusicUrl) {
+      musicSoundRef.current?.playAsync?.();
     }
   };
 
-  preloadStories();
-}, [currentIndex, stories]);
+  const onMediaLoaded = useCallback(() => {
+    clearLoadTimeout();
+    setIsMediaLoaded(true);
+  }, [clearLoadTimeout]);
 
+  useEffect(() => {
+    const preloadStories = async () => {
+      prefetchAdjacentStories(stories, currentIndex);
+
+      const nextStory = stories[currentIndex + 1];
+      if (nextStory) {
+        const thumb = getStoryThumbnailUrl(nextStory);
+        if (thumb) Image.prefetch(thumb).catch(() => {});
+      }
+    };
+    preloadStories();
+  }, [currentIndex, stories]);
+
+  useEffect(() => {
+    return () => {
+      clearLoadTimeout();
+      stopMusic();
+    };
+  }, [clearLoadTimeout, stopMusic]);
 
   const renderMedia = () => {
     if (!currentStory) return null;
+    const mediaKey = `story-media-${currentStory.id}`;
+    const showSpinner = isResolvingUrl || (!isMediaLoaded && !loadFailed);
+    const poster = thumbnailUrl || playbackUrl;
 
-    if (currentStory.media_type === 'photo') {
+    if (loadFailed) {
+      return (
+        <View style={styles.errorWrap}>
+          {poster ? (
+            <CachedImage
+              uri={poster}
+              resolve={false}
+              style={styles.media}
+              contentFit="contain"
+            />
+          ) : null}
+          <View style={styles.errorOverlay}>
+            <Text style={styles.errorText}>Couldn&apos;t load this story</Text>
+            <Pressable style={styles.retryBtn} onPress={retryCurrentStory}>
+              <Text style={styles.retryBtnText}>Tap to retry</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+
+    if (isStoryPhoto(currentStory)) {
+      if (!isValidMediaUri(playbackUrl) && isResolvingUrl) {
+        return (
+          <View style={styles.loader}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        );
+      }
       return (
         <>
-          <CachedImage
-            source={{ uri: fixedUrl }}
-            cacheKey={`story-${currentStory.id}`}
-            style={styles.media}
-            resizeMode="contain"
-            onLoadStart={() => {
-              setIsMediaLoaded(false);
-              progress.setValue(0);
-            }}
-            onLoad={async () => {
-              setIsMediaLoaded(true);
-              // Small delay to ensure image is fully rendered
-              await new Promise(resolve => setTimeout(resolve, 100));
-              // Start music after image loads
-              if (fixedMusicUrl) {
-                await playMusicAfterMediaLoads();
-              }
-            }}
-            onLoadEnd={() => {
-              // Fallback: cached images may skip the onLoad timing path on some devices.
-              setIsMediaLoaded(true);
-              if (fixedMusicUrl) {
-                playMusicAfterMediaLoads();
-              }
-            }}
-          />
-          {!isMediaLoaded && (
+          {isValidMediaUri(playbackUrl) ? (
+            <CachedImage
+              key={mediaKey}
+              uri={playbackUrl}
+              resolve={false}
+              recyclingKey={mediaKey}
+              style={styles.media}
+              contentFit="contain"
+              priority="high"
+              onLoad={onMediaLoaded}
+              onError={handleVideoError}
+            />
+          ) : null}
+          {showSpinner && (
             <View style={styles.loader}>
               <ActivityIndicator size="large" color="#fff" />
             </View>
@@ -313,50 +473,79 @@ useEffect(() => {
       );
     }
 
+    if (!isValidMediaUri(playbackUrl)) {
+      return (
+        <View style={styles.loader}>
+          {poster ? (
+            <CachedImage
+              uri={poster}
+              resolve={false}
+              style={styles.media}
+              contentFit="contain"
+            />
+          ) : null}
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      );
+    }
 
     return (
       <>
+        {poster && !isMediaLoaded ? (
+          <CachedImage
+            uri={poster}
+            resolve={false}
+            recyclingKey={`${mediaKey}-poster`}
+            style={styles.media}
+            contentFit="contain"
+            priority="high"
+          />
+        ) : null}
         <Video
-          ref={(ref) => (videoRef.current = ref)}
-          source={{ uri: fixedUrl }}
+          key={mediaKey}
+          ref={(ref) => {
+            videoRef.current = ref;
+          }}
+          source={{ uri: playbackUrl }}
           rate={1.0}
           volume={1.0}
-          isMuted={false}
+          isMuted={!!fixedMusicUrl}
+          isLooping={false}
           resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={!isPaused}
+          shouldPlay={!isPaused && !isResolvingUrl}
+          progressUpdateIntervalMillis={150}
           style={styles.media}
-          onLoadStart={() => {
-            setIsMediaLoaded(false);
-            progress.setValue(0);
-          }}
-          onLoad={async () => {
-            setIsMediaLoaded(true);
-            if (!isPaused) {
-              await videoRef.current?.playAsync?.();
-            }
-            // Start music after video loads
-            if (fixedMusicUrl) {
-              await playMusicAfterMediaLoads();
-            }
-          }}
+          onLoad={onMediaLoaded}
+          onReadyForDisplay={onMediaLoaded}
+          onError={handleVideoError}
           onPlaybackStatusUpdate={(status) => {
-            if (status.isLoaded) {
-              // Update progress bar based on video position - smooth animation
-              if (status.durationMillis && status.positionMillis !== undefined) {
-                const progressValue = Math.min(status.positionMillis / status.durationMillis, 1);
-                progress.setValue(progressValue);
-              }
-              
-              if (status.didJustFinish) {
-                handleNext();
-              } else if (!status.isPlaying && !isPaused && !status.didJustFinish) {
-                // Auto-resume if video stopped unexpectedly
-                videoRef.current?.playAsync?.();
-              }
+            if (!status.isLoaded) return;
+            if (
+              status.isPlaying &&
+              !videoPlaybackStartedRef.current &&
+              fixedMusicUrl
+            ) {
+              videoPlaybackStartedRef.current = true;
+              syncMusicWithVideo();
+            }
+            if (status.isPlaying && (status.positionMillis ?? 0) > 0) {
+              onMediaLoaded();
+            }
+            if (status.durationMillis && status.positionMillis !== undefined) {
+              const progressValue = Math.min(
+                status.positionMillis / status.durationMillis,
+                1,
+              );
+              progress.setValue(progressValue);
+            }
+            if (status.didJustFinish) {
+              handleNext();
+            } else if (!status.isPlaying && !isPaused && !status.didJustFinish) {
+              videoRef.current?.playAsync?.();
             }
           }}
         />
-        {!isMediaLoaded && (
+        {showSpinner && (
           <View style={styles.loader}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
@@ -365,15 +554,14 @@ useEffect(() => {
     );
   };
 
-
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
-      {stories.map((_, index) => {
+      {stories.map((story, index) => {
         const isActive = index === currentIndex;
         const isCompleted = index < currentIndex;
-        
+
         return (
-          <View key={index} style={styles.progressTrack}>
+          <View key={story.id ?? index} style={styles.progressTrack}>
             <Animated.View
               style={[
                 styles.progressBar,
@@ -399,21 +587,30 @@ useEffect(() => {
     </View>
   );
 
+  if (!stories.length) {
+    return (
+      <View style={[styles.container, styles.empty]}>
+        <Text style={styles.emptyText}>No stories available</Text>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.emptyLink}>Go back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderMedia()}
       {renderProgressBar()}
-      
-      {/* Left tap zone - Previous */}
+
       <Pressable
         style={styles.leftTapZone}
         onPress={handlePrev}
         onLongPress={handlePressIn}
         onPressOut={handlePressOut}
       />
-      
-      {/* Right tap zone - Next */}
+
       <Pressable
         style={styles.rightTapZone}
         onPress={handleNext}
@@ -421,7 +618,6 @@ useEffect(() => {
         onPressOut={handlePressOut}
       />
 
-      {/* Music indicator */}
       {fixedMusicUrl ? (
         <View style={styles.musicIndicator}>
           <Ionicons name="musical-note" size={16} color="#fff" />
@@ -431,7 +627,6 @@ useEffect(() => {
         </View>
       ) : null}
 
-      {/* Story counter */}
       <View style={styles.storyCounter}>
         <Text style={styles.counterText}>
           {currentIndex + 1} / {stories.length}
@@ -451,6 +646,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     position: 'relative',
   },
+  empty: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  emptyLink: {
+    color: '#940304',
+    fontSize: 15,
+  },
   media: {
     width,
     height: height * 0.88,
@@ -464,7 +672,36 @@ const styles = StyleSheet.create({
     height,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#00000080',
+    backgroundColor: '#00000040',
+  },
+  errorWrap: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    gap: 16,
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  retryBtn: {
+    backgroundColor: '#940304',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   progressContainer: {
     position: 'absolute',
@@ -474,7 +711,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     zIndex: 1000,
-    elevation: 1000, // For Android
+    elevation: 1000,
   },
   progressTrack: {
     flex: 1,

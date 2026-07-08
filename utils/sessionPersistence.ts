@@ -1,11 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Router } from 'expo-router';
+import {
+  AUTH_ROUTES,
+  isTabRoute,
+  normalizeRestorableRoute,
+} from '@/utils/safeNavigation';
 
 const LAST_ROUTE_KEY = 'gympaddy:last_route';
 const FEED_SCROLL_KEY = 'gympaddy:feed_scroll_offset';
 const FEED_ACTIVE_POST_KEY = 'gympaddy:feed_active_post';
-
-const AUTH_ROUTES = new Set(['/', '/login', '/OnboardingScreen', '/register']);
 
 export type SavedRoute = {
   pathname: string;
@@ -30,6 +33,9 @@ export async function saveLastRoute(
 ): Promise<void> {
   if (!pathname || AUTH_ROUTES.has(pathname)) return;
 
+  // Only persist tab routes so cold start keeps a proper back stack (feed, market, etc.).
+  if (!isTabRoute(pathname)) return;
+
   const payload: SavedRoute = {
     pathname,
     params: normalizeParams(params),
@@ -44,7 +50,16 @@ export async function getLastRoute(): Promise<SavedRoute | null> {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SavedRoute;
     if (!parsed?.pathname || AUTH_ROUTES.has(parsed.pathname)) return null;
-    return parsed;
+
+    const pathname = normalizeRestorableRoute(parsed.pathname);
+    if (!isTabRoute(pathname)) {
+      return { pathname: '/(tabs)' };
+    }
+
+    return {
+      pathname,
+      params: isTabRoute(parsed.pathname) ? parsed.params : undefined,
+    };
   } catch {
     return null;
   }
@@ -55,10 +70,11 @@ export async function restoreLastRoute(router: Router): Promise<boolean> {
   if (!saved?.pathname) return false;
 
   try {
-    if (saved.params) {
-      router.replace({ pathname: saved.pathname as any, params: saved.params });
+    const pathname = normalizeRestorableRoute(saved.pathname);
+    if (saved.params && isTabRoute(pathname)) {
+      router.replace({ pathname: pathname as any, params: saved.params });
     } else {
-      router.replace(saved.pathname as any);
+      router.replace(pathname as any);
     }
     return true;
   } catch {

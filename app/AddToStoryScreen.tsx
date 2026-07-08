@@ -1,276 +1,314 @@
-// Add to Story: gallery grid + camera capture.
+// Add to Story — camera or gallery picker (no MediaLibrary grid; works in Expo Go).
 
 export const options = {
   headerShown: false,
 };
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
-  FlatList,
-  Image,
-  TouchableOpacity,
   StyleSheet,
   Text,
+  TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
+  Alert,
+  Pressable,
 } from 'react-native';
-import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '@/contexts/themeContext';
+import { useSafeBack } from '@/utils/hooks/useSafeBack';
 
-const { width } = Dimensions.get('window');
-const ITEM_SIZE = (width - 40) / 3;
+const BRAND = '#940304';
+
+type StoryAsset = {
+  id: string;
+  uri: string;
+  mediaType: 'photo' | 'video';
+};
 
 export default function AddToStoryScreen() {
-  const [mediaAssets, setMediaAssets] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [endCursor, setEndCursor] = useState<string | null>(null);
-  const [hasNextPage, setHasNextPage] = useState(true);
   const router = useRouter();
+  const goBack = useSafeBack();
+  const { dark } = useTheme();
+  const [busy, setBusy] = useState<'camera' | 'gallery' | null>(null);
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  };
-
-  useEffect(() => {
-    (async () => {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status === 'granted') {
-        await loadMoreAssets();
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  const loadMoreAssets = async () => {
-    if (!hasNextPage) return;
-    const media = await MediaLibrary.getAssetsAsync({
-      mediaType: ['photo', 'video'], // Explicitly include both photos and videos
-      first: 30,
-      sortBy: [['creationTime', false]],
-      after: endCursor || undefined,
-    });
-    setMediaAssets((prev) => [...prev, ...media.assets]);
-    setEndCursor(media.endCursor || null);
-    setHasNextPage(media.hasNextPage);
-  };
-
-  const openCamera = async () => {
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 1,
-      allowsEditing: true,
-      videoMaxDuration: 120,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      const a = result.assets[0];
-      setSelected((prev) => [
-        ...prev,
-        {
-          id: `cam_${Date.now()}`,
-          uri: a.uri,
-          mediaType: a.type === 'video' ? 'video' : 'photo',
-        },
-      ]);
-    }
-  };
-
-  const openLibrary = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 1,
-      allowsEditing: true,
-      videoMaxDuration: 120,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      const a = result.assets[0];
-      setSelected((prev) => [
-        ...prev,
-        {
-          id: `lib_${Date.now()}`,
-          uri: a.uri,
-          mediaType: a.type === 'video' ? 'video' : 'photo',
-        },
-      ]);
-    }
-  };
-
-  const toggleSelect = (item: any) => {
-    const isSelected = selected.find((s) => s.id === item.id);
-    if (isSelected) {
-      setSelected((prev) => prev.filter((s) => s.id !== item.id));
-    } else {
-      setSelected((prev) => [...prev, item]);
-    }
-  };
-
-  const handleContinue = () => {
-    if (selected.length > 0) {
+  const navigateWithAsset = useCallback(
+    (asset: ImagePicker.ImagePickerAsset, prefix: string) => {
+      const item: StoryAsset = {
+        id: `${prefix}_${Date.now()}`,
+        uri: asset.uri,
+        mediaType: asset.type === 'video' ? 'video' : 'photo',
+      };
       router.push({
         pathname: '/story-preview',
-        params: {
-          selected: JSON.stringify(
-            selected.map((i) => ({
-              id: i.id,
-              uri: i.uri,
-              mediaType: i.mediaType,
-            }))
-          ),
-        },
+        params: { selected: JSON.stringify([item]) },
       });
-    }
-  };
+    },
+    [router],
+  );
 
-  if (loading)
-    return <ActivityIndicator style={{ flex: 1 }} color="#940304" />;
+  const openCamera = useCallback(async () => {
+    if (busy) return;
+    setBusy('camera');
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera access needed',
+          'Allow camera access in settings to capture photos and videos for your story.',
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images', 'videos'],
+        quality: 0.72,
+        allowsEditing: true,
+        aspect: [9, 16],
+        videoMaxDuration: 60,
+        videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        navigateWithAsset(result.assets[0], 'cam');
+      }
+    } catch (err) {
+      console.warn('Story camera error:', err);
+      Alert.alert('Camera unavailable', 'Could not open the camera. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  }, [busy, navigateWithAsset]);
+
+  const openGallery = useCallback(async () => {
+    if (busy) return;
+    setBusy('gallery');
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Photos access needed',
+          'Allow photo library access in settings to pick media for your story.',
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        quality: 0.72,
+        allowsEditing: true,
+        aspect: [9, 16],
+        videoMaxDuration: 60,
+        videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        navigateWithAsset(result.assets[0], 'lib');
+      }
+    } catch (err) {
+      console.warn('Story gallery error:', err);
+      Alert.alert('Gallery unavailable', 'Could not open your photo library. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  }, [busy, navigateWithAsset]);
+
+  const bg = dark ? '#0d0d0d' : '#f8f8f8';
+  const cardBg = dark ? '#1a1a1a' : '#fff';
+  const textPrimary = dark ? '#fff' : '#111';
+  const textSecondary = dark ? '#9ca3af' : '#6b7280';
+  const border = dark ? '#2a2a2a' : '#e5e7eb';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity onPress={handleBack} style={styles.headerSide} hitSlop={8}>
-            <Ionicons name="chevron-back" size={26} color="#111" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add to Story</Text>
-          <View style={styles.headerSide} />
-        </View>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={openCamera} style={styles.actionButton}>
-            <Text style={styles.actionButtonText}>Camera</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={openLibrary} style={styles.actionButton}>
-            <Text style={styles.actionButtonText}>Library</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={goBack} style={styles.backBtn} hitSlop={12}>
+          <Ionicons name="close" size={28} color={textPrimary} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: textPrimary }]}>New Story</Text>
+        <View style={styles.backBtn} />
       </View>
 
-      <FlatList
-        data={mediaAssets}
-        numColumns={3}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.flatListContent}
-        renderItem={({ item }) => {
-          const isSelected = selected.find((s) => s.id === item.id);
-          const isVideo = item.mediaType === 'video';
-          return (
-            <TouchableOpacity onPress={() => toggleSelect(item)} style={{ position: 'relative' }}>
-              <Image
-                source={{ uri: item.uri }}
-                style={[styles.image, isSelected && styles.selected]}
-              />
-              {isVideo && (
-                <View style={styles.videoOverlay}>
-                  <Text style={styles.videoText}>▶</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        }}
-        onEndReached={loadMoreAssets}
-        onEndReachedThreshold={0.5}
-      />
+      <View style={styles.hero}>
+        <LinearGradient
+          colors={['#b80406', BRAND, '#6b0203']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroRing}
+        >
+          <View style={[styles.heroInner, { backgroundColor: bg }]}>
+            <Ionicons name="add-circle" size={52} color={BRAND} />
+          </View>
+        </LinearGradient>
+        <Text style={[styles.heroTitle, { color: textPrimary }]}>Share a moment</Text>
+        <Text style={[styles.heroSubtitle, { color: textSecondary }]}>
+          Capture something new or pick from your gallery
+        </Text>
+      </View>
 
-      {selected.length > 0 && (
-        <TouchableOpacity onPress={handleContinue} style={styles.button}>
-          <Text style={styles.buttonText}>Continue ({selected.length})</Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.options}>
+        <Pressable
+          onPress={openCamera}
+          disabled={!!busy}
+          style={({ pressed }) => [
+            styles.optionCard,
+            { backgroundColor: cardBg, borderColor: border },
+            pressed && styles.optionPressed,
+          ]}
+        >
+          <LinearGradient
+            colors={['#1e3a5f', '#0f172a']}
+            style={styles.optionIconWrap}
+          >
+            {busy === 'camera' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Ionicons name="camera" size={28} color="#fff" />
+            )}
+          </LinearGradient>
+          <View style={styles.optionTextWrap}>
+            <Text style={[styles.optionTitle, { color: textPrimary }]}>Camera</Text>
+            <Text style={[styles.optionDesc, { color: textSecondary }]}>
+              Take a photo or record a video
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={textSecondary} />
+        </Pressable>
+
+        <Pressable
+          onPress={openGallery}
+          disabled={!!busy}
+          style={({ pressed }) => [
+            styles.optionCard,
+            { backgroundColor: cardBg, borderColor: border },
+            pressed && styles.optionPressed,
+          ]}
+        >
+          <LinearGradient
+            colors={['#4c1d95', '#312e81']}
+            style={styles.optionIconWrap}
+          >
+            {busy === 'gallery' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Ionicons name="images" size={28} color="#fff" />
+            )}
+          </LinearGradient>
+          <View style={styles.optionTextWrap}>
+            <Text style={[styles.optionTitle, { color: textPrimary }]}>Gallery</Text>
+            <Text style={[styles.optionDesc, { color: textSecondary }]}>
+              Choose a photo or video from your library
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={textSecondary} />
+        </Pressable>
+      </View>
+
+      <Text style={[styles.hint, { color: textSecondary }]}>
+        Stories disappear after 24 hours
+      </Text>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    backgroundColor: '#fff',
+  container: {
+    flex: 1,
   },
-  headerTop: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  headerSide: {
-    width: 40,
+  backBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#111',
+    letterSpacing: 0.2,
+  },
+  hero: {
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 32,
+    paddingHorizontal: 32,
+  },
+  heroRing: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  heroInner: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 8,
     textAlign: 'center',
   },
-  headerRow: {
+  heroSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  options: {
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  optionCard: {
     flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 14,
+  },
+  optionPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }],
+  },
+  optionIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
-  actionButton: {
-    backgroundColor: '#940304',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+  optionTextWrap: {
+    flex: 1,
   },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  optionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  flatListContent: {
-    paddingHorizontal: 10,
-    paddingBottom: 80,
+  optionDesc: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-  image: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    margin: 5,
-    borderRadius: 10,
-    backgroundColor: '#eee',
-  },
-  selected: {
-    borderWidth: 3,
-    borderColor: '#940304',
-  },
-  videoOverlay: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  videoText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  button: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-    backgroundColor: '#940304',
-    paddingVertical: 12,
+  hint: {
+    textAlign: 'center',
+    fontSize: 13,
+    marginTop: 'auto',
+    marginBottom: 28,
     paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
   },
 });

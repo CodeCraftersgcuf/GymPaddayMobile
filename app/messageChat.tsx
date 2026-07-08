@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,12 +32,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
+import { CachedAvatar, CachedImage } from '@/components/media/CachedImage';
 import { useAgoraCall } from '@/hooks/useAgoraCall';
 
 import AgoraVideoView from 'react-native-agora';
 
 import { RenderModeType } from 'react-native-agora';
-import VoiceCallScreenT from '@/app/VoiceCallScreen';
+import VoiceCallScreenT from '@/screens/native/VoiceCallScreen';
 import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get('window');
@@ -134,25 +135,30 @@ export default function MessageChat() {
   const receiverName = firstMessage?.receiver?.fullname || 'User';
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
 
-  const serverMessages = (data?.messages?.map((msg: any) => {
-    let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
-    if (imageUrl) {
-      imageUrl = resolveMediaUrl(imageUrl);
-    }
-    return {
-      id: String(msg.id),
-      isCurrentUser: msg.direction === 'sent',
-      text: msg.message || '',
-      timestamp: new Date(msg.created_at),
-      senderPicture: msg.direction === 'sent'
-        ? msg.sender?.profile_picture_url
-        : msg.receiver?.profile_picture_url,
-      image: imageUrl,
-    };
-  }) || []);
-  const messages = [...serverMessages, ...(optimisticMessages || [])].sort(
-    (a, b) => (a.timestamp?.getTime() ?? 0) - (b.timestamp?.getTime() ?? 0)
-  );
+  const serverMessages = useMemo(() => (
+    data?.messages?.map((msg: any) => {
+      let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
+      if (imageUrl) {
+        imageUrl = resolveMediaUrl(imageUrl);
+      }
+      return {
+        id: String(msg.id),
+        isCurrentUser: msg.direction === 'sent',
+        text: msg.message || '',
+        timestamp: new Date(msg.created_at),
+        senderPicture: msg.direction === 'sent'
+          ? msg.sender?.profile_picture_url
+          : msg.receiver?.profile_picture_url,
+        image: imageUrl,
+      };
+    }) || []
+  ), [data?.messages]);
+
+  const messages = useMemo(() => (
+    [...serverMessages, ...(optimisticMessages || [])].sort(
+      (a, b) => (a.timestamp?.getTime() ?? 0) - (b.timestamp?.getTime() ?? 0)
+    )
+  ), [serverMessages, optimisticMessages]);
 
 
   const sendMessageMutation = useMutation({
@@ -365,7 +371,7 @@ export default function MessageChat() {
     })
   }
 
-  const renderMessage = ({ item, index }) => {
+  const renderMessage = useCallback(({ item, index }) => {
     if (!item) return null; // Guard against undefined items
     
     const isCurrentUser = item.isCurrentUser;
@@ -382,8 +388,9 @@ export default function MessageChat() {
       >
         {/* Avatar only for received messages */}
         {!isCurrentUser && showAvatar && (
-          <Image
-            source={{ uri: item.senderPicture }}
+          <CachedAvatar
+            uri={item.senderPicture}
+            size={32}
             style={styles.messageAvatar}
           />
         )}
@@ -400,8 +407,9 @@ export default function MessageChat() {
         >
           {/* Render image if present */}
           {(item.image || item.image_url || item.imagePath) && (
-            <Image
-              source={{ uri: item.image || item.image_url || item.imagePath }}
+            <CachedImage
+              uri={item.image || item.image_url || item.imagePath}
+              resolve={false}
               style={{
                 width: 160,
                 height: 160,
@@ -410,7 +418,6 @@ export default function MessageChat() {
                 alignSelf: isCurrentUser ? 'flex-end' : 'flex-start',
                 backgroundColor: '#eee',
               }}
-              resizeMode="cover"
             />
           )}
           {item.text ? (
@@ -426,7 +433,7 @@ export default function MessageChat() {
         </View>
       </View>
     );
-  };
+  }, [messages]);
 
   const otherUser = data?.messages?.length
     ? (data.messages.find((m: any) => m.direction === 'received')?.sender
@@ -465,12 +472,7 @@ export default function MessageChat() {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [refetch]);
+  // Polling handled by react-query `refetchInterval: 3000` above.
 
   // Load current user data for optimistic message avatar
   useEffect(() => {
@@ -532,8 +534,8 @@ export default function MessageChat() {
               </TouchableOpacity>
 
               <View style={styles.userInfo}>
-                <Image
-                  source={{ uri: userWithUpdatedStatus?.profile_picture_url }}
+                <CachedAvatar
+                  uri={userWithUpdatedStatus?.profile_picture_url}
                   style={styles.userImage}
                 />
                 <View style={styles.userDetails}>
@@ -556,7 +558,7 @@ export default function MessageChat() {
               data={messages || []}
               style={styles.messagesContainer}
               contentContainerStyle={styles.messagesContent}
-              keyExtractor={(item) => item?.id || String(Math.random())}
+              keyExtractor={(item, index) => item?.id ?? `msg-${index}`}
               scrollEnabled={true}
               refreshing={refreshing}
               onRefresh={handleRefresh}
@@ -566,8 +568,8 @@ export default function MessageChat() {
               ListEmptyComponent={<View />}
               ListHeaderComponent={
                 <View style={[styles.profileCard, { backgroundColor: dark ? '#181818' : 'white' }]}>
-                  <Image
-                    source={{ uri: otherUser?.profile_picture_url }}
+                  <CachedAvatar
+                    uri={otherUser?.profile_picture_url}
                     style={styles.profileImage}
                   />
                   <Text style={styles.profileName}>

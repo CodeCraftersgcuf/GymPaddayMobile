@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryClient } from '@/utils/queryClient';
 import { flushQueryCache, queryPersistOptions } from '@/utils/queryPersistence';
+import { warmStoryCacheOnDisk } from '@/utils/storyPrefetch';
 
 interface Props {
   children: React.ReactNode;
@@ -25,6 +26,7 @@ export default function AppQueryProvider({ children, onHydrated }: Props) {
       client={queryClient}
       persistOptions={queryPersistOptions}
       onSuccess={() => {
+        warmStoryCacheOnDisk().catch(() => {});
         onHydrated?.();
       }}
     >

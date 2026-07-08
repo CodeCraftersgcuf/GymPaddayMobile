@@ -17,6 +17,7 @@ import {
   Image,
 } from "react-native";
 import { Image as ExpoImage } from 'expo-image';
+import { CachedImage, CachedAvatar } from '@/components/media/CachedImage';
 import ThemedView from "../ThemedView";
 import ThemeText from "../ThemedText";
 import { useTheme } from "@/contexts/themeContext";
@@ -27,13 +28,23 @@ import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from "expo-router";
 import { navigateToUserProfile, prefetchUserProfile } from "@/utils/navigateToProfile";
 import { useFeedVideoOptional } from "@/contexts/FeedVideoContext";
+import { useFeedVideoPoolOptional } from "@/contexts/FeedVideoPoolContext";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
 import { useQuery } from "@tanstack/react-query";
 import { getLikenDislikePost, createShare } from "@/utils/queries/socialMedia";
+import { useLikeState, getLikeEntry } from "@/utils/likeStore";
 import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
+import { requestMediaLibraryWritePermissions } from '@/utils/mediaLibraryPermissions';
 import { Video } from "expo-av";
+import VideoDetailModal from "./VideoDetailModal";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  getCachedFeedVideoUri,
+  pickFeedVideoPlaybackUrl,
+  prefetchFeedVideoMp4,
+} from '@/utils/feedVideoCache';
 
 
 
@@ -54,6 +65,7 @@ interface PostItemProps {
     view_count: number;
     share_count: number;
     location?: string;
+    is_liked?: boolean;
     likes?: any[];
     user: {
       id: number;
@@ -66,14 +78,26 @@ interface PostItemProps {
   handleMenu: (userId: number | string, postId: number) => void;
   /** When set, only the focused post in the feed may load/play video. */
   isFeedFocused?: boolean;
+  /** False while the feed tab is blurred or the app is backgrounded. */
+  feedPlaybackEnabled?: boolean;
+  /** True for the active post + its immediate neighbors so the video is buffered before the user reaches it. */
+  preloadVideo?: boolean;
 }
 
-const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, showComment, isFeedFocused }) => {
+const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, showComment = true, isFeedFocused, feedPlaybackEnabled = true, preloadVideo }) => {
   const { dark } = useTheme();
   const router = useRouter();
   const isFeedManaged = isFeedFocused !== undefined;
   const isActive = !isFeedManaged || Boolean(isFeedFocused);
+  const canPlay = isActive && (!isFeedManaged || feedPlaybackEnabled);
+  // Mount the actual <Video> (a decoder) only for the active post and its
+  // neighbors. Far posts show a lightweight thumbnail so we never exhaust the
+  // device's video decoders — and the next post is always pre-buffered.
+  const shouldLoadVideo = !isFeedManaged || isActive || Boolean(preloadVideo);
   const feedVideo = useFeedVideoOptional();
+  const feedPool = useFeedVideoPoolOptional();
+  const openDetailRef = useRef(feedPool?.openVideoDetail);
+  openDetailRef.current = feedPool?.openVideoDetail;
   const [localMuted, setLocalMuted] = useState(true);
   const isMuted = feedVideo?.isMuted ?? localMuted;
   const toggleMute = feedVideo?.toggleMuted ?? (() => setLocalMuted((prev) => !prev));
@@ -93,14 +117,23 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const controlsTimeoutRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({});
 
   const [ImagesData, setImagesData] = useState<string[]>([]);
-  const [isLiked, setIsLiked] = useState(false);
-  // Fix: Initialize likes from post.likes array length if available, otherwise from likes_count
-  const [likesCount, setLikesCount] = useState(post.likes?.length || post.likes_count || 0);
+  // Shared like state so a like on the feed is reflected in the reels viewer
+  // (and vice versa) and never lets the user "like again" what they've liked.
+  const { liked: isLiked, count: likesCount, setLike } = useLikeState(
+    post.id,
+    Boolean(post.is_liked),
+    post.likes?.length || post.likes_count || 0,
+  );
   const [shareCount, setShareCount] = useState(post.share_count || 0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
   const [videoFallbackUrls, setVideoFallbackUrls] = useState<Record<number, string>>({});
+  const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const videoRefs = useRef<Record<number, Video>>({});
+  const [readyForDisplay, setReadyForDisplay] = useState(false);
+  const [showBufferSpinner, setShowBufferSpinner] = useState(false);
+  const bufferSpinnerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [videoDetailOpen, setVideoDetailOpen] = useState(false);
 
   // console.log("post data we are getting", post);
   useEffect(() => {
@@ -118,18 +151,22 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
     };
   }, []);
 
-  // Check if current user has liked this post
+  // If the payload actually includes a likes array (e.g. a detail endpoint),
+  // seed the shared store when the current user is present — but don't override
+  // an existing store entry (a like the user just made this session).
   useEffect(() => {
     const checkIfLiked = async () => {
       const userData = await SecureStore.getItemAsync('user_data');
-      if (userData && post.likes) {
+      if (userData && post.likes && post.likes.length > 0) {
         const currentUser = JSON.parse(userData);
         const userLiked = post.likes.some(like => like.user?.id === currentUser.id);
-        setIsLiked(userLiked);
+        if (userLiked && !getLikeEntry(post.id)) {
+          setLike(true, post.likes?.length || post.likes_count || 0);
+        }
       }
     };
     checkIfLiked();
-  }, [post.likes]);
+  }, [post.likes, post.id]);
 
   const {
     data: likeData,
@@ -176,22 +213,71 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
     setImagesData(mediaArray);
     setVideoFallbackUrls({});
+    setPlaybackUri(null);
     setVideoLoaded({});
     setIsBuffering({});
     setIsPlaying({});
+    setReadyForDisplay(false);
+    setShowBufferSpinner(false);
   }, [post]);
+
+  useEffect(() => {
+    if (!shouldLoadVideo || (!post.videoUrl && !post.videoMp4Url)) {
+      return;
+    }
+
+    const cached = getCachedFeedVideoUri(post.id);
+    if (cached) {
+      setPlaybackUri(cached);
+      return;
+    }
+
+    if (post.videoMp4Url) {
+      prefetchFeedVideoMp4(post.id, post.videoMp4Url);
+    }
+
+    let cancelled = false;
+    pickFeedVideoPlaybackUrl(post.id, post.videoMp4Url, post.videoUrl, 800).then((uri) => {
+      if (!cancelled && uri) {
+        setPlaybackUri(uri);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadVideo, post.id, post.videoMp4Url, post.videoUrl]);
+
+  // When the post leaves the preload window the <Video> unmounts and its
+  // decoded frame is released. Reset the "ready" flags so that, on remount
+  // (e.g. scrolling back up), the thumbnail poster covers the blank/black
+  // decoder surface until the first frame renders again.
+  useEffect(() => {
+    if (!shouldLoadVideo) {
+      setReadyForDisplay(false);
+      setVideoLoaded({});
+      setIsPlaying({});
+    }
+  }, [shouldLoadVideo]);
 
   useEffect(() => {
     const ref = videoRefs.current[0];
     if (!ref || !post.videoUrl) return;
 
-    if (isActive) {
+    if (canPlay && currentIndex === 0) {
       ref.playAsync().catch(() => {});
     } else {
       ref.pauseAsync().catch(() => {});
-      ref.setPositionAsync(0).catch(() => {});
     }
-  }, [isActive, post.id, post.videoUrl]);
+  }, [canPlay, currentIndex, post.id, post.videoUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (bufferSpinnerTimer.current) {
+        clearTimeout(bufferSpinnerTimer.current);
+      }
+    };
+  }, []);
 
 
   const toggleVideoPlayback = React.useCallback(async (index: number) => {
@@ -213,21 +299,23 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const handleLike = React.useCallback(async () => {
     if (!token || likeLoading) return; // Prevent double-tap lag
 
-    // Optimistic update - instant feedback
+    // Optimistic update - instant feedback (shared across feed + reels)
     const newLiked = !isLiked;
-    setIsLiked(newLiked);
-    setLikesCount((prev) => prev + (newLiked ? 1 : -1));
+    setLike(newLiked, likesCount + (newLiked ? 1 : -1));
 
     // Call API in background (non-blocking)
     try {
-      await toggleLike();
+      const res: any = await toggleLike();
+      // Server is authoritative: reconcile in case our guess was wrong.
+      const serverLiked = !(res?.data && res.data.message === 'Disliked');
+      if (serverLiked !== newLiked) {
+        setLike(serverLiked, likesCount + (serverLiked ? 1 : -1));
+      }
     } catch (error) {
       console.error('Failed to toggle like:', error);
-      // Revert on error
-      setIsLiked(!newLiked);
-      setLikesCount((prev) => prev + (!newLiked ? 1 : -1));
+      setLike(isLiked, likesCount);
     }
-  }, [token, isLiked, likeLoading, toggleLike]);
+  }, [token, isLiked, likesCount, likeLoading, toggleLike, setLike]);
 
 
 
@@ -365,8 +453,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       const isVideo = fileExtension === 'mp4' || fileExtension === 'mov' || fileExtension === 'avi' || fileExtension === 'mkv';
       
       // Request permission
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
+      const granted = await requestMediaLibraryWritePermissions();
+      if (!granted) {
         Alert.alert('Permission required', 'Please allow media library access to save files.');
         return;
       }
@@ -513,14 +601,22 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
               const isVideo = index === 0 && Boolean(post.videoUrl);
               const videoSource =
                 videoFallbackUrls[index]
-                || post.videoUrl
+                || playbackUri
                 || post.videoMp4Url
+                || post.videoUrl
                 || item;
+              // Show the thumbnail poster whenever the real video frame isn't
+              // guaranteed to be on screen: when the player isn't mounted (far
+              // post) OR it's mounted but hasn't rendered a frame yet. The
+              // poster is a single element that stays mounted across the
+              // far->near transition so there's never a black gap.
               const showVideoPoster =
-                Boolean(post.videoThumbnailUrl) && !videoLoaded[index];
+                Boolean(post.videoThumbnailUrl) &&
+                (!shouldLoadVideo || !videoLoaded[index] || !readyForDisplay);
 
               return isVideo ? (
                 <View style={styles.carouselVideoWrapper}>
+                  {shouldLoadVideo && (
                   <Video
                     ref={(ref) => {
                       if (ref) {
@@ -534,12 +630,25 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     resizeMode="cover"
                     isLooping
                     isMuted={isMuted}
-                    shouldPlay={isActive && index === currentIndex}
+                    shouldPlay={canPlay && index === currentIndex}
                     useNativeControls={false}
+                    progressUpdateIntervalMillis={150}
                     onLoadStart={() => {
                       setIsBuffering((prev) =>
                         prev[index] === true ? prev : { ...prev, [index]: true }
                       );
+                      if (bufferSpinnerTimer.current) clearTimeout(bufferSpinnerTimer.current);
+                      bufferSpinnerTimer.current = setTimeout(() => {
+                        setShowBufferSpinner(true);
+                      }, 300);
+                    }}
+                    onReadyForDisplay={() => {
+                      setReadyForDisplay(true);
+                      setShowBufferSpinner(false);
+                      if (bufferSpinnerTimer.current) {
+                        clearTimeout(bufferSpinnerTimer.current);
+                        bufferSpinnerTimer.current = null;
+                      }
                     }}
                     onLoad={(data) => {
                       setIsBuffering((prev) =>
@@ -552,7 +661,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                         const ratio = data.naturalSize.width / data.naturalSize.height;
                         setVideoAspectRatio(ratio);
                       }
-                      if (isActive && index === currentIndex) {
+                      if (canPlay && index === currentIndex) {
                         videoRefs.current[index]?.playAsync().catch(() => {});
                       }
                     }}
@@ -561,7 +670,8 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       const current = videoFallbackUrls[index] || videoSource;
                       if (
                         post.videoMp4Url &&
-                        current !== post.videoMp4Url
+                        current !== post.videoMp4Url &&
+                        !current?.startsWith('file://')
                       ) {
                         setVideoFallbackUrls((prev) => ({
                           ...prev,
@@ -569,9 +679,20 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                         }));
                         return;
                       }
+                      if (
+                        post.videoUrl &&
+                        current !== post.videoUrl
+                      ) {
+                        setVideoFallbackUrls((prev) => ({
+                          ...prev,
+                          [index]: post.videoUrl!,
+                        }));
+                        return;
+                      }
                       setIsBuffering((prev) =>
                         prev[index] === false ? prev : { ...prev, [index]: false }
                       );
+                      setShowBufferSpinner(false);
                     }}
                     onPlaybackStatusUpdate={(status) => {
                       if (!status.isLoaded || !('isPlaying' in status)) return;
@@ -579,8 +700,31 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       setIsPlaying((prev) =>
                         prev[index] === playing ? prev : { ...prev, [index]: playing }
                       );
+                      // onReadyForDisplay can fire late (Android/HLS), leaving the
+                      // poster on top while audio already plays. Once playback has
+                      // actually advanced, frames are rendering — drop the poster.
+                      if (playing && (status.positionMillis ?? 0) > 0) {
+                        setReadyForDisplay((prev) => (prev ? prev : true));
+                        setVideoLoaded((prev) =>
+                          prev[index] === true ? prev : { ...prev, [index]: true }
+                        );
+                      }
+                      if (status.isBuffering && !playing && !readyForDisplay) {
+                        if (!bufferSpinnerTimer.current) {
+                          bufferSpinnerTimer.current = setTimeout(() => {
+                            setShowBufferSpinner(true);
+                          }, 300);
+                        }
+                      } else {
+                        setShowBufferSpinner(false);
+                        if (bufferSpinnerTimer.current) {
+                          clearTimeout(bufferSpinnerTimer.current);
+                          bufferSpinnerTimer.current = null;
+                        }
+                      }
                     }}
                   />
+                  )}
 
                   {showVideoPoster && (
                     <ExpoImage
@@ -597,15 +741,15 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     </View>
                   )}
 
-                  {isActive && isBuffering[index] && (
+                  {isActive && showBufferSpinner && (
                     <ActivityIndicator
-                      size="large"
+                      size="small"
                       color="#fff"
                       style={styles.videoLoader}
                     />
                   )}
 
-                  {isActive && !isBuffering[index] && !isPlaying[index] && (
+                  {isActive && !isBuffering[index] && !isPlaying[index] && readyForDisplay && (
                     <TouchableOpacity
                       style={styles.playButton}
                       activeOpacity={0.85}
@@ -631,11 +775,26 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       />
                     </TouchableOpacity>
                   )}
+
+                  {isActive && (
+                    <TouchableOpacity
+                      style={styles.expandButton}
+                      onPress={() =>
+                        isFeedManaged
+                          ? openDetailRef.current?.(post.id)
+                          : setVideoDetailOpen(true)
+                      }
+                      hitSlop={8}
+                      accessibilityLabel="Fullscreen"
+                    >
+                      <Ionicons name="expand" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  )}
                 </View>
 
               ) : (
                 <TouchableOpacity onPress={() => openImageSlider(index)}>
-                  <Image source={{ uri: item }} style={styles.carouselImage} />
+                  <CachedImage uri={item} style={styles.carouselImage} recyclingKey={`${post.id}-${index}`} />
                 </TouchableOpacity>
               );
 
@@ -736,7 +895,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     });
                   }}
                 >
-                  <Image source={{ uri: item.profile_picture_url }} style={styles.likeUserImage} />
+                  <CachedAvatar uri={item.profile_picture_url} style={styles.likeUserImage} />
                   <Text style={styles.likeUserName}>{item.fullname || item.username}</Text>
                 </TouchableOpacity>
               )}
@@ -769,7 +928,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
             })}
             keyExtractor={(item, index) => index.toString()}
             renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.fullscreenImage} />
+              <CachedImage uri={item} style={styles.fullscreenImage} contentFit="contain" />
             )}
             onScroll={handleScroll}
             scrollEventThrottle={16}
@@ -792,6 +951,18 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {!isFeedManaged && post.videoUrl ? (
+        <VideoDetailModal
+          visible={videoDetailOpen}
+          videoUrl={post.videoUrl}
+          thumbnailUrl={post.videoThumbnailUrl}
+          fallbackMp4Url={post.videoMp4Url}
+          isMuted={isMuted}
+          onToggleMute={toggleMute}
+          onClose={() => setVideoDetailOpen(false)}
+        />
+      ) : null}
 
     </View>
   );
@@ -1125,6 +1296,33 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     zIndex: 25,
   },
+  expandButton: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 8,
+    borderRadius: 20,
+    zIndex: 25,
+  },
+  feedExpandButton: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 8,
+    borderRadius: 20,
+    zIndex: 60,
+  },
+  feedMuteButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 8,
+    borderRadius: 20,
+    zIndex: 60,
+  },
 
   muteIcon: {
     width: 20,
@@ -1140,6 +1338,8 @@ export default React.memo(PostItem, (prevProps, nextProps) => {
     && prevProps.post.likes_count === nextProps.post.likes_count
     && prevProps.post.comments_count === nextProps.post.comments_count
     && prevProps.isFeedFocused === nextProps.isFeedFocused
+    && prevProps.feedPlaybackEnabled === nextProps.feedPlaybackEnabled
+    && prevProps.preloadVideo === nextProps.preloadVideo
     && prevProps.showComment === nextProps.showComment
   );
 });

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -208,11 +208,11 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const textColor = dark ? '#FFFFFF' : '#000000';
   const inputBackgroundColor = dark ? '#333333' : '#F0F0F0';
   const borderColor = dark ? '#333333' : '#E0E0E0';
-  const handleReplyPress = (commentId: string, username: string) => {
+  const handleReplyPress = useCallback((commentId: string, username: string) => {
     setReplyToCommentId(commentId);
     setReplyToUsername(username);
-  };
-  const handleDeletePress = (commentId: string, userId: string) => {
+  }, []);
+  const handleDeletePress = useCallback((commentId: string, userId: string) => {
     // Compare user IDs (handle both string and number formats)
     const currentUserIdStr = currentUserId?.toString();
     const commentUserIdStr = userId?.toString();
@@ -239,7 +239,19 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
         },
       ]
     );
-  };
+  }, [currentUserId, deleteMutation]);
+
+  const renderCommentItem = useCallback(
+    ({ item }: { item: Comment }) => (
+      <CommentItem
+        comment={item}
+        darkMode={dark}
+        onReplyPress={handleReplyPress}
+        onDeletePress={handleDeletePress}
+      />
+    ),
+    [dark, handleReplyPress, handleDeletePress]
+  );
 
   return (
     <Animated.View
@@ -297,15 +309,12 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
               ref={scrollViewRef}
               style={styles.commentsList}
               data={localComments}
-              keyExtractor={(item, index) => `${item.id}-${index}`}
-              renderItem={({ item }) => (
-                <CommentItem
-                  comment={item}
-                  darkMode={dark}
-                  onReplyPress={handleReplyPress}
-                  onDeletePress={handleDeletePress}
-                />
-              )}
+              keyExtractor={(item) => item.id}
+              renderItem={renderCommentItem}
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={7}
+              removeClippedSubviews
               ListEmptyComponent={
                 <View style={styles.noComments}>
                   <Text style={[styles.noCommentsText, { color: textColor }]}>

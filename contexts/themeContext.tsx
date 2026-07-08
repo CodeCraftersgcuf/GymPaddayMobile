@@ -1,7 +1,9 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   ReactNode,
 } from "react";
@@ -45,16 +47,19 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   }, [colorScheme]);
 
   // Save manually selected theme
-  const setScheme = async (scheme: "light" | "dark") => {
+  const setScheme = useCallback(async (scheme: "light" | "dark") => {
     await AsyncStorage.setItem("app-theme", scheme);
     setIsDark(scheme === "dark");
-  };
+  }, []);
 
-  const theme: ThemeContextType = {
-    dark: isDark,
-    colors: isDark ? Colors.dark : Colors.light,
-    setScheme,
-  };
+  const theme: ThemeContextType = useMemo(
+    () => ({
+      dark: isDark,
+      colors: isDark ? Colors.dark : Colors.light,
+      setScheme,
+    }),
+    [isDark, setScheme]
+  );
 
   return (
     <ThemeContext.Provider value={theme}>

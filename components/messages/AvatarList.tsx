@@ -1,9 +1,9 @@
 // components/Chat/AvatarList.tsx
 import React from 'react';
-import { View, Image, StyleSheet, TouchableOpacity, FlatList, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import ThemeText from '@/components/ThemedText';
-import { useTheme } from '@/contexts/themeContext';
 import ThemedView from '@/components/ThemedView';
+import { CachedAvatar } from '@/components/media/CachedImage';
 
 type User = {
   id: string;
@@ -24,7 +24,7 @@ export default function AvatarList({ users, onAvatarPress }: Props) {
         {users.map((item) => (
           <TouchableOpacity key={item.id} onPress={() => onAvatarPress(item.id)} style={styles.item}>
             <ThemedView style={styles.avatarWrapper}>
-              <Image source={{ uri: item.profile_img }} style={styles.avatar} />
+              <CachedAvatar uri={item.profile_img} size={60} style={styles.avatar} />
               {item.online && <ThemedView style={styles.online} />}
             </ThemedView>
             <ThemeText style={styles.name}>{item.username}</ThemeText>

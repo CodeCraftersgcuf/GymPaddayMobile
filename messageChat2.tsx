@@ -27,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons as Icon, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
-import { useAgoraCall } from './AgoraCallScreen';
+import { useAgoraCall } from '@/hooks/useAgoraCall';
 
 import AgoraVideoView from 'react-native-agora';
 
@@ -35,7 +35,7 @@ import { RenderModeType } from 'react-native-agora';
 
 const { width, height } = Dimensions.get('window');
 import { RtcSurfaceView } from 'react-native-agora';
-import VoiceCallScreenT from '@/app/VoiceCallScreen';
+import VoiceCallScreenT from '@/screens/native/VoiceCallScreen';
 
 
 export default function MessageChat() {

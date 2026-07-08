@@ -8,7 +8,13 @@ export type ProfilePreview = {
 };
 
 export async function prefetchUserProfile(userId: string | number): Promise<void> {
-  await prefetchUserProfilePages(userId, 2);
+  try {
+    await prefetchUserProfilePages(userId, 1);
+  } catch (err: any) {
+    if (err?.statusCode !== 403 && err?.statusCode !== 401) {
+      throw err;
+    }
+  }
 }
 
 export function navigateToUserProfile(router: Router, preview: ProfilePreview): void {
