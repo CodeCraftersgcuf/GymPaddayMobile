@@ -7,7 +7,7 @@ import {
   ScrollView,
   Text,
 } from 'react-native';
-import { GalleryMedia } from '@/app/create-post';
+import { GalleryMedia } from '@/app/createpost';
 import { AntDesign, Entypo } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 
@@ -34,6 +34,12 @@ export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedi
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  const formatFileSize = (bytes?: number | null) => {
+    if (!bytes || bytes <= 0) return '';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+  };
+
   return (
     <View style={[styles.container,{ backgroundColor:  dark ? 'black': 'white'}]}>
       <ScrollView 
@@ -53,12 +59,19 @@ export default function SelectedMedia({ selectedMedia, onRemoveMedia, onViewMedi
             {/* Video overlay */}
             {item.mediaType === 'video' && (
               <View style={styles.videoOverlay}>
-                <Entypo name='controller-play' size={20} color="#fff" fill="#fff" />
-                {item.duration && (
+                <View style={styles.videoMeta}>
+                  <Entypo name='controller-play' size={20} color="#fff" fill="#fff" />
+                  {item.duration ? (
+                    <Text style={styles.durationText}>
+                      {formatDuration(item.duration)}
+                    </Text>
+                  ) : null}
+                </View>
+                {item.fileSizeBytes ? (
                   <Text style={styles.durationText}>
-                    {formatDuration(item.duration)}
+                    {formatFileSize(item.fileSizeBytes)}
                   </Text>
-                )}
+                ) : null}
               </View>
             )}
             
@@ -106,6 +119,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
+  },
+  videoMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
   },
   durationText: {
     color: '#fff',

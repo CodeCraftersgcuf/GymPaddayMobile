@@ -10,6 +10,7 @@ import axios from 'axios'
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query'
 import { router } from 'expo-router'
+import { removePendingPostByPostId } from '@/utils/pendingPosts';
 
 const UserPostDetail: React.FC<{
   idCan: {
@@ -70,6 +71,7 @@ const UserPostDetail: React.FC<{
                 },
               });
 
+              await removePendingPostByPostId(Number(idCan.postId));
               await clientQuery.invalidateQueries({ queryKey: ['userPosts'] });
               if (onClose) {
                 onClose();

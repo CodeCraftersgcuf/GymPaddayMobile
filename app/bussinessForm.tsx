@@ -298,8 +298,8 @@ export default function BusinessRegistrationScreen() {
             case 'rejected':
                 return {
                     backgroundColor: '#FFEBEE',
-                    borderColor: '#F44336',
-                    textColor: '#D32F2F',
+                    borderColor: '#C61F3A',
+                    textColor: '#C61F3A',
                 };
             case 'approved':
                 return {
@@ -341,7 +341,7 @@ export default function BusinessRegistrationScreen() {
 
             {isLoadingStatus ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color="#940304" />
+                    <ActivityIndicator size="large" color="#C61F3A" />
                     <Text style={{ marginTop: 12, color: dark ? 'white' : '#333' }}>Loading business profile...</Text>
                 </View>
             ) : (
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     inputError: {
-        borderColor: '#940304',
+        borderColor: '#C61F3A',
     },
     textArea: {
         height: 80,
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     errorText: {
-        color: '#940304',
+        color: '#C61F3A',
         fontSize: 12,
         marginTop: 5,
     },
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
         paddingBottom: 30,
     },
     saveButton: {
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
         borderRadius: 25,
         paddingVertical: 18,
         justifyContent: 'center',

@@ -9,8 +9,7 @@ import {
   Linking,
 } from "react-native";
 import { useTheme } from "@/contexts/themeContext";
-import { COLORS, images } from "@/constants";
-import { Image } from "expo-image";
+import { COLORS } from "@/constants";
 import { CodeValidation } from "@/constants/validation"; // ✅ Your Yup validation schema
 import { Formik } from "formik";
 import { useRouter } from "expo-router";
@@ -18,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import FloatingLabelInput from "@/components/login/FloatingLabelInput";
 import ThemeText from "@/components/ThemedText";
 import ThemedView from "@/components/ThemedView";
+import BrandLogo from "@/components/BrandLogo";
 
 
 //Code Related to the integration
@@ -62,7 +62,7 @@ const codeverification = () => {
           </TouchableOpacity>
         )}
         <LinearGradient
-          colors={["#940304", "#840000"]}
+          colors={["#C61F3A", "#9B1830"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ height: 150 }}
@@ -83,18 +83,17 @@ const codeverification = () => {
             darkColor="transparent"
             style={{
               alignSelf: "center",
-              backgroundColor: "white",
+              backgroundColor: dark ? "transparent" : "white",
               transform: [{ translateY: -60 }],
               borderRadius: 10,
-              elevation: 5,
+              elevation: dark ? 0 : 5,
               padding: 10,
             }}
           >
-            <Image
-              source={images.logo}
+            <BrandLogo
               style={{
-                width: 70,
-                height: 70,
+                width: 150,
+                height: 130,
               }}
             />
           </ThemedView>
@@ -150,7 +149,7 @@ const codeverification = () => {
                     <Pressable
                       onPress={() => handleSubmit()}
                       style={{
-                        backgroundColor: '#940304',
+                        backgroundColor: '#C61F3A',
                         paddingVertical: 15,
                         borderRadius: 10,
                       }}

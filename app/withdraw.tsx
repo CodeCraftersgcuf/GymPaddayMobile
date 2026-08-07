@@ -9,18 +9,29 @@ import SuccessModal from '@/components/more/withdraw/SuccessModal';
 import { useTheme } from '@/contexts/themeContext';
 
 // Integration
-import { useMutation } from '@tanstack/react-query';
-import { createTransaction } from '@/utils/mutations/transactions';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { requestWithdrawal, resolveWithdrawalAccount } from '@/utils/mutations/withdrawals';
+import { getWithdrawalBanks } from '@/utils/queries/withdrawals';
+import { API_ENDPOINTS } from '@/apiConfig';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
+import uuid from 'react-native-uuid';
+
+/** Naira paid out per 1 GP. Must match the backend WithdrawalRequest::RATE. */
+export const GP_RATE = 2000;
+
+/** Smallest payout the backend accepts, in Naira. */
+export const MIN_WITHDRAWAL_NAIRA = 2000;
+export const MAX_WITHDRAWAL_NAIRA = 1000000;
 
 export interface WithdrawData {
   amount: string;
+  bankCode: string;
   bankName: string;
   accountNumber: string;
   accountName: string;
-  saveDetails: boolean;
+  verificationToken: string;
 }
 
 export default function WithdrawScreen() {
@@ -35,51 +46,93 @@ export default function WithdrawScreen() {
 
   const [withdrawData, setWithdrawData] = useState<WithdrawData>({
     amount: '',
+    bankCode: '',
     bankName: '',
     accountNumber: '',
     accountName: '',
-    saveDetails: false,
+    verificationToken: '',
   });
 
   const { dark } = useTheme();
+  const queryClient = useQueryClient();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [clientReference, setClientReference] = useState(() => String(uuid.v4()));
+
+  const { data: balance = 0, isLoading: balanceLoading } = useQuery({
+    queryKey: ['wallet-balance'],
+    enabled: !hideIosMonetization,
+    queryFn: async () => {
+      const authToken = await SecureStore.getItemAsync('auth_token');
+      if (!authToken) return 0;
+
+      const response = await fetch(API_ENDPOINTS.USER.BALANCE, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${authToken}`, Accept: 'application/json' },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) return 0;
+      return Number(result.balance ?? result.data?.balance ?? 0) || 0;
+    },
+  });
+
+  const {
+    data: banks = [],
+    isLoading: banksLoading,
+    error: banksError,
+    refetch: refetchBanks,
+  } = useQuery({
+    queryKey: ['withdrawal-banks'],
+    enabled: !hideIosMonetization,
+    staleTime: 24 * 60 * 60 * 1000,
+    queryFn: async () => {
+      const authToken = await SecureStore.getItemAsync('auth_token');
+      if (!authToken) throw new Error('Not authenticated');
+      return getWithdrawalBanks(authToken);
+    },
+  });
+
+  const resolveAccountMutation = useMutation({
+    mutationFn: async ({ bankCode, accountNumber }: { bankCode: string; accountNumber: string }) => {
+      const authToken = await SecureStore.getItemAsync('auth_token');
+      if (!authToken) throw new Error('Not authenticated');
+      return resolveWithdrawalAccount({ bankCode, accountNumber, token: authToken });
+    },
+  });
 
   const handleFormSubmit = (data: WithdrawData) => {
     setWithdrawData(data);
     setCurrentStep('summary');
   };
 
-  const createTransactionMutation = useMutation({
+  const withdrawalMutation = useMutation({
     mutationFn: async () => {
       const authToken = await SecureStore.getItemAsync('auth_token');
       if (!authToken) throw new Error('Not authenticated');
 
-      return createTransaction({
+      return requestWithdrawal({
         data: {
-          wallet_id: 2,
           amount: parseFloat(withdrawData.amount),
-          type: 'withdraw',
+          verification_token: withdrawData.verificationToken,
+          client_reference: clientReference,
         },
         token: authToken,
       });
     },
     onSuccess: () => {
-      Toast.show({
-        type: 'success',
-        text1: 'Withdrawal successful!',
-      });
+      queryClient.invalidateQueries({ queryKey: ['wallet-balance'] });
       setShowSuccessModal(true);
     },
     onError: (error: any) => {
       Toast.show({
         type: 'error',
-        text1: error?.message || 'Failed to create transaction',
+        text1: error?.message || 'Failed to submit withdrawal request',
       });
     },
   });
 
   const handleSummaryProceed = () => {
-    createTransactionMutation.mutate();
+    if (withdrawalMutation.isPending) return;
+    withdrawalMutation.mutate();
   };
 
   const handleSuccessClose = () => {
@@ -87,11 +140,13 @@ export default function WithdrawScreen() {
     setCurrentStep('form');
     setWithdrawData({
       amount: '',
+      bankCode: '',
       bankName: '',
       accountNumber: '',
       accountName: '',
-      saveDetails: false,
+      verificationToken: '',
     });
+    setClientReference(String(uuid.v4()));
   };
 
   const handleGoBack = () => {
@@ -112,12 +167,23 @@ export default function WithdrawScreen() {
           <WithdrawForm
             onSubmit={handleFormSubmit}
             initialData={withdrawData}
+            balance={balance}
+            balanceLoading={balanceLoading}
+            banks={banks}
+            banksLoading={banksLoading}
+            banksError={banksError ? 'Could not load banks.' : undefined}
+            onRetryBanks={refetchBanks}
+            isVerifying={resolveAccountMutation.isPending}
+            onVerifyAccount={async (bankCode, accountNumber) => {
+              const response = await resolveAccountMutation.mutateAsync({ bankCode, accountNumber });
+              return response.data;
+            }}
           />
         ) : (
           <WithdrawSummary
             data={withdrawData}
             onProceed={handleSummaryProceed}
-            isLoading={createTransactionMutation.isLoading}
+            isLoading={withdrawalMutation.isPending}
           />
         )}
       </View>

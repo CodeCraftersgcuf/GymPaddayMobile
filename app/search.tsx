@@ -117,7 +117,7 @@ const SearchScreen = () => {
                 </TouchableOpacity>
             </View>
 
-            {isLoading && <ActivityIndicator color="red" size="large" style={{ marginTop: 20 }} />}
+            {isLoading && <ActivityIndicator color="#C61F3A" size="large" style={{ marginTop: 20 }} />}
 
             {triggerSearch && !isLoading && data && (
                 <View style={{ flex: 1 }}>

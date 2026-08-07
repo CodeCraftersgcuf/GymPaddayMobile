@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 
 interface GiftItem {
@@ -23,12 +24,19 @@ interface GiftsPanelProps {
   onTopupPress: () => void;
 }
 
+const NUM_COLUMNS = 3;
+const HORIZONTAL_PADDING = 16;
+const CARD_GAP = 10;
+const CARD_HEIGHT = 108;
+const EMOJI_SIZE = 34;
+
 const GiftsPanel: React.FC<GiftsPanelProps> = ({
   dark,
   balance,
   onGiftSelect,
   onTopupPress,
 }) => {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [selectedGiftId, setSelectedGiftId] = useState<string | null>(null);
   const [giftQuantities, setGiftQuantities] = useState<{ [key: string]: number }>({});
 
@@ -55,6 +63,19 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
     { id: '12', emoji: '🌻', name: 'Sunflower', price: 10, currency: 'GP' },
   ];
 
+  const cardWidth = useMemo(() => {
+    const available =
+      windowWidth - HORIZONTAL_PADDING * 2 - CARD_GAP * (NUM_COLUMNS - 1);
+    return Math.floor(available / NUM_COLUMNS);
+  }, [windowWidth]);
+
+  const listHeight = useMemo(() => {
+    const rowCount = Math.ceil(giftItems.length / NUM_COLUMNS);
+    const contentHeight = rowCount * (CARD_HEIGHT + CARD_GAP) + CARD_GAP;
+    const maxHeight = Math.max(220, windowHeight * 0.34);
+    return Math.min(contentHeight, maxHeight);
+  }, [giftItems.length, windowHeight]);
+
   const renderGiftItem = ({ item }: { item: GiftItem }) => {
     const isSelected = selectedGiftId === item.id;
     const quantity = giftQuantities[item.id] || 1;
@@ -63,20 +84,23 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
       <TouchableOpacity
         style={[
           styles.giftCard,
-          { backgroundColor: themeStyles.cardBackground },
-          isSelected && { borderWidth: 2, borderColor: '#940304' },
+          {
+            width: cardWidth,
+            height: CARD_HEIGHT,
+            backgroundColor: themeStyles.cardBackground,
+          },
+          isSelected && { borderWidth: 2, borderColor: '#C61F3A' },
         ]}
         onPress={() => {
           const totalCost = item.price * quantity;
           if (totalCost > balance) {
-            alert("You don’t have enough balance, please top up first.");
+            alert("You don't have enough balance, please top up first.");
             return;
           }
 
           setSelectedGiftId(item.id);
           onGiftSelect({ ...item, quantity });
         }}
-
       >
         <Text style={styles.giftEmoji}>{item.emoji}</Text>
         <View style={styles.priceContainer}>
@@ -105,7 +129,7 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
                 const newQty = quantity + 1;
                 const totalCost = item.price * newQty;
                 if (totalCost > balance) {
-                  alert("Not enough balance for this quantity.");
+                  alert('Not enough balance for this quantity.');
                   return;
                 }
                 setGiftQuantities((prev) => ({
@@ -141,13 +165,16 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
         data={giftItems}
         keyExtractor={(item) => item.id}
         renderItem={renderGiftItem}
-        numColumns={4}
-        style={styles.giftsList}
+        numColumns={NUM_COLUMNS}
+        key={`gift-grid-${NUM_COLUMNS}`}
+        style={[styles.giftsList, { height: listHeight }]}
         contentContainerStyle={styles.giftsGrid}
+        columnWrapperStyle={styles.giftsRow}
         scrollEnabled
         nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
+        bounces
       />
 
       <TouchableOpacity style={styles.topupBtn} onPress={onTopupPress}>
@@ -159,23 +186,21 @@ const GiftsPanel: React.FC<GiftsPanelProps> = ({
 
 const styles = StyleSheet.create({
   giftsPanel: {
-    flexGrow: 1,
-    flexShrink: 0,
-    minHeight: 280,
+    flex: 1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 20,
   },
   giftsList: {
-    flexGrow: 1,
-    flexShrink: 1,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   giftsPanelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   giftsTitle: {
     fontSize: 20,
@@ -199,29 +224,31 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   topupBtn: {
-    padding: 10,
     paddingVertical: 16,
     borderRadius: 8,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 12,
   },
   topupText: {
     color: 'white',
     fontSize: 14,
+    fontWeight: '600',
   },
   giftsGrid: {
-    paddingHorizontal: 16,
+    paddingHorizontal: HORIZONTAL_PADDING,
     paddingBottom: 8,
-    flexGrow: 1,
+  },
+  giftsRow: {
+    justifyContent: 'space-between',
+    marginBottom: CARD_GAP,
   },
   giftCard: {
-    flex: 1,
-    aspectRatio: 1,
-    margin: 6,
     borderRadius: 12,
-    padding: 12,
+    padding: 10,
     alignItems: 'center',
     justifyContent: 'space-between',
     elevation: 2,
@@ -231,7 +258,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   giftEmoji: {
-    fontSize: 32,
+    fontSize: EMOJI_SIZE,
+    lineHeight: EMOJI_SIZE + 4,
   },
   priceContainer: {
     flexDirection: 'row',
@@ -242,30 +270,31 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   priceText: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '600',
+    textAlign: 'center',
   },
   quantityControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
     justifyContent: 'space-between',
     width: '100%',
   },
   quantityBtn: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
     borderRadius: 4,
     borderColor: '#888',
-    color: '#940304',
+    color: '#C61F3A',
   },
   quantityValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginHorizontal: 6,
+    marginHorizontal: 4,
     color: '#444',
   },
 });

@@ -21,13 +21,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/themeContext';
 import { useSafeBack } from '@/utils/hooks/useSafeBack';
+import {
+  STORY_VIDEO_MAX_SECONDS,
+  needsStoryVideoTrim,
+  storyVideoDurationSeconds,
+} from '@/utils/storyVideoLimits';
 
-const BRAND = '#940304';
+const BRAND = '#C61F3A';
 
 type StoryAsset = {
   id: string;
   uri: string;
   mediaType: 'photo' | 'video';
+};
+
+const pickerVideoOptions = {
+  mediaTypes: ['images', 'videos'] as ('images' | 'videos')[],
+  quality: 0.72,
+  allowsEditing: true,
+  aspect: [9, 16] as [number, number],
+  videoMaxDuration: STORY_VIDEO_MAX_SECONDS,
+  videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
 };
 
 export default function AddToStoryScreen() {
@@ -38,10 +52,25 @@ export default function AddToStoryScreen() {
 
   const navigateWithAsset = useCallback(
     (asset: ImagePicker.ImagePickerAsset, prefix: string) => {
+      const isVideo = asset.type === 'video';
+      const durationSec = storyVideoDurationSeconds(asset.duration);
+
+      if (isVideo && needsStoryVideoTrim(asset.duration)) {
+        router.push({
+          pathname: '/story-video-trim',
+          params: {
+            uri: asset.uri,
+            duration: String(durationSec || STORY_VIDEO_MAX_SECONDS * 2),
+            prefix,
+          },
+        });
+        return;
+      }
+
       const item: StoryAsset = {
         id: `${prefix}_${Date.now()}`,
         uri: asset.uri,
-        mediaType: asset.type === 'video' ? 'video' : 'photo',
+        mediaType: isVideo ? 'video' : 'photo',
       };
       router.push({
         pathname: '/story-preview',
@@ -64,14 +93,7 @@ export default function AddToStoryScreen() {
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images', 'videos'],
-        quality: 0.72,
-        allowsEditing: true,
-        aspect: [9, 16],
-        videoMaxDuration: 60,
-        videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
-      });
+      const result = await ImagePicker.launchCameraAsync(pickerVideoOptions);
 
       if (!result.canceled && result.assets[0]) {
         navigateWithAsset(result.assets[0], 'cam');
@@ -97,14 +119,7 @@ export default function AddToStoryScreen() {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
-        quality: 0.72,
-        allowsEditing: true,
-        aspect: [9, 16],
-        videoMaxDuration: 60,
-        videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
-      });
+      const result = await ImagePicker.launchImageLibraryAsync(pickerVideoOptions);
 
       if (!result.canceled && result.assets[0]) {
         navigateWithAsset(result.assets[0], 'lib');
@@ -135,7 +150,7 @@ export default function AddToStoryScreen() {
 
       <View style={styles.hero}>
         <LinearGradient
-          colors={['#b80406', BRAND, '#6b0203']}
+          colors={['#9B1830', BRAND, '#7A1226']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroRing}
@@ -173,7 +188,7 @@ export default function AddToStoryScreen() {
           <View style={styles.optionTextWrap}>
             <Text style={[styles.optionTitle, { color: textPrimary }]}>Camera</Text>
             <Text style={[styles.optionDesc, { color: textSecondary }]}>
-              Take a photo or record a video
+              Take a photo or record up to {STORY_VIDEO_MAX_SECONDS}s
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={textSecondary} />
@@ -201,7 +216,7 @@ export default function AddToStoryScreen() {
           <View style={styles.optionTextWrap}>
             <Text style={[styles.optionTitle, { color: textPrimary }]}>Gallery</Text>
             <Text style={[styles.optionDesc, { color: textSecondary }]}>
-              Choose a photo or video from your library
+              Photos or videos (max {STORY_VIDEO_MAX_SECONDS}s — trim if longer)
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={textSecondary} />
@@ -209,7 +224,7 @@ export default function AddToStoryScreen() {
       </View>
 
       <Text style={[styles.hint, { color: textSecondary }]}>
-        Stories disappear after 24 hours
+        Stories disappear after 24 hours · Videos max {STORY_VIDEO_MAX_SECONDS} seconds
       </Text>
     </SafeAreaView>
   );

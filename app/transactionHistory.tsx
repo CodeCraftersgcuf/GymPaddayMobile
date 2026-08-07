@@ -58,6 +58,9 @@ export default function TransactionsScreen() {
     );
   }, [activeFilter, allTransactions]);
 
+  const currencySymbol =
+    Array.isArray(apiData) && apiData[0]?.currency_symbol ? apiData[0].currency_symbol : 'N';
+
   const totals = useMemo(() => {
     const deposits = allTransactions
       .filter((t) => t.type === 'deposit')
@@ -87,9 +90,9 @@ export default function TransactionsScreen() {
 
       <SummaryCard
         leftLabel="Total Deposits"
-        leftAmount={`N${totals.deposits.toLocaleString()}`}
+        leftAmount={`${currencySymbol}${totals.deposits.toLocaleString()}`}
         rightLabel="Total Withdrawals"
-        rightAmount={`N${totals.withdrawals.toLocaleString()}`}
+        rightAmount={`${currencySymbol}${totals.withdrawals.toLocaleString()}`}
         lastUpdated="Last updated just now"
       />
 

@@ -83,7 +83,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
   },
   topSection: {
     flex: 1,

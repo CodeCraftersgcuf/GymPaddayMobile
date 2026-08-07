@@ -8,6 +8,11 @@ import { fetchUserProfile } from '@/utils/queries/profile';
 import { getNextFeedPage } from '@/utils/feedPagination';
 import { findRawPostInAppCache, postQueryKey, seedPostCache } from '@/utils/postCache';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { mapPostFromApi } from '@/utils/mapFeedPost';
+import {
+  getCachedFeedVideoUri,
+  pinPostVideoForReplay,
+} from '@/utils/feedVideoCache';
 import {
   prefetchVideoForPostId,
   prefetchVideoFromRawPost,
@@ -165,6 +170,10 @@ export function openSinglePost(
   if (cached) {
     seedPostCache(cached);
     prefetchVideoFromRawPost(cached);
+    const mapped = mapPostFromApi(cached);
+    if (mapped.videoMp4Url && !getCachedFeedVideoUri(postId)) {
+      pinPostVideoForReplay(postId, mapped.videoMp4Url);
+    }
   } else {
     prefetchPost(postId).catch(() => {});
   }

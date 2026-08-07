@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet } from 'react-native';
-import BottomSheet from '@gorhom/bottom-sheet';
 import { router } from 'expo-router';
 
 import Header from '@/components/Social/live/Header';
@@ -8,21 +7,20 @@ import StreamingCard from '@/components/Social/live/StreamingCard';
 import DurationSelector from '@/components/Social/live/DurationSelector';
 import SummaryModal from '@/components/Social/live/SummaryModal';
 import LiveStreamingView from '@/components/Social/live/LiveStreamingView';
-// import BottomSheetMenu from '@/components/Social/live/BottomSheetMenu';
 import BuyMinutesSheet from '@/components/Social/live/BuyMinutesSheet';
 import BuySuccessModal from '@/components/Social/live/BuySuccessModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
 import { createLiveStream } from '@/utils/mutations/live';
-// import { v4 as uuidv4 } from 'uuid'; // npm i uuid
 import uuid from 'react-native-uuid';
+import { Camera } from 'expo-camera';
 
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { LIVE_STREAM_API_BASE, LIVE_STREAM_PUBLIC_BASE } from '@/utils/liveStreamConstants';
 
-export default function HomeScreen() {
+export default function GoLiveScreen() {
     const { dark } = useTheme();
     const queryClient = useQueryClient();
     const [selectedDuration, setSelectedDuration] = useState('15 Min');
@@ -33,10 +31,30 @@ export default function HomeScreen() {
     const [boughtMinutes, setBoughtMinutes] = useState('');
     const [showBuyModal, setShowBuyModal] = useState(false);
     const [channelInfo, setChannelInfo] = useState<{ title: string; agora_channel: string, id?: string } | null>(null);
+    const [cameraEnabled, setCameraEnabled] = useState(true);
 
     const handleProceed = async () => {
         try {
             setShowSummary(false);
+            // Ask for mic+camera at OS level before WebView (WebView will not prompt itself).
+            const cam = await Camera.requestCameraPermissionsAsync();
+            const mic = await Camera.requestMicrophonePermissionsAsync();
+            if (cam.status !== 'granted' || mic.status !== 'granted') {
+              setCameraEnabled(true);
+              alert(
+                cam.status !== 'granted' && mic.status !== 'granted'
+                  ? 'Please allow camera and microphone access to go live.'
+                  : cam.status !== 'granted'
+                    ? 'Please allow camera access to go live.'
+                    : 'Please allow microphone access to go live.',
+              );
+              return;
+            }
+
+            // Fully release expo-camera before Agora WebView getUserMedia.
+            setCameraEnabled(false);
+            await new Promise((r) => setTimeout(r, 800));
+
             const token = await SecureStore.getItemAsync('auth_token');
             if (!token) throw new Error('No token');
 
@@ -57,9 +75,11 @@ export default function HomeScreen() {
             });
 
             queryClient.invalidateQueries({ queryKey: ['liveStreams'] });
-            setIsLive(true); // will trigger LiveStreamingView
+            await new Promise((r) => setTimeout(r, 200));
+            setIsLive(true);
         } catch (err: any) {
             console.error('Error creating live stream:', err);
+            setCameraEnabled(true);
             const message = err?.message || 'Failed to go live. Try again.';
             alert(message);
         }
@@ -105,6 +125,7 @@ export default function HomeScreen() {
         } finally {
             setIsLive(false);
             setChannelInfo(null);
+            setCameraEnabled(true);
         }
     };
     const handleBuyPress = () => {
@@ -172,6 +193,7 @@ export default function HomeScreen() {
                     onDurationSelect={handleDurationSelect}
                     onGoLive={handleGoLive}
                     onBuyMinutes={handleBuyPress}
+                    cameraEnabled={cameraEnabled}
                 />
                 <SummaryModal
                     visible={showSummary}

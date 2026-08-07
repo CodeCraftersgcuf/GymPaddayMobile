@@ -2,6 +2,8 @@ import { resolveMediaUrl, resolveVideoPlaybackUrl } from '@/utils/mediaUrl';
 
 export function mapPostFromApi(post: any) {
   const videoMedia = post.media?.find((m: any) => m.media_type === 'video');
+  const videoHlsUrl = videoMedia ? resolveMediaUrl(videoMedia.hls_url) : null;
+  const videoMp4Url = videoMedia ? resolveMediaUrl(videoMedia.url) : null;
 
   return {
     id: Number(post.id),
@@ -17,7 +19,8 @@ export function mapPostFromApi(post: any) {
         .map((m: any) => resolveMediaUrl(m.url))
         .filter(Boolean) || [],
     videoUrl: resolveVideoPlaybackUrl(videoMedia),
-    videoMp4Url: videoMedia ? resolveMediaUrl(videoMedia.url) : null,
+    videoHlsUrl,
+    videoMp4Url,
     videoThumbnailUrl: videoMedia
       ? resolveMediaUrl(videoMedia.thumbnail_url || videoMedia.thumbnail)
       : null,

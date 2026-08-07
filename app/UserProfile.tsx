@@ -587,7 +587,7 @@ export default function ProfileScreen() {
                   onPress={() => handleListingPress()}
                   style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}
                 >
-                  <Text style={[styles.messageButtonText, { color: '#940304' }]}>Listing</Text>
+                  <Text style={[styles.messageButtonText, { color: '#C61F3A' }]}>Listing</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -604,7 +604,7 @@ export default function ProfileScreen() {
                 onPress={() => handleListingPress()}
                 style={[styles.messageButton, styles.listingBtn, { backgroundColor: 'transparent' }]}
               >
-                <Text style={[styles.messageButtonText, { color: '#940304' }]}>Listing</Text>
+                <Text style={[styles.messageButtonText, { color: '#C61F3A' }]}>Listing</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -674,7 +674,7 @@ export default function ProfileScreen() {
     if (isFetching && !mediaArray.length) {
       return (
         <View style={{ alignItems: 'center', padding: 40 }}>
-          <ActivityIndicator size="small" color="#940304" />
+          <ActivityIndicator size="small" color="#C61F3A" />
         </View>
       );
     }
@@ -698,7 +698,7 @@ export default function ProfileScreen() {
           backgroundColor: theme.background,
         }}
       >
-        <ActivityIndicator size="large" color="#940304" />
+        <ActivityIndicator size="large" color="#C61F3A" />
         <Text style={{ color: theme.text, fontSize: 18, marginTop: 16 }}>Loading profile...</Text>
       </GestureHandlerRootView>
     );
@@ -741,8 +741,8 @@ export default function ProfileScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#940304']}
-              tintColor={'#940304'}
+              colors={['#C61F3A']}
+              tintColor={'#C61F3A'}
               title="Pull to refresh"
               titleColor={theme.text}
             />
@@ -791,8 +791,8 @@ export default function ProfileScreen() {
                 bottomSheetRef.current?.close();
               }}
             >
-              <Icon name="warning-outline" size={24} color="#ff4444" />
-              <Text style={[styles.bottomSheetOptionText, { color: '#ff4444' }]}>Restrict</Text>
+              <Icon name="warning-outline" size={24} color="#C61F3A" />
+              <Text style={[styles.bottomSheetOptionText, { color: '#C61F3A' }]}>Restrict</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -807,8 +807,8 @@ export default function ProfileScreen() {
                 bottomSheetRef.current?.close();
               }}
             >
-              <MaterialIcons name="block" size={24} color="#ff4444" />
-              <Text style={[styles.bottomSheetOptionText, { color: '#ff4444' }]}>Block User</Text>
+              <MaterialIcons name="block" size={24} color="#C61F3A" />
+              <Text style={[styles.bottomSheetOptionText, { color: '#C61F3A' }]}>Block User</Text>
             </TouchableOpacity>
 
           </BottomSheetView>
@@ -916,7 +916,7 @@ const styles = StyleSheet.create({
   },
   followButton: {
     flex: 1,
-    backgroundColor: '#ff4444',
+    backgroundColor: '#C61F3A',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -955,7 +955,7 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#ff4444',
+    borderBottomColor: '#C61F3A',
   },
   tabText: {
     fontSize: 14,
@@ -990,11 +990,12 @@ const styles = StyleSheet.create({
   },
   playButton: {
     position: 'absolute',
-    top: '40%',
-    left: '40%',
-    transform: [{ translateX: -12 }, { translateY: -12 }],
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 18,
+    top: '50%',
+    left: '50%',
+    marginTop: -20,
+    marginLeft: -20,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderRadius: 20,
     width: 40,
     height: 40,
     alignItems: 'center',

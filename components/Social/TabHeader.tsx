@@ -6,8 +6,7 @@ import { useTheme } from '@/contexts/themeContext';
 import { images } from '@/constants';
 import { useRouter } from 'expo-router';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
-
-import logoNew from '../../assets/images/logo-old.png';
+import BrandLogo from '@/components/BrandLogo';
 
 import * as SecureStore from 'expo-secure-store';
 import { Feather } from '@expo/vector-icons';
@@ -32,9 +31,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({ title, admin, notificationID, chi
 
   const { dark } = useTheme();
   const router = useRouter();
-  const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
-
-  const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -91,17 +88,13 @@ const [userId, setUserId] = useState<string | null>(null);
           const userData = JSON.parse(userDataStr);
           setUserId(userData.id.toString());
           setUsername(userData.username || null);
-          if (userData.profile_picture_url) {
-            setProfileImage(userData.profile_picture_url);
-          } else {
-            setProfileImage(defatulImage);
-          }
+          setProfileImage(userData.profile_picture_url || null);
         } else {
-          setProfileImage(defatulImage);
+          setProfileImage(null);
         }
       } catch (error) {
         console.error('Error loading user data:', error);
-        setProfileImage(defatulImage);
+        setProfileImage(null);
       }
     })();
     fetchUnreadCount();
@@ -137,7 +130,7 @@ const [userId, setUserId] = useState<string | null>(null);
 
   return (
     <ThemedView darkColor="black" style={styles.header}>
-<Image source={logoNew} style={styles.logo} resizeMode="contain" />
+<BrandLogo style={styles.logo} />
       <ThemedView style={styles.alignCenter}>
         {children}
         {admin?.profile && (
@@ -198,13 +191,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
   },
   logo: {
-  width: 120, // ✅ Adjust as needed
-  height: 60,
+  width: 140,
+  height: 56,
   textAlign:'left',
-  marginLeft:-20
+  marginLeft:-8
   
 },
 

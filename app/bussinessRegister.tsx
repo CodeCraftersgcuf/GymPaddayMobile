@@ -151,11 +151,11 @@ export default function BusinessUpgradeScreen() {
             case 'reviewing':
                 return '#FFB300';
             case 'rejected':
-                return '#F44336';
+                return '#C61F3A';
             case 'approved':
                 return '#4CAF50';
             default:
-                return '#940304';
+                return '#C61F3A';
         }
     };
 
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     businessText: {
-        color: '#940304',
+        color: '#C61F3A',
     },
     upgradeSubtitle: {
         fontSize: 16,
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 10,
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
         paddingBottom: 30,
     },
     upgradeButton: {
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
         borderRadius: 15,
         paddingVertical: 18,
         justifyContent: 'center',

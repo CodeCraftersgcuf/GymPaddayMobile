@@ -1,5 +1,8 @@
 import { images } from '@/constants';
-import React, { useState } from 'react';
+import { BRAND_PRIMARY } from '@/constants/Colors';
+import { useTheme } from '@/contexts/themeContext';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,90 +10,126 @@ import {
   TouchableOpacity,
   Image,
   Modal,
+  Pressable,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   withSpring,
   useSharedValue,
   withTiming,
-  interpolate
+  Easing,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface FloatingActionButtonProps {
   onStartLive?: () => void;
   onCreatePost?: () => void;
 }
 
+type MenuAction = {
+  key: string;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  iconBg: string;
+  onPress: () => void;
+};
+
 const FAB_SIZE = 35;
 const PLUS_ICON_SIZE = 14;
 
 const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   onStartLive,
-  onCreatePost
+  onCreatePost,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const animation = useSharedValue(0);
+  const { dark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const openProgress = useSharedValue(0);
 
-  const toggleMenu = () => {
-    const toValue = isOpen ? 0 : 1;
-    animation.value = withSpring(toValue, {
-      damping: 15,
-      stiffness: 100,
+  useEffect(() => {
+    openProgress.value = withTiming(isOpen ? 1 : 0, {
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
     });
-    setIsOpen(!isOpen);
-  };
+  }, [isOpen, openProgress]);
 
-  const liveButtonStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { scale: withSpring(interpolate(animation.value, [0, 1], [0, 1])) },
-        {
-          translateY: withSpring(
-            interpolate(animation.value, [0, 1], [0, 140])
-          )
-        }
-      ],
-      opacity: withTiming(interpolate(animation.value, [0, 0.5, 1], [0, 0, 1])),
-    };
-  });
+  const toggleMenu = () => setIsOpen((prev) => !prev);
+  const closeMenu = () => setIsOpen(false);
 
-  const postButtonStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { scale: withSpring(interpolate(animation.value, [0, 1], [0, 1])) },
-        {
-          translateY: withSpring(
-            interpolate(animation.value, [0, 1], [0, 70])
-          )
-        }
-      ],
-      opacity: withTiming(interpolate(animation.value, [0, 0.5, 1], [0, 0, 1])),
-    };
-  });
+  const rotateStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        rotate: withSpring(`${openProgress.value * 45}deg`, {
+          damping: 16,
+          stiffness: 160,
+        }),
+      },
+    ],
+  }));
 
-  const rotateStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          rotate: withSpring(`${interpolate(animation.value, [0, 1], [0, 45])}deg`)
-        }
-      ],
-    };
-  });
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: openProgress.value,
+    transform: [
+      {
+        translateY: withSpring((1 - openProgress.value) * 14, {
+          damping: 18,
+          stiffness: 160,
+        }),
+      },
+      {
+        scale: withSpring(0.94 + openProgress.value * 0.06, {
+          damping: 16,
+          stiffness: 150,
+        }),
+      },
+    ],
+  }));
 
   const handleStartLive = () => {
-    toggleMenu();
+    closeMenu();
     onStartLive?.();
   };
 
   const handleCreatePost = () => {
-    toggleMenu();
+    closeMenu();
     onCreatePost?.();
   };
 
+  const actions: MenuAction[] = [
+    {
+      key: 'post',
+      title: 'Create Post',
+      subtitle: 'Share with community',
+      icon: 'create-outline',
+      iconBg: BRAND_PRIMARY,
+      onPress: handleCreatePost,
+    },
+    {
+      key: 'live',
+      title: 'Go Live',
+      subtitle: 'Stream in real-time',
+      icon: 'radio-outline',
+      iconBg: '#9B1830',
+      onPress: handleStartLive,
+    },
+  ];
+
+  const cardBg = dark ? '#1C1C1E' : '#FFFFFF';
+  const titleColor = dark ? '#FFFFFF' : '#111111';
+  const subtitleColor = dark ? '#A0A0A5' : '#8A8A8E';
+  const dividerColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const headerColor = dark ? '#F5F5F5' : '#111111';
+
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.fab} onPress={toggleMenu} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={toggleMenu}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={isOpen ? 'Close create menu' : 'Open create menu'}
+      >
         <Animated.View style={rotateStyle}>
           <Image
             source={images.CreatePlus}
@@ -102,42 +141,62 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       <Modal
         visible={isOpen}
         transparent
-        animationType="fade"
-        onRequestClose={toggleMenu}
+        animationType="none"
+        onRequestClose={closeMenu}
+        statusBarTranslucent
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={toggleMenu}
-          style={styles.modalBackdrop}
-        >
-          <View style={styles.menuAnchor} pointerEvents="box-none">
-            <Animated.View style={[styles.menuButton, postButtonStyle]}>
-              <TouchableOpacity style={styles.button} onPress={handleCreatePost}>
-                <Text style={styles.buttonText}>Create Post</Text>
-                <View style={[styles.ImagesButton, styles.postButton]}>
-                  <Image
-                    source={images.notifcationIcon}
-                    tintColor={'white'}
-                    style={{ width: 25, height: 25 }}
-                  />
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
+        <View style={styles.modalRoot}>
+          <Pressable style={styles.modalBackdrop} onPress={closeMenu} />
 
-            <Animated.View style={[styles.menuButton, liveButtonStyle]}>
-              <TouchableOpacity style={styles.button} onPress={handleStartLive}>
-                <Text style={styles.buttonText}>Start Live</Text>
-                <View style={[styles.ImagesButton, styles.liveButton]}>
-                  <Image
-                    source={images.CreateVideo}
-                    tintColor={'white'}
-                    style={{ width: 25, height: 25 }}
-                  />
-                </View>
+          <Animated.View
+            style={[
+              styles.card,
+              cardStyle,
+              {
+                backgroundColor: cardBg,
+                top: insets.top + 58,
+                shadowColor: dark ? '#000' : '#1A1A1A',
+              },
+            ]}
+          >
+            <View style={styles.cardHeader}>
+              <Text style={[styles.cardHeaderTitle, { color: headerColor }]}>Create</Text>
+              <TouchableOpacity
+                style={[styles.closeChip, { backgroundColor: dark ? '#2C2C2E' : '#F2F2F4' }]}
+                onPress={closeMenu}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={16} color={dark ? '#fff' : '#333'} />
               </TouchableOpacity>
-            </Animated.View>
-          </View>
-        </TouchableOpacity>
+            </View>
+
+            {actions.map((action, index) => (
+              <React.Fragment key={action.key}>
+                {index > 0 && (
+                  <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                )}
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={action.onPress}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.iconTile, { backgroundColor: action.iconBg }]}>
+                    <Ionicons name={action.icon} size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.textBlock}>
+                    <Text style={[styles.title, { color: titleColor }]}>{action.title}</Text>
+                    <Text style={[styles.subtitle, { color: subtitleColor }]}>
+                      {action.subtitle}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={subtitleColor} />
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
@@ -152,56 +211,85 @@ const styles = StyleSheet.create({
     width: FAB_SIZE,
     height: FAB_SIZE,
     borderRadius: FAB_SIZE / 2,
-    backgroundColor: '#940304',
+    backgroundColor: BRAND_PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.35,
     shadowRadius: 4,
   },
-  modalBackdrop: {
+  modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
-  menuAnchor: {
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  card: {
     position: 'absolute',
-    top: 52,
-    right: 60,
-    alignItems: 'flex-end',
+    right: 16,
+    width: 286,
+    borderRadius: 22,
+    paddingTop: 12,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
+    elevation: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
   },
-  menuButton: {
-    marginBottom: 8,
-  },
-  button: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingBottom: 6,
   },
-  ImagesButton: {
-    flexDirection: 'row',
+  cardHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  closeChip: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
     paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+    gap: 12,
   },
-  liveButton: {
-    backgroundColor: '#6c5ce7',
+  iconTile: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  postButton: {
-    backgroundColor: '#ff00ff',
+  textBlock: {
+    flex: 1,
   },
-  buttonText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontWeight: '600',
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  subtitle: {
+    fontSize: 13,
+    marginTop: 2,
+    fontWeight: '400',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 70,
+    marginRight: 10,
   },
 });
 

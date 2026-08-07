@@ -42,7 +42,7 @@ export default function LazyNativeScreen({
   if (!Screen) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#940304" />
+        <ActivityIndicator size="large" color="#C61F3A" />
       </View>
     );
   }

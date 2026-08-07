@@ -229,7 +229,7 @@ const ProfileScreen: React.FC = () => {
     if (isLoading) {
         return (
             <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
-                <ActivityIndicator size="large" color="#940304" />
+                <ActivityIndicator size="large" color="#C61F3A" />
                 <Text style={{ color: theme.text, marginTop: 16, fontSize: 16 }}>Loading listings...</Text>
             </SafeAreaView>
         );
@@ -347,8 +347,8 @@ const ProfileScreen: React.FC = () => {
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            colors={['#940304']}
-                            tintColor="#940304"
+                            colors={['#C61F3A']}
+                            tintColor="#C61F3A"
                             title="Pull to refresh"
                             titleColor={theme.text}
                         />

@@ -66,10 +66,10 @@ const FloatingLabelGenderPicker: React.FC<Props> = ({ label, value, error, onPre
       top: 18,
     },
     errorBorder: {
-      borderColor: "#940304",
+      borderColor: "#C61F3A",
     },
     errorText: {
-      color: "#940304",
+      color: "#C61F3A",
       fontSize: 12,
       marginTop: 4,
     },

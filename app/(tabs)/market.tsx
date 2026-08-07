@@ -163,7 +163,7 @@ export default function MarketplaceScreen() {
     cardBackground: isDark ? '#181818' : '#FFFFFF',
     text: isDark ? '#FFFFFF' : '#000000',
     textSecondary: isDark ? '#CCCCCC' : '#666666',
-    headerBackground: '#940304',
+    headerBackground: '#C61F3A',
     searchBackground: "#BD0000",
     borderColor: isDark ? '#333333' : '#E5E5E5',
   };
@@ -341,7 +341,7 @@ export default function MarketplaceScreen() {
   if (isLoading && !data) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#940304" />
+        <ActivityIndicator size="large" color="#C61F3A" />
       </SafeAreaView>
     );
   }
@@ -413,8 +413,8 @@ export default function MarketplaceScreen() {
           <RefreshControl
             refreshing={isFetching || refreshing}
             onRefresh={onRefresh}
-            colors={['#940304']}
-            tintColor="#940304"
+            colors={['#C61F3A']}
+            tintColor="#C61F3A"
           />
         }
       >
@@ -429,7 +429,7 @@ export default function MarketplaceScreen() {
                 style={[
                   styles.categoryCard,
                   { backgroundColor: theme.cardBackground },
-                  selectedCategory === item.id && { borderColor: '#940304', borderWidth: 2 },
+                  selectedCategory === item.id && { borderColor: '#C61F3A', borderWidth: 2 },
                 ]}
                 onPress={() => setSelectedCategory(item.id)}
               >
@@ -524,7 +524,7 @@ export default function MarketplaceScreen() {
               }}>
                 <Text style={[
                   styles.bottomSheetItem,
-                  selectedLocation === loc.id && { color: '#940304', fontWeight: '600' }
+                  selectedLocation === loc.id && { color: '#C61F3A', fontWeight: '600' }
                 ]}>{loc.name}</Text>
               </TouchableOpacity>
             ))}
@@ -582,7 +582,7 @@ export default function MarketplaceScreen() {
                 }}>
                   <Text style={[
                     styles.bottomSheetItem,
-                    selectedCategory === cat.id && { color: '#940304', fontWeight: '600' }
+                    selectedCategory === cat.id && { color: '#C61F3A', fontWeight: '600' }
                   ]}>{cat.title}</Text>
                 </TouchableOpacity>
               ))}
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   listingPrice: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#940304',
+    color: '#C61F3A',
     marginBottom: 8,
   },
   sellerInfo: {
@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,24 +10,89 @@ import {
   Image,
   ScrollView,
   BackHandler,
+  Keyboard,
   KeyboardAvoidingView,
-  Keyboard
+  TextInput,
 } from 'react-native';
 import Modal from 'react-native-modal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaterialIcons } from '@expo/vector-icons';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getLiveVideoCallToken } from '@/utils/mutations/video';
 import * as SecureStore from 'expo-secure-store';
-import LiveStreamingPlayer from './LiveStreamingPlayer';
 import WebView from 'react-native-webview';
-import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
+import { useLiveStreamChatList } from '@/utils/hooks/useLiveStreamChats';
 import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
 import { Alert } from 'react-native';
-import { TextInput } from 'react-native-gesture-handler';
+import { Camera } from 'expo-camera';
 import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
-import { buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
+import { AGORA_LIVE_APP_ID, buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
+import { keyboardInputOffset, useKeyboardHeight } from '@/utils/useKeyboardHeight';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
+
+const AGORA_FALLBACK_UID = 12345;
+
+async function ensureLiveMediaPermissions(): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const cam = await Camera.requestCameraPermissionsAsync();
+    const mic = await Camera.requestMicrophonePermissionsAsync();
+    if (cam.status !== 'granted' || mic.status !== 'granted') {
+      return {
+        ok: false,
+        message:
+          cam.status !== 'granted' && mic.status !== 'granted'
+            ? 'Allow camera and microphone access in Settings to go live.'
+            : cam.status !== 'granted'
+              ? 'Allow camera access in Settings to go live.'
+              : 'Allow microphone access in Settings to go live.',
+      };
+    }
+    if (Platform.OS === 'android') {
+      await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, message: e?.message || 'Could not request camera/mic permission.' };
+  }
+}
+
+/**
+ * Prefer Agora WebView (same path as Expo Go).
+ * Native react-native-agora hangs on "Joining channel…" on EAS/dev builds;
+ * WebView is JS-only and shippable via OTA.
+ */
+function canUseNativeAgora(): boolean {
+  return false;
+}
+
+/** Lazy load kept for a future native re-enable; currently unused while WebView is forced. */
+function loadNativeLivePlayer(): React.ComponentType<any> | null {
+  if (!canUseNativeAgora()) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('./LiveStreamingPlayer').default;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveAgoraUid(): Promise<number> {
+  try {
+    const raw = await SecureStore.getItemAsync('user_data');
+    if (raw) {
+      const u = JSON.parse(raw) as { id?: number };
+      const id = Number(u?.id);
+      if (Number.isFinite(id) && id >= 1) return Math.floor(id) % 2147483647;
+    }
+  } catch {
+    /* fallback */
+  }
+  return AGORA_FALLBACK_UID;
+}
 
 interface LiveStreamingViewProps {
   dark: boolean;
@@ -52,15 +117,16 @@ interface ChatMessage {
     user: { fullname: string };
   } | null;
 }
-/** Parse duration string (e.g. "15 Min", "1 Hour", "3 Hours") to total seconds */
+/** Parse duration string (e.g. "15 Min", "1 Hour", "2 Hours 30 Min") to total seconds */
 function parseDurationToSeconds(durationStr: string | undefined): number | null {
   if (!durationStr || typeof durationStr !== 'string') return null;
   const s = durationStr.trim();
-  const hourMatch = s.match(/^(\d+)\s*Hours?/i);
-  if (hourMatch) return parseInt(hourMatch[1], 10) * 3600;
-  const minMatch = s.match(/^(\d+)\s*Min/i);
-  if (minMatch) return parseInt(minMatch[1], 10) * 60;
-  return null;
+  const hourMatch = s.match(/(\d+)\s*Hours?/i);
+  const minMatch = s.match(/(\d+)\s*Min/i);
+  const hours = hourMatch ? parseInt(hourMatch[1], 10) : 0;
+  const mins = minMatch ? parseInt(minMatch[1], 10) : 0;
+  const total = hours * 3600 + mins * 60;
+  return total > 0 ? total : null;
 }
 
 export default function LiveStreamingView({
@@ -72,37 +138,43 @@ export default function LiveStreamingView({
   selectedDuration,
 }: LiveStreamingViewProps) {
   const { blocked: hideIosMonetization } = useIosMonetizationHidden();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const CHANNEL_NAME = channelName ?? 'live_stream';
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const chatScrollRef = useRef<ScrollView>(null);
-  const fetchLiveVideoCallToken = useMutation({
-    mutationFn: async () => {
+  const [cameraReadyForWeb, setCameraReadyForWeb] = useState(false);
+  const [mediaPermissionError, setMediaPermissionError] = useState<string | null>(null);
+  const [NativeLivePlayer, setNativeLivePlayer] = useState<React.ComponentType<any> | null>(null);
+
+  const { data: agoraAuth, isPending: agoraTokenPending, isError: agoraTokenError } = useQuery({
+    queryKey: ['liveHostToken', CHANNEL_NAME],
+    enabled: !!CHANNEL_NAME,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token found');
-      let uid = 12345;
-      try {
-        const raw = await SecureStore.getItemAsync('user_data');
-        if (raw) {
-          const u = JSON.parse(raw) as { id?: number };
-          const id = Number(u?.id);
-          if (Number.isFinite(id) && id >= 1) uid = Math.floor(id) % 2147483647;
-        }
-      } catch {
-        /* keep fallback uid */
-      }
-      return await getLiveVideoCallToken(
+      const uid = await resolveAgoraUid();
+      const res = await getLiveVideoCallToken(
         { channel_name: CHANNEL_NAME, uid, role: 'host' },
-        token
+        token,
       );
-    },
-    onSuccess: (data) => {
-      // console.log('✅ Live token fetched:', data);
-    },
-    onError: (error) => {
-      console.error('❌ Live token error:', error);
+      const agoraToken = String(res?.token || '');
+      if (!agoraToken) throw new Error('Empty Agora token');
+      return { token: agoraToken, uid };
     },
   });
 
+  const useNativeLive = NativeLivePlayer != null;
+
+  const hostWebHtml = useMemo(() => {
+    if (!agoraAuth?.token || useNativeLive) return null;
+    return buildLiveStreamWebHtml(CHANNEL_NAME, 'host', {
+      appId: AGORA_LIVE_APP_ID,
+      token: agoraAuth.token,
+      uid: agoraAuth.uid,
+    });
+  }, [CHANNEL_NAME, agoraAuth?.token, agoraAuth?.uid, useNativeLive]);
 
   const [audienceModalVisible, setAudienceModalVisible] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -117,7 +189,7 @@ export default function LiveStreamingView({
   const [replyText, setReplyText] = useState('');
   const [replyModalVisible, setReplyModalVisible] = useState(false);
   const [messageText, setMessageText] = useState('');
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardHeight = useKeyboardHeight();
 
   const endLiveFlow = useCallback(() => {
     setLiveEnded(true);
@@ -154,7 +226,7 @@ export default function LiveStreamingView({
   }, [hostStreamMeta, liveEnded]);
 
   const chatStreamId = liveEnded ? '' : livestreamId ?? '';
-  const { data: chats = [], isLoading } = useLiveStreamChats(chatStreamId);
+  const { chats, isLoading } = useLiveStreamChatList(chatStreamId);
   const { mutate: sendChatMessage, isPending } = useSendLiveStreamMessage(chatStreamId);
 
   useEffect(() => {
@@ -214,19 +286,44 @@ export default function LiveStreamingView({
     queryFn: async () => {
       const token = await SecureStore.getItemAsync('auth_token');
       const res = await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${livestreamId}/audience`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       });
 
       if (!res.ok) throw new Error('Failed to fetch audience');
       return await res.json();
     },
-    enabled: !!livestreamId && (audienceModalVisible || insightsModalVisible),
-    refetchInterval:
-      livestreamId && (audienceModalVisible || insightsModalVisible) ? 4000 : false,
+    enabled: !!livestreamId && !liveEnded,
+    refetchInterval: livestreamId && !liveEnded ? 5000 : false,
   });
   useEffect(() => {
-    fetchLiveVideoCallToken.mutate();
-  }, [CHANNEL_NAME]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    (async () => {
+      // Must prompt at RN layer — WebView getUserMedia will hang forever without OS grants.
+      const perm = await ensureLiveMediaPermissions();
+      if (cancelled) return;
+      if (!perm.ok) {
+        setMediaPermissionError(perm.message || 'Camera/microphone permission required');
+        setCameraReadyForWeb(false);
+        return;
+      }
+      setMediaPermissionError(null);
+
+      // Always use WebView live path (OTA-safe). Give camera time to release after RN permission prompt.
+      const Player = loadNativeLivePlayer();
+      if (!cancelled && Player) setNativeLivePlayer(() => Player);
+
+      timer = setTimeout(() => {
+        if (!cancelled) setCameraReadyForWeb(true);
+      }, Player ? 250 : 450);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
   useEffect(() => {
     if (audienceQuery.data) {
       // console.log('Audience API response:', audienceQuery.data);
@@ -322,29 +419,14 @@ export default function LiveStreamingView({
     }
   }, [liveEnded]);
 
-  // Listen to keyboard events to adjust chat overlay position
-  useEffect(() => {
-    const keyboardWillShow = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-      }
-    );
-    const keyboardWillHide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardWillShow.remove();
-      keyboardWillHide.remove();
-    };
-  }, []);
+  const bottomInputOffset = keyboardInputOffset(keyboardHeight, insets.bottom);
 
   return (
-    <View style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: dark ? '#000' : '#FFF' }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 52 : 24}
+    >
       {/* Back button only – title lives in web */}
       <View style={styles.header}>
         <TouchableOpacity onPress={endLiveFlow} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
@@ -354,30 +436,95 @@ export default function LiveStreamingView({
       <View style={styles.streamContainer}>
         {/* Video area only – WebView does not extend under app input bar, so web's bottom bar stays visible */}
         <View style={styles.webViewWrapper}>
-          {fetchLiveVideoCallToken.isPending && (
-            <ActivityIndicator size="large" color="#940304" style={styles.loaderCenter} />
+          {(agoraTokenPending || (!cameraReadyForWeb && !mediaPermissionError)) && (
+            <View style={styles.loaderCenter}>
+              <ActivityIndicator size="large" color="#C61F3A" />
+              <Text style={{ color: dark ? '#fff' : '#000', marginTop: 12, textAlign: 'center', paddingHorizontal: 24 }}>
+                {agoraTokenPending ? 'Preparing live stream…' : 'Starting camera…'}
+              </Text>
+            </View>
           )}
 
-          {fetchLiveVideoCallToken.data && (
+          {mediaPermissionError ? (
+            <View style={styles.loaderCenter}>
+              <Text style={{ color: dark ? '#fff' : '#000', textAlign: 'center', paddingHorizontal: 24, marginBottom: 12 }}>
+                {mediaPermissionError}
+              </Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  setMediaPermissionError(null);
+                  const perm = await ensureLiveMediaPermissions();
+                  if (!perm.ok) {
+                    setMediaPermissionError(perm.message || 'Permission required');
+                    return;
+                  }
+                  setCameraReadyForWeb(true);
+                }}
+                style={{ backgroundColor: '#C61F3A', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {!!agoraAuth?.token && cameraReadyForWeb && NativeLivePlayer && (
+            <NativeLivePlayer
+              token={agoraAuth.token}
+              channelName={CHANNEL_NAME}
+              uid={agoraAuth.uid}
+              role="host"
+            />
+          )}
+
+          {!!hostWebHtml && cameraReadyForWeb && !useNativeLive && !mediaPermissionError && (
             <WebView
               originWhitelist={['*']}
               source={{
-                html: buildLiveStreamWebHtml(CHANNEL_NAME, 'host'),
-                baseUrl: 'https://skillverse.com.pk/',
+                html: hostWebHtml,
+                baseUrl: 'https://api.gympaddy.com/',
               }}
               javaScriptEnabled
               domStorageEnabled
               allowsInlineMediaPlayback
               mediaPlaybackRequiresUserAction={false}
+              mediaCapturePermissionGrantType="grant"
+              onPermissionRequest={(event: any) => {
+                event.grant?.(event.resources ?? event.nativeEvent?.resources);
+              }}
               allowsFullscreenVideo
+              allowsProtectedMedia
               style={styles.webView}
               onMessage={(event) => {
-                const message = event.nativeEvent.data;
-                if (message === 'stream_ended' || message === '"stream_ended"') {
+                const raw = event.nativeEvent.data;
+                if (raw === 'stream_ended' || raw === '"stream_ended"') {
                   endLiveFlow();
+                  return;
+                }
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (parsed?.type === 'live_error') {
+                    if (__DEV__) console.warn('Live WebView error:', parsed.message);
+                    const msg = String(parsed.message || '');
+                    if (/timed out|permission|NotAllowed|NotFound|NotReadable/i.test(msg)) {
+                      Alert.alert(
+                        'Could not start live',
+                        'Please allow camera and microphone access so you can go live, then try again. If you already allowed them, close any other app using the camera and retry.',
+                      );
+                    }
+                  }
+                } catch {
+                  /* ignore non-json */
                 }
               }}
             />
+          )}
+
+          {agoraTokenError && (
+            <View style={styles.loaderCenter}>
+              <Text style={{ color: dark ? '#fff' : '#000', textAlign: 'center', paddingHorizontal: 24 }}>
+                Could not start live (token error). Check your connection and try again.
+              </Text>
+            </View>
           )}
 
           {/* Chat Overlay – pinned to upper-left so it never covers the bottom bar or center camera buttons */}
@@ -447,14 +594,18 @@ export default function LiveStreamingView({
             </View>
           )}
         </View>
+      </View>
 
+      <View
+        style={[
+          styles.bottomSection,
+          {
+            paddingBottom: bottomInputOffset,
+            marginBottom: 0,
+          },
+        ]}
+      >
         {canType && (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            // On iOS, offset the keyboard by header height + a bit of padding
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 20}
-            style={styles.inputBarSection}
-          >
           <View style={styles.inputBar}>
             {!!replyTo && (
               <TouchableOpacity style={styles.inputReplyChip} onPress={() => setReplyTo(null)}>
@@ -526,7 +677,6 @@ export default function LiveStreamingView({
               </TouchableOpacity>
             </View>
           </View>
-          </KeyboardAvoidingView>
         )}
 
         {liveEnded && (
@@ -535,45 +685,51 @@ export default function LiveStreamingView({
           </View>
         )}
 
+        {keyboardHeight === 0 && (
+          <View style={styles.controlsContainer}>
+            <TouchableOpacity
+              style={[styles.viewAudienceButton, styles.controlButton]}
+              onPress={() => {
+                setAudienceModalVisible(true);
+                if (livestreamId) {
+                  queryClient.invalidateQueries({ queryKey: ['audience', livestreamId] });
+                }
+              }}
+            >
+              <Text
+                style={[
+                  styles.viewAudienceButtonText,
+                  { color: dark ? '#FFF' : '#FFF' },
+                ]}
+              >
+                 Audience
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewAudienceButton, styles.controlButton]}
+              onPress={() => setInsightsModalVisible(true)}
+            >
+              <Text
+                style={[
+                  styles.viewAudienceButtonText,
+                  { color: dark ? '#FFF' : '#FFF' },
+                ]}
+              >
+                 Insights
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.endStreamButton, styles.controlButton]}
+              onPress={endLiveFlow}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="call-end" size={18} color="#FFF" />
+              <Text style={styles.endStreamButtonText}>End stream</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      {/* App controls – End Stream button kept clear above chat; web can also post "stream_ended" to trigger onEndLive */}
-      <View style={styles.controlsContainer}>
-        <TouchableOpacity
-          style={[styles.viewAudienceButton, styles.controlButton]}
-          onPress={() => setAudienceModalVisible(true)}
-        >
-          <Text
-            style={[
-              styles.viewAudienceButtonText,
-              { color: dark ? '#FFF' : '#FFF' },
-            ]}
-          >
-             Audience
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.viewAudienceButton, styles.controlButton]}
-          onPress={() => setInsightsModalVisible(true)}
-        >
-          <Text
-            style={[
-              styles.viewAudienceButtonText,
-              { color: dark ? '#FFF' : '#FFF' },
-            ]}
-          >
-             Insights
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.endStreamButton, styles.controlButton]}
-          onPress={endLiveFlow}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="call-end" size={18} color="#FFF" />
-          <Text style={styles.endStreamButtonText}>End stream</Text>
-        </TouchableOpacity>
-      </View>
       <Modal
         isVisible={audienceModalVisible}
         onBackdropPress={() => setAudienceModalVisible(false)}
@@ -806,7 +962,7 @@ export default function LiveStreamingView({
 
 
 
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -941,6 +1097,9 @@ const styles = StyleSheet.create({
   inputBarSection: {
     backgroundColor: '#0E0E0E',
   },
+  bottomSection: {
+    backgroundColor: '#0E0E0E',
+  },
   chatClosedBanner: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -957,11 +1116,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'nowrap',
     paddingHorizontal: 20,
-    paddingBottom: 18,
+    paddingBottom: 8,
     paddingTop: 10,
     gap: 8,
-    zIndex: 1000,
-    elevation: 1000,
     backgroundColor: 'rgba(20,20,20,0.98)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(128,128,128,0.3)',
@@ -987,7 +1144,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 10,
@@ -1007,7 +1164,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   giftBadge: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,

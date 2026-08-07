@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 30,
         paddingVertical: 12,
         borderRadius: 25,
-        backgroundColor: '#FF3B30',
+        backgroundColor: '#C61F3A',
     },
     endCallText: {
         color: 'white',

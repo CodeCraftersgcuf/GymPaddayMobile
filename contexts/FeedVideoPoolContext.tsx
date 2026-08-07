@@ -10,6 +10,7 @@ import { View, StyleSheet } from 'react-native';
 export type FeedPostVideo = {
   id: number;
   videoUrl?: string | null;
+  videoHlsUrl?: string | null;
   videoThumbnailUrl?: string | null;
   videoMp4Url?: string | null;
   // Rich fields (present at runtime from mapPostFromApi) used by the Reels UI.

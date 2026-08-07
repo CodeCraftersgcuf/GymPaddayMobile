@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   gap: 6, // optional spacing
 },
 unreadBadge: {
-  backgroundColor: '#FF3B30',
+  backgroundColor: '#C61F3A',
   borderRadius: 12,
   minWidth: 20,
   height: 20,

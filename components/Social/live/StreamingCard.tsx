@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as SecureStore from 'expo-secure-store';
 import { apiCall } from '@/utils/customApiCall';
 import { API_ENDPOINTS } from '@/apiConfig';
@@ -20,6 +20,8 @@ interface StreamingCardProps {
   onDurationSelect: () => void;
   onGoLive: () => void;
   onBuyMinutes: () => void;
+  /** When false, release the device camera (needed before Agora WebView / native live). */
+  cameraEnabled?: boolean;
 }
 
 export default function StreamingCard({
@@ -28,10 +30,12 @@ export default function StreamingCard({
   onDurationSelect,
   onGoLive,
   onBuyMinutes,
+  cameraEnabled = true,
 }: StreamingCardProps) {
   const router = useRouter();
   const [facing, setFacing] = useState<CameraType>('front');
   const [permission, requestPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [liveMinutes, setLiveMinutes] = useState<number | null>(null);
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [authUserId, setAuthUserId] = useState<number | null>(null);
@@ -41,10 +45,17 @@ export default function StreamingCard({
     (followerCount !== null && followerCount >= MIN_FOLLOWERS);
 
   useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission();
-    }
+    (async () => {
+      if (!permission?.granted) {
+        await requestPermission();
+      }
+      if (!micPermission?.granted) {
+        await requestMicPermission();
+      }
+    })();
   }, []);
+
+  const mediaReady = Boolean(permission?.granted && micPermission?.granted);
 
   useEffect(() => {
     if (!REQUIRE_FOLLOWERS_FOR_LIVE) return;
@@ -103,40 +114,64 @@ export default function StreamingCard({
     fetchLiveMinutes();
   }, []);
 
-  if (!permission) return <Text>Requesting permission...</Text>;
-  if (!permission.granted) {
+  if (!permission || !micPermission) return <Text>Requesting permission...</Text>;
+  if (!permission.granted || !micPermission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={{ textAlign: 'center' }}>No access to camera</Text>
-        <TouchableOpacity onPress={requestPermission} style={styles.buyButton}>
-          <Text style={{ color: '#940304', fontWeight: 'bold' }}>Grant Camera Access</Text>
+        <Text style={{ textAlign: 'center', marginBottom: 8 }}>
+          {!permission.granted && !micPermission.granted
+            ? 'Camera and microphone access are required for live streaming.'
+            : !permission.granted
+              ? 'Camera access is required for live streaming.'
+              : 'Microphone access is required for live streaming.'}
+        </Text>
+        <TouchableOpacity
+          onPress={async () => {
+            if (!permission.granted) await requestPermission();
+            if (!micPermission.granted) await requestMicPermission();
+          }}
+          style={styles.buyButton}
+        >
+          <Text style={{ color: '#C61F3A', fontWeight: 'bold' }}>Grant Access</Text>
         </TouchableOpacity>
       </View>
     );
   }
   const canGoLive =
+    mediaReady &&
     hasMinFollowers &&
     (!REQUIRE_LIVE_MINUTES_FOR_GO_LIVE || (liveMinutes !== null && liveMinutes > 0));
 
   return (
     <View style={styles.container}>
-      {/* Camera Preview */}
+      {/* Camera Preview — unmount before go-live so Agora can open the camera */}
       <View style={styles.cameraContainer}>
-        <CameraView style={styles.cameraPreview} facing={facing} />
-        <TouchableOpacity
-          style={styles.flipCamera}
-          activeOpacity={0.85}
-          onPress={() =>
-            setFacing((prev) => (prev === 'back' ? 'front' : 'back'))
-          }
-        >
-          <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        {cameraEnabled && permission?.granted ? (
+          <CameraView style={styles.cameraPreview} facing={facing} />
+        ) : (
+          <View style={[styles.cameraPreview, styles.cameraPlaceholder]}>
+            <MaterialIcons name="videocam" size={48} color="#666" />
+            <Text style={styles.cameraPlaceholderText}>
+              {cameraEnabled ? 'Camera permission needed' : 'Starting live…'}
+            </Text>
+          </View>
+        )}
+        {cameraEnabled ? (
+          <TouchableOpacity
+            style={styles.flipCamera}
+            activeOpacity={0.85}
+            onPress={() =>
+              setFacing((prev) => (prev === 'back' ? 'front' : 'back'))
+            }
+          >
+            <MaterialIcons name="flip-camera-ios" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Streaming Info Card */}
       <LinearGradient
-        colors={['#940304', '#8B00FF']}
+        colors={['#C61F3A', '#9B1830']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.infoCard}
@@ -237,7 +272,7 @@ export default function StreamingCard({
         style={[
           styles.goLiveButton,
           {
-            backgroundColor: canGoLive ? '#940304' : '#CCCCCC',
+            backgroundColor: canGoLive ? '#C61F3A' : '#CCCCCC',
             opacity: canGoLive ? 1 : 0.6,
           },
         ]}
@@ -263,6 +298,16 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 20,
     overflow: 'hidden',
+  },
+  cameraPlaceholder: {
+    backgroundColor: '#111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  cameraPlaceholderText: {
+    color: '#888',
+    fontSize: 13,
   },
   flipCamera: {
     position: 'absolute',
@@ -331,7 +376,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   buyButtonText: {
-    color: '#940304',
+    color: '#C61F3A',
     fontWeight: '600',
   },
   errorContainer: {
@@ -354,7 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   profileLinkText: {
-    color: '#940304',
+    color: '#C61F3A',
     fontWeight: '600',
     fontSize: 15,
   },

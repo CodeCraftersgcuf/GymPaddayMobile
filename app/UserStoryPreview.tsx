@@ -9,11 +9,14 @@ import {
   Pressable,
   Text,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
 import { StoryItem } from '@/utils/types/story';
 import { CachedImage } from '@/components/media/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +28,7 @@ import {
   clearCachedStoryVideo,
 } from '@/utils/storyPrefetch';
 import { markStoryViewed } from '@/utils/storyViews';
+import { deleteStory, removeStoryFromGroupedCache } from '@/utils/storiesApi';
 
 const { width, height } = Dimensions.get('window');
 const STORY_DURATION = 4000;
@@ -76,26 +80,56 @@ function resolveStoriesFromParams(
     ? String(Array.isArray(userIdRaw) ? userIdRaw[0] : userIdRaw)
     : null;
 
-  if (userId) {
-    const grouped = queryClient.getQueryData<GroupedStoryUser[]>(['groupedStories']);
-    const group = grouped?.find(
-      (g) => String(g.user?.id) === userId,
-    );
-    if (group?.stories?.length) {
-      return group.stories;
-    }
-  }
-
+  let fromSelected: StoryItem[] = [];
   const selectedRaw = params.selected;
   const selectedStr = selectedRaw
     ? (Array.isArray(selectedRaw) ? selectedRaw[0] : selectedRaw)
     : '[]';
   try {
     const parsed = JSON.parse(selectedStr || '[]');
-    return Array.isArray(parsed) ? parsed : [];
+    fromSelected = Array.isArray(parsed) ? parsed : [];
   } catch {
-    return [];
+    fromSelected = [];
   }
+
+  let fromCache: StoryItem[] = [];
+  if (userId) {
+    const grouped = queryClient.getQueryData<GroupedStoryUser[]>(['groupedStories']);
+    const group = grouped?.find((g) => String(g.user?.id) === userId);
+    if (group?.stories?.length) {
+      fromCache = group.stories;
+    }
+  }
+
+  if (!fromCache.length) return fromSelected;
+  if (!fromSelected.length) return fromCache;
+
+  // Merge so we never drop slides when cache/selected disagree after refresh.
+  const byId = new Map<number, StoryItem>();
+  for (const story of fromSelected) {
+    byId.set(Number(story.id), story);
+  }
+  for (const story of fromCache) {
+    const id = Number(story.id);
+    const existing = byId.get(id);
+    if (!existing) {
+      byId.set(id, story);
+      continue;
+    }
+    byId.set(id, {
+      ...existing,
+      ...story,
+      music_url: story.music_url || existing.music_url,
+      music_title: story.music_title || existing.music_title,
+      music_artist: (story as StoryWithMusic).music_artist || (existing as StoryWithMusic).music_artist,
+      full_media_url: story.full_media_url || existing.full_media_url,
+      full_thumbnail_url: story.full_thumbnail_url || existing.full_thumbnail_url,
+    });
+  }
+
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 }
 
 const UserStoryPreview = () => {
@@ -107,10 +141,38 @@ const UserStoryPreview = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const stories = useMemo(
+  const resolvedStories = useMemo(
     () => resolveStoriesFromParams(queryClient, params),
     [queryClient, params.selected, params.userId],
   );
+
+  const [stories, setStories] = useState<StoryItem[]>(resolvedStories);
+  const [ownUserId, setOwnUserId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    setStories(resolvedStories);
+  }, [resolvedStories]);
+
+  useEffect(() => {
+    SecureStore.getItemAsync('user_data').then((data) => {
+      if (!data) return;
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed?.id != null) setOwnUserId(Number(parsed.id));
+      } catch {
+        /* noop */
+      }
+    });
+  }, []);
+
+  const paramUserId = params.userId ? String(params.userId) : null;
+
+  const isOwnStory = useMemo(() => {
+    if (ownUserId == null) return false;
+    if (paramUserId && paramUserId === String(ownUserId)) return true;
+    return String(stories[0]?.user_id ?? '') === String(ownUserId);
+  }, [ownUserId, paramUserId, stories]);
 
   const initialIndex = useMemo(() => {
     const raw = params.startIndex;
@@ -178,6 +240,7 @@ const UserStoryPreview = () => {
       playsInSilentModeIOS: true,
       staysActiveInBackground: false,
       shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
     }).catch(() => {});
   }, []);
 
@@ -227,37 +290,54 @@ const UserStoryPreview = () => {
 
   useEffect(() => {
     videoPlaybackStartedRef.current = false;
-  }, [currentIndex]);
+  }, [currentIndex, currentStory?.id]);
 
-  // Photos: music starts once image is loaded. Videos: preload paused, sync on first frame.
+  // Photo stories: music starts when the image is visible.
   useEffect(() => {
-    if (!fixedMusicUrl || isPaused) {
-      stopMusic();
+    if (!isStoryPhoto(currentStory) || !fixedMusicUrl || isPaused) {
       return;
     }
-
-    if (isStoryPhoto(currentStory)) {
-      if (!isMediaLoaded) return;
-      startMusic(fixedMusicUrl, true);
-      return () => {
-        stopMusic();
-      };
-    }
-
-    if (isStoryVideo(currentStory)) {
-      startMusic(fixedMusicUrl, false);
-      return () => {
-        stopMusic();
-      };
-    }
+    if (!isMediaLoaded) return;
+    startMusic(fixedMusicUrl, true);
+    return () => {
+      stopMusic();
+    };
   }, [
     currentIndex,
+    currentStory?.id,
     fixedMusicUrl,
     isPaused,
     isMediaLoaded,
     currentStory,
     startMusic,
     stopMusic,
+  ]);
+
+  // Video stories: preload music once per slide (do NOT depend on isMediaLoaded —
+  // that was stopping music right after syncMusicWithVideo started it).
+  useEffect(() => {
+    if (!isStoryVideo(currentStory) || !fixedMusicUrl || isPaused) {
+      return;
+    }
+    startMusic(fixedMusicUrl, false);
+    return () => {
+      stopMusic();
+    };
+  }, [currentIndex, currentStory?.id, fixedMusicUrl, isPaused, currentStory, startMusic, stopMusic]);
+
+  // Video: start music when the first frame is ready.
+  useEffect(() => {
+    if (!isStoryVideo(currentStory) || !fixedMusicUrl || isPaused || !isMediaLoaded) {
+      return;
+    }
+    syncMusicWithVideo();
+  }, [
+    isMediaLoaded,
+    fixedMusicUrl,
+    isPaused,
+    currentStory?.id,
+    currentStory,
+    syncMusicWithVideo,
   ]);
 
   const clearLoadTimeout = useCallback(() => {
@@ -338,6 +418,75 @@ const UserStoryPreview = () => {
     }
   }, [currentIndex, router, progress, clearLoadTimeout]);
 
+  const handleDeleteStory = useCallback(() => {
+    if (!currentStory?.id || isDeleting || !isOwnStory) return;
+
+    const storyId = currentStory.id;
+    const ownerId = currentStory.user_id ?? paramUserId ?? ownUserId;
+
+    Alert.alert(
+      'Delete story?',
+      'This story will be removed permanently.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsDeleting(true);
+              await stopMusic();
+              animationRef.current?.stop();
+              clearLoadTimeout();
+
+              const token = await SecureStore.getItemAsync('auth_token');
+              if (!token) throw new Error('Not authenticated');
+
+              await deleteStory(token, storyId);
+              clearCachedStoryVideo(storyId);
+              removeStoryFromGroupedCache(queryClient, storyId, ownerId ?? undefined);
+
+              const remaining = stories.filter((s) => s.id !== storyId);
+              setStories(remaining);
+
+              if (remaining.length === 0) {
+                Toast.show({ type: 'success', text1: 'Story deleted' });
+                router.replace('/(tabs)');
+                return;
+              }
+
+              if (currentIndex >= remaining.length) {
+                setCurrentIndex(remaining.length - 1);
+              }
+
+              Toast.show({ type: 'success', text1: 'Story deleted' });
+            } catch (error: any) {
+              Toast.show({
+                type: 'error',
+                text1: 'Delete failed',
+                text2: error?.message || 'Please try again.',
+              });
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [
+    currentStory,
+    isDeleting,
+    isOwnStory,
+    paramUserId,
+    ownUserId,
+    stories,
+    currentIndex,
+    queryClient,
+    router,
+    stopMusic,
+    clearLoadTimeout,
+  ]);
+
   useEffect(() => {
     if (isMediaLoaded && !isPaused) {
       if (isStoryPhoto(currentStory)) {
@@ -382,7 +531,7 @@ const UserStoryPreview = () => {
     } else if (isStoryVideo(currentStory)) {
       videoRef.current?.playAsync?.();
       if (fixedMusicUrl) {
-        musicSoundRef.current?.playAsync?.();
+        syncMusicWithVideo();
       }
     } else if (fixedMusicUrl) {
       musicSoundRef.current?.playAsync?.();
@@ -521,9 +670,9 @@ const UserStoryPreview = () => {
           onPlaybackStatusUpdate={(status) => {
             if (!status.isLoaded) return;
             if (
-              status.isPlaying &&
+              fixedMusicUrl &&
               !videoPlaybackStartedRef.current &&
-              fixedMusicUrl
+              (status.isPlaying || (status.positionMillis ?? 0) > 0)
             ) {
               videoPlaybackStartedRef.current = true;
               syncMusicWithVideo();
@@ -618,6 +767,31 @@ const UserStoryPreview = () => {
         onPressOut={handlePressOut}
       />
 
+      {/* Above tap zones (zIndex 50) so close/delete receive touches, not prev/next */}
+      <View style={styles.headerTouchShield} pointerEvents="box-none">
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.topBarBtn}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </Pressable>
+          {isOwnStory ? (
+            <Pressable
+              onPress={handleDeleteStory}
+              hitSlop={12}
+              style={styles.topBarBtn}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="trash-outline" size={24} color="#fff" />
+              )}
+            </Pressable>
+          ) : (
+            <View style={styles.topBarBtn} />
+          )}
+        </View>
+      </View>
+
       {fixedMusicUrl ? (
         <View style={styles.musicIndicator}>
           <Ionicons name="musical-note" size={16} color="#fff" />
@@ -656,8 +830,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   emptyLink: {
-    color: '#940304',
+    color: '#C61F3A',
     fontSize: 15,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    width: '100%',
+  },
+  headerTouchShield: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 108 : 92,
+    zIndex: 200,
+    elevation: 200,
+  },
+  topBarBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   media: {
     width,
@@ -693,7 +890,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   retryBtn: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -727,7 +924,7 @@ const styles = StyleSheet.create({
   },
   leftTapZone: {
     position: 'absolute',
-    top: 0,
+    top: Platform.OS === 'ios' ? 108 : 92,
     left: 0,
     bottom: 0,
     width: '40%',
@@ -735,7 +932,7 @@ const styles = StyleSheet.create({
   },
   rightTapZone: {
     position: 'absolute',
-    top: 0,
+    top: Platform.OS === 'ios' ? 108 : 92,
     right: 0,
     bottom: 0,
     width: '40%',

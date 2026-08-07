@@ -22,8 +22,10 @@ export default function SuccessModal({ visible, onClose }: SuccessModalProps) {
           </View>
           
           <Text style={styles.title}>
-            <Text style={styles.congratulations}>Congratulations</Text>
-            <Text style={styles.message}>, your withdrawal request has been processed</Text>
+            <Text style={styles.congratulations}>Request submitted</Text>
+            <Text style={styles.message}>
+              . Flutterwave is processing your bank payout. We will notify you when it completes.
+            </Text>
           </Text>
           
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>

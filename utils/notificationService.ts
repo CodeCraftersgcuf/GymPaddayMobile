@@ -1,76 +1,111 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { Alert, Linking, Platform } from 'react-native';
 import axios from 'axios';
 
 const API_URL = 'https://api.gympaddy.com/api/user/set-fcm-token';
 
+export async function ensureNotificationPermission(promptIfNeeded = false): Promise<boolean> {
+    if (!Device.isDevice) {
+        console.warn('Push notifications require a physical device.');
+        return false;
+    }
+
+    const current = await Notifications.getPermissionsAsync();
+    let finalStatus = current.status;
+
+    const shouldRequest =
+        finalStatus !== 'granted' &&
+        (finalStatus === 'undetermined' || current.canAskAgain !== false);
+
+    if (shouldRequest) {
+        const requested = await Notifications.requestPermissionsAsync({
+            ios: {
+                allowAlert: true,
+                allowBadge: true,
+                allowSound: true,
+            },
+        });
+        finalStatus = requested.status;
+    }
+
+    if (finalStatus !== 'granted' && promptIfNeeded) {
+        Alert.alert(
+            'Enable notifications',
+            'Turn on notifications in your device settings to get messages, likes, and updates from GymPaddy.',
+            [
+                { text: 'Not now', style: 'cancel' },
+                {
+                    text: 'Open settings',
+                    onPress: () => {
+                        if (Platform.OS === 'ios') {
+                            Linking.openURL('app-settings:');
+                        } else {
+                            Linking.openSettings();
+                        }
+                    },
+                },
+            ],
+        );
+    }
+
+    return finalStatus === 'granted';
+}
+
+export async function setupPushNotifications(authToken: string): Promise<string | null> {
+    const granted = await ensureNotificationPermission(false);
+    if (!granted) {
+        return null;
+    }
+
+    const fcmToken = await registerForPushNotificationsAsync();
+    if (fcmToken) {
+        await saveFcmTokenToServer(fcmToken, authToken);
+    }
+    return fcmToken;
+}
+
 export const registerForPushNotificationsAsync = async (): Promise<string | null> => {
     try {
-        if (!Device.isDevice) {
-            console.warn('Device check failed: Not a physical device.');
+        const granted = await ensureNotificationPermission(false);
+        if (!granted) {
+            console.log('Notification permissions not granted.');
             return null;
         }
 
-        // Step 2: Get current notification permissions
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        console.log('Existing Notification Permission Status:', existingStatus);
-
-        let finalStatus = existingStatus;
-
-        // Step 3: Only request permissions if status is 'undetermined' (not previously denied)
-        // This ensures we don't repeatedly ask users who have already denied permission
-        if (existingStatus === 'undetermined') {
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-            console.log('Updated Notification Permission Status:', finalStatus);
-        }
-
-        // Step 4: Handle denied permissions - silently return null without showing alerts
-        // Push notifications are optional and the app should work without them
-        if (finalStatus !== 'granted') {
-            console.log('Notification permissions not granted. App will continue to work without push notifications.');
-            return null;
-        }
-
-        // Step 5: Get the FCM push token using getDevicePushTokenAsync
         const tokenData = await Notifications.getDevicePushTokenAsync();
         const fcmToken = tokenData.data;
         console.log('FCM Push Token Retrieved:', fcmToken);
 
-        return fcmToken; // Return the FCM token for further use
+        return fcmToken;
     } catch (error) {
         console.error('Error while registering for push notifications:', error);
         return null;
     }
 };
 
-// Define the expected structure of the API response
 interface ApiResponse {
     message: string;
-    [key: string]: any; // Allow additional optional fields
+    [key: string]: any;
 }
 
-/**
- * Function to send the FCM token to the backend
- */
 export const saveFcmTokenToServer = async (fcmToken: string, authToken: string): Promise<void> => {
     try {
         const response = await axios.post<ApiResponse>(
             API_URL,
-            { fcmToken }, // Sending the FCM token to the backend
+            { fcmToken },
             {
                 headers: {
-                    Authorization: `Bearer ${authToken}`, // Include the auth token in the headers
+                    Authorization: `Bearer ${authToken}`,
                 },
             }
         );
 
         console.log('FCM token saved successfully:', response.data.message);
     } catch (error) {
-        // Check if the error is an Axios error with a response
         if (axios.isAxiosError(error) && error.response) {
             console.error('Failed to save FCM token:', error.response.data);
-        } else {
+        } else if (error instanceof Error) {
             console.error('Error saving FCM token:', error.message);
         }
     }

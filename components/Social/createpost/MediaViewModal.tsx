@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { X, Play, Pause } from 'lucide-react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { GalleryMedia } from '@/app/create-post';
+import { GalleryMedia } from '@/app/createpost';
 import { AntDesign, Entypo, FontAwesome } from '@expo/vector-icons';
 
 interface MediaViewModalProps {

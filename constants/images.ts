@@ -3,7 +3,13 @@ const images = {
   authMidCircle: require('../assets/images/auth-midCircle.png'),
   radiusAuth: require('../assets/images/radiusAuth.png'),
   arrowLeft: require('../assets/images/arrow-left.png'),
+  /** Full brand logo (GYM PADDY + tagline) — light mode */
   logo: require('../assets/images/logo.png'),
+  /** GP mark (red G + white P) — dark mode */
+  logoDark: require('../assets/images/logo-dark.png'),
+  /** GP mark only — padded for app / home icon (do not crop) */
+  appIcon: require('../assets/images/app-icon.png'),
+  logoMark: require('../assets/images/logo-mark.png'),
   male: require('../assets/images/male_avatar.svg'),
   female: require('../assets/images/female_avatar.svg'),
   SocialIcons: require('../assets/images/ChatsCircle.png'),

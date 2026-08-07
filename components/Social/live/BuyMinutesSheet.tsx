@@ -74,7 +74,7 @@ export default function BuyMinutesSheet({
               {/* Radio Circle */}
               <View style={[
                 styles.radioOuter,
-                { borderColor: amount === opt.value ? '#940304' : (dark ? '#666' : '#CCC') }
+                { borderColor: amount === opt.value ? '#C61F3A' : (dark ? '#666' : '#CCC') }
               ]}>
                 {amount === opt.value && <View style={styles.radioInner} />}
               </View>
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   buyButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     borderRadius: 15,
     paddingVertical: 12,
     alignItems: 'center',
@@ -199,6 +199,6 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
   },
 });

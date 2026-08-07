@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     listingPrice: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#ff4444',
+        color: '#C61F3A',
         marginBottom: 12,
     },
     sellerInfo: {

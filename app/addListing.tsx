@@ -47,10 +47,10 @@ const categoryMap: Record<string, number> = {
 };
 
 const categories = [
-    { id: 'gym', title: 'Gym Equipments', icon: 'barbell', color: '#940304' },
+    { id: 'gym', title: 'Gym Equipments', icon: 'barbell', color: '#C61F3A' },
     { id: 'supplement', title: 'Supplement', icon: 'medical', color: '#0066FF' },
     { id: 'wears', title: 'Wears', icon: 'shirt', color: '#00AA00' },
-    { id: 'others', title: 'Others', icon: 'grid', color: '#8B00FF' },
+    { id: 'others', title: 'Others', icon: 'grid', color: '#C61F3A' },
 ];
 
 const locations = [
@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
         paddingBottom: 32,
     },
     postButton: {
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
         height: 56,
         borderRadius: 28,
         justifyContent: 'center',

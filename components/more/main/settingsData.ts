@@ -16,7 +16,7 @@ export const settingsData: SettingItem[] = [
     id: 'notifications',
     title: 'Notifications',
     icon: images.notifcationIcon,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
   },
   {
     id: 'edit-profile',

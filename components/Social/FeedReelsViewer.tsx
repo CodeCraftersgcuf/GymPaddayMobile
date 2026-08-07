@@ -26,6 +26,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { images } from '@/constants';
 import type { FeedPostVideo } from '@/contexts/FeedVideoPoolContext';
 import { prefetchFeedVideosFromIndex, getReelsPrefetchAhead } from '@/utils/videoPrefetch';
+import { usePostVideoPlayback } from '@/utils/usePostVideoPlayback';
 import { downloadMedia } from '@/utils/downloadMedia';
 import ReelsActionRail from '@/components/Social/reels/ReelsActionRail';
 import ReelsMoreSheet from '@/components/Social/reels/ReelsMoreSheet';
@@ -52,24 +53,30 @@ const ReelsVideoCell = React.memo(function ReelsVideoCell({
   const [ready, setReady] = useState(false);
   const [paused, setPaused] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
-  const [sourceUrl, setSourceUrl] = useState(post.videoUrl ?? null);
+  const pinnedRef = useRef(false);
+
+  const load = isActive || shouldLoad;
+  const shouldPlay = isActive && !paused;
+
+  const { playbackUri, onPlaybackStarted, isLocalPlayback } = usePostVideoPlayback(
+    post.id,
+    post.videoMp4Url,
+    post.videoHlsUrl,
+    load,
+  );
+
+  const sourceUrl = playbackUri || post.videoMp4Url || post.videoHlsUrl || post.videoUrl || null;
 
   useEffect(() => {
-    setSourceUrl(post.videoUrl ?? null);
     setReady(false);
     setPaused(false);
-  }, [post.id, post.videoUrl]);
+    pinnedRef.current = false;
+  }, [post.id, sourceUrl]);
 
   // Reset manual pause when the cell leaves the active slot, so re-entering plays.
   useEffect(() => {
     if (!isActive) setPaused(false);
   }, [isActive]);
-
-  // Load the source declaratively for the active cell AND its neighbors so the
-  // next/prev reel is already buffered in the player — scrolling plays instantly
-  // instead of cold-loading every time.
-  const load = isActive || shouldLoad;
-  const shouldPlay = isActive && !paused;
 
   const togglePlayPause = useCallback(() => {
     if (!isActive) return;
@@ -79,17 +86,18 @@ const ReelsVideoCell = React.memo(function ReelsVideoCell({
   const onStatus = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) return;
     setIsBuffering(Boolean(status.isBuffering));
-    // onReadyForDisplay can fire late (Android/HLS), leaving the poster on top
-    // while audio already plays. Once playback advances, frames are rendering —
-    // drop the poster immediately.
     if (status.isPlaying && (status.positionMillis ?? 0) > 0) {
       setReady((prev) => (prev ? prev : true));
+      if (!pinnedRef.current) {
+        pinnedRef.current = true;
+        onPlaybackStarted();
+      }
     }
-  }, []);
+  }, [onPlaybackStarted]);
 
   return (
     <Pressable style={[styles.page, { height: pageHeight }]} onPress={togglePlayPause}>
-      {post.videoThumbnailUrl && !ready ? (
+      {post.videoThumbnailUrl && !ready && !isLocalPlayback ? (
         <ExpoImage
           source={{ uri: post.videoThumbnailUrl }}
           style={styles.poster}
@@ -108,16 +116,24 @@ const ReelsVideoCell = React.memo(function ReelsVideoCell({
         shouldPlay={shouldPlay}
         useNativeControls={false}
         progressUpdateIntervalMillis={150}
-        onReadyForDisplay={() => setReady(true)}
+        onReadyForDisplay={() => {
+          setReady(true);
+          if (!pinnedRef.current) {
+            pinnedRef.current = true;
+            onPlaybackStarted();
+          }
+        }}
         onPlaybackStatusUpdate={onStatus}
         onError={() => {
           if (post.videoMp4Url && sourceUrl !== post.videoMp4Url) {
-            setSourceUrl(post.videoMp4Url);
+            videoRef.current
+              ?.loadAsync({ uri: post.videoMp4Url }, { shouldPlay: shouldPlay, isMuted }, false)
+              .catch(() => {});
           }
         }}
       />
 
-      {isActive && isBuffering && !ready && (
+      {isActive && isBuffering && !ready && !isLocalPlayback && (
         <ActivityIndicator size="large" color="#fff" style={styles.spinner} />
       )}
 
@@ -410,13 +426,20 @@ const styles = StyleSheet.create({
   },
   playHint: {
     position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -34,
+    marginLeft: -34,
+    width: 68,
+    height: 68,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 36,
-    padding: 16,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playIcon: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     tintColor: '#fff',
   },
   caption: {

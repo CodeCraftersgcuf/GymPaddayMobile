@@ -349,7 +349,7 @@ const FloatingLabelPhoneInput: React.FC<FloatingLabelPhoneInputProps> = ({
                     <Text style={styles.countryCodeDisplay}>{item.code}</Text>
                   </View>
                   {countryCode === item.code && (
-                    <Ionicons name="checkmark" size={20} color="#940304" />
+                    <Ionicons name="checkmark" size={20} color="#C61F3A" />
                   )}
                 </TouchableOpacity>
               )}

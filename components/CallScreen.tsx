@@ -54,7 +54,7 @@ export default function CallScreen({
     if (!receiverJoined) {
         return (
             <LinearGradient
-                colors={['#940304', '#C800A1', '#4A00FF']}
+                colors={['#C61F3A', '#C800A1', '#4A00FF']}
                 style={styles.gradientBackground}
             >
                 <Image
@@ -96,7 +96,7 @@ export default function CallScreen({
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.voiceBtn, { backgroundColor: '#F44336' }]}
+                        style={[styles.voiceBtn, { backgroundColor: '#C61F3A' }]}
                         onPress={onEndCall}
                     >
                         <Text style={styles.voiceBtnText}>End</Text>
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 25,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
   },
   endCallText: {
     color: 'white',

@@ -169,8 +169,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   followRedButton: {
-    backgroundColor: '#ff4444',
-    borderColor: '#ff4444',
+    backgroundColor: '#C61F3A',
+    borderColor: '#C61F3A',
   },
   followButtonText: {
     fontSize: 14,

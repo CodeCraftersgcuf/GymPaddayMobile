@@ -39,19 +39,23 @@ export default function StreamIncomingCall() {
     // 🔊 Play ringtone when screen loads
     useEffect(() => {
         const playRingtone = async () => {
-            const { sound } = await Audio.Sound.createAsync(
-                require('../assets/music/audio.mp3')
-            );
-            setSound(sound);
-            await sound.setIsLoopingAsync(true);
-            await sound.playAsync();
+            try {
+                const { sound } = await Audio.Sound.createAsync(
+                    require('../../assets/music/audio.mp3')
+                );
+                setSound(sound);
+                await sound.setIsLoopingAsync(true);
+                await sound.playAsync();
+            } catch {
+                /* ringtone optional if playback fails */
+            }
         };
 
         playRingtone();
 
         return () => {
             if (sound) {
-                sound.unloadAsync();
+                sound.unloadAsync().catch(() => {});
             }
         };
     }, []);
@@ -188,7 +192,7 @@ export default function StreamIncomingCall() {
                                 source={
                                     caller_avatar
                                         ? { uri: String(caller_avatar) }
-                                        : require('../assets/icons/more/User.png')
+                                        : require('../../assets/icons/more/User.png')
                                 }
                                 style={styles.avatar}
                             />
@@ -203,7 +207,7 @@ export default function StreamIncomingCall() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.voiceBtn, { backgroundColor: '#F44336' }]}
+                                    style={[styles.voiceBtn, { backgroundColor: '#C61F3A' }]}
                                     onPress={async () => {
                                         await call.leave();
                                         router.replace('/');
@@ -226,7 +230,7 @@ export default function StreamIncomingCall() {
                 source={
                     caller_avatar
                         ? { uri: String(caller_avatar) }
-                        : require('../assets/icons/more/User.png')
+                        : require('../../assets/icons/more/User.png')
                 }
                 style={styles.avatar}
             />
@@ -314,7 +318,7 @@ const styles = StyleSheet.create({
         borderRadius: 30,
     },
     declineButton: {
-        backgroundColor: '#F44336',
+        backgroundColor: '#C61F3A',
         paddingVertical: 12,
         paddingHorizontal: 30,
         borderRadius: 30,

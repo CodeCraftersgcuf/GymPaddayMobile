@@ -152,7 +152,7 @@ overlay: {
   },
   proceedButton: {
     flex: 1,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     borderRadius: 15,
     paddingVertical: 8,
     alignItems: 'center',

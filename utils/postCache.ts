@@ -1,4 +1,5 @@
 import { queryClient } from '@/utils/queryClient';
+import { sanitizeApiPost } from '@/utils/mediaUrl';
 
 export const postQueryKey = (postId: number | string) => ['post', Number(postId)] as const;
 
@@ -50,12 +51,12 @@ export function seedPostCaches(rawPosts: any[] | undefined): void {
   for (const post of rawPosts) {
     const id = Number(post?.id);
     if (!id) continue;
-    queryClient.setQueryData(postQueryKey(id), post);
+    queryClient.setQueryData(postQueryKey(id), sanitizeApiPost(post));
   }
 }
 
 export function seedPostCache(post: any): void {
   const id = Number(post?.id);
   if (!id) return;
-  queryClient.setQueryData(postQueryKey(id), post);
+  queryClient.setQueryData(postQueryKey(id), sanitizeApiPost(post));
 }

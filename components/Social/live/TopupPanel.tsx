@@ -4,12 +4,8 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  TextInput,
-  Alert,
-  Platform,
-  ActivityIndicator,
 } from 'react-native';
-import { useIAP } from '@/utils/hooks/useIAP';
+import { router } from 'expo-router';
 
 interface TopupPanelProps {
   dark: boolean;
@@ -17,48 +13,18 @@ interface TopupPanelProps {
   onTopupSuccess: (amount: number) => void;
 }
 
+/** Live top-up — opens the shared Flutterwave wallet screen (same as Android). No Apple IAP. */
 const TopupPanel: React.FC<TopupPanelProps> = ({ dark, balance, onTopupSuccess }) => {
-  const useStoreIap = false;
-  const [topupAmount, setTopupAmount] = React.useState<string>('');
-
-  const iapResult = useIAP();
-  const purchaseProduct = iapResult?.purchaseProduct;
-  const isIAPLoading = iapResult?.isLoading ?? false;
-  const isAvailable = iapResult?.isAvailable ?? false;
-  const iosIapInitializing = iapResult?.iosIapInitializing ?? false;
-  const iosWalletProductReady = iapResult?.iosWalletProductReady ?? false;
-  const iosWalletGpCredit = iapResult?.iosWalletGpCredit ?? 0;
-  const iosLocalizedPrice = iapResult?.iosLocalizedPrice;
-  const iosWalletTitle = iapResult?.iosWalletTitle;
-  const iosWalletDescription = iapResult?.iosWalletDescription;
-  const iosPriceCurrencyCode = iapResult?.iosPriceCurrencyCode;
-  const iosWalletProductId = iapResult?.iosWalletProductId;
-
   const themeStyles = {
-    backgroundColor: dark ? '#000000' : '#ffffff',
-    secondaryBackground: dark ? '#181818' : '#f5f5f5',
     textColor: dark ? '#ffffff' : '#000000',
     textColorSecondary: dark ? '#cccccc' : '#666666',
     panelBackground: dark ? '#181818' : '#ffe5e5',
   };
 
-  const handleTopup = async () => {
-    if (!topupAmount || parseFloat(topupAmount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
-      return;
-    }
-
-    const amount = parseFloat(topupAmount);
-    const success = await purchaseProduct(amount);
-    if (success) {
-      Alert.alert('Success', `Topup of ${amount} GP Coins successful!`);
-      onTopupSuccess(amount);
-      setTopupAmount('');
-    }
+  const handleTopup = () => {
+    onTopupSuccess(0); // close panel only — do not credit wallet here
+    router.push('/topup');
   };
-
-  const iosBuyDisabled =
-    isIAPLoading || iosIapInitializing || !iosWalletProductReady || !purchaseProduct;
 
   return (
     <View style={[styles.topupPanel, { backgroundColor: themeStyles.panelBackground }]}>
@@ -79,89 +45,13 @@ const TopupPanel: React.FC<TopupPanelProps> = ({ dark, balance, onTopupSuccess }
         <Text style={[styles.topupTitle, { color: themeStyles.textColor }]}>
           Topup your balance
         </Text>
+        <Text style={[styles.topupDescription, { color: themeStyles.textColorSecondary }]}>
+          Topup your GP coin balance. 1 GP Coin is equivalent to 1 Naira. Uses the same payment
+          flow as Android.
+        </Text>
 
-        {useStoreIap ? (
-          <>
-            <Text style={[styles.topupDescription, { color: themeStyles.textColorSecondary }]}>
-              Purchase uses Apple In-App Purchase; price and pack are defined in App Store Connect for{' '}
-              {iosWalletProductId ?? 'this product'}.
-            </Text>
-            {iosIapInitializing ? (
-              <View style={styles.iosStoreLoading}>
-                <ActivityIndicator color="#940304" />
-                <Text style={[styles.storeMeta, { color: themeStyles.textColorSecondary, marginTop: 12 }]}>
-                  Loading App Store…
-                </Text>
-              </View>
-            ) : (
-              <>
-                {iosWalletTitle ? (
-                  <Text style={[styles.iosProductTitle, { color: themeStyles.textColor }]}>{iosWalletTitle}</Text>
-                ) : null}
-                {iosLocalizedPrice ? (
-                  <Text style={[styles.iosProductPrice, { color: themeStyles.textColor }]}>
-                    {iosLocalizedPrice}
-                    {iosPriceCurrencyCode ? ` · ${iosPriceCurrencyCode}` : ''}
-                  </Text>
-                ) : null}
-                {iosWalletProductReady ? (
-                  <Text style={[styles.storeMeta, { color: themeStyles.textColorSecondary }]}>
-                    Credits <Text style={{ fontWeight: '700', color: themeStyles.textColor }}>{iosWalletGpCredit} GP</Text> after
-                    purchase (from store price).
-                  </Text>
-                ) : (
-                  <Text style={[styles.storeMeta, { color: '#c00' }]}>
-                    Product not available from the store. Check App Store Connect.
-                  </Text>
-                )}
-                {iosWalletDescription ? (
-                  <Text
-                    style={[styles.storeMeta, { color: themeStyles.textColorSecondary, marginTop: 8 }]}
-                    numberOfLines={3}
-                  >
-                    {iosWalletDescription}
-                  </Text>
-                ) : null}
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <Text style={[styles.topupDescription, { color: themeStyles.textColorSecondary }]}>
-              Topup your GP coin balance, note that 1 GP Coin is equivalent to 1 Naira
-            </Text>
-
-            <TextInput
-              style={[
-                styles.amountInput,
-                {
-                  backgroundColor: themeStyles.backgroundColor,
-                  color: themeStyles.textColor,
-                  borderColor: themeStyles.textColorSecondary,
-                },
-              ]}
-              placeholder="Enter amount"
-              placeholderTextColor={themeStyles.textColorSecondary}
-              value={topupAmount}
-              onChangeText={setTopupAmount}
-              keyboardType="numeric"
-              editable={!isIAPLoading}
-            />
-          </>
-        )}
-
-        <TouchableOpacity
-          style={[styles.topupButton, (useStoreIap ? iosBuyDisabled : isIAPLoading) && styles.topupButtonDisabled]}
-          onPress={handleTopup}
-          disabled={useStoreIap ? iosBuyDisabled : isIAPLoading}
-        >
-          {isIAPLoading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.topupButtonText}>
-              {useStoreIap ? `Buy for ${iosLocalizedPrice ?? 'App Store'}` : 'Topup'}
-            </Text>
-          )}
+        <TouchableOpacity style={styles.topupButton} onPress={handleTopup}>
+          <Text style={styles.topupButtonText}>Continue to Topup</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -216,36 +106,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 24,
   },
-  iosStoreLoading: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  iosProductTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  iosProductPrice: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  storeMeta: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  amountInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    marginBottom: 40,
-  },
   topupButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -256,9 +118,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  topupButtonDisabled: {
-    opacity: 0.6,
   },
 });
 

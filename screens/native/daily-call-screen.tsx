@@ -76,7 +76,7 @@ export default function DailyCallScreen() {
       {loading && (
         <ActivityIndicator
           size="large"
-          color="#FF3B30"
+          color="#C61F3A"
           style={styles.loading}
         />
       )}
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     bottom: 40,
     alignSelf: 'center',
     padding: 12,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     borderRadius: 10,
     zIndex: 999,
   },

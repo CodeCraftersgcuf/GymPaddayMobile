@@ -7,12 +7,13 @@ import {
     ScrollView,
     Modal,
     Image,
-    SafeAreaView,
     KeyboardAvoidingView,
     Platform,
     Alert,
+    Keyboard,
+    ActivityIndicator,
 } from 'react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { router } from 'expo-router';
@@ -21,6 +22,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { apiCall } from '@/utils/customApiCall';
 import { API_ENDPOINTS } from '@/apiConfig';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BRAND_PRIMARY } from '@/constants/Colors';
 
 interface Message {
     id: string;
@@ -28,8 +31,9 @@ interface Message {
     isUser: boolean;
     timestamp: string;
     avatar?: string;
-    imageUrl?: string; // ✅ add this
-
+    imageUrl?: string;
+    /** Set while an optimistic bubble is still uploading. */
+    pending?: boolean;
 }
 
 interface SupportTicket {
@@ -38,9 +42,23 @@ interface SupportTicket {
     message?: string;
     description?: string;
     admin_reply?: string | null;
+    /** Uploaded image URLs keyed by the stored path referenced in the message log. */
+    attachments?: Record<string, string> | null;
     created_at?: string;
     updated_at?: string;
 }
+
+interface PickedImage {
+    uri: string;
+    name: string;
+    type: string;
+}
+
+/** Matches the marker the backend writes into the message log for uploaded images. */
+const IMAGE_TOKEN = '[image]';
+/** Older app versions logged this instead of uploading the image. */
+const LEGACY_IMAGE_TEXT = '[image attached]';
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 const supportCategories = [
     'General',
@@ -48,16 +66,34 @@ const supportCategories = [
     'Connect',
     'Market',
     'Gym Hub',
-];
+] as const;
+
+type SupportCategory = (typeof supportCategories)[number];
+
+function categoryStorageKey(userId: string) {
+    return `supportCategory:${userId}`;
+}
 
 export default function SupportScreen() {
     const { dark } = useTheme();
+    const insets = useSafeAreaInsets();
+    const scrollRef = useRef<ScrollView>(null);
     const [selectedCategory, setSelectedCategory] = useState('');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [message, setMessage] = useState('');
+    const [attachedImage, setAttachedImage] = useState<PickedImage | null>(null);
+    const [isSending, setIsSending] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [storageKey, setStorageKey] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
+
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const sub = Keyboard.addListener(showEvent, () => {
+            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        });
+        return () => sub.remove();
+    }, []);
 
     const extractTicketsFromResponse = (response: any): SupportTicket[] => {
         if (Array.isArray(response)) return response;
@@ -67,8 +103,14 @@ export default function SupportScreen() {
         return [];
     };
 
-    const normalizeCategory = (category: string = '') => {
-        const lower = category.toLowerCase();
+    const normalizeCategory = (category: string = ''): SupportCategory => {
+        const trimmed = category.trim();
+        const exact = supportCategories.find(
+            (item) => item.toLowerCase() === trimmed.toLowerCase()
+        );
+        if (exact) return exact;
+
+        const lower = trimmed.toLowerCase();
         if (lower.includes('social')) return 'Socials';
         if (lower.includes('connect')) return 'Connect';
         if (lower.includes('market')) return 'Market';
@@ -76,21 +118,69 @@ export default function SupportScreen() {
         return 'General';
     };
 
-    const mapTicketsToMessages = (tickets: SupportTicket[]): { messages: Message[]; latestCategory: string } => {
+    const pickLatestCategory = (tickets: SupportTicket[]): SupportCategory | '' => {
+        let latestCategory: SupportCategory | '' = '';
+        let latestActivityAt = 0;
+
+        tickets.forEach((ticket) => {
+            const category = normalizeCategory(ticket.subject || '');
+            if (!category) return;
+
+            const createdAt = ticket.created_at ? new Date(ticket.created_at).getTime() : 0;
+            const updatedAt = ticket.updated_at ? new Date(ticket.updated_at).getTime() : createdAt;
+            const activityAt = Math.max(createdAt, updatedAt);
+
+            if (activityAt >= latestActivityAt) {
+                latestCategory = category;
+                latestActivityAt = activityAt;
+            }
+        });
+
+        return latestCategory;
+    };
+
+    const persistCategory = async (category: string, userId?: string | null) => {
+        const id = userId || (storageKey ? storageKey.split(':')[1] : null);
+        if (!id || !category) return;
+        await AsyncStorage.setItem(categoryStorageKey(id), category);
+    };
+
+    const applyCategory = useCallback(async (category: string, userId?: string | null) => {
+        if (!category) return;
+        setSelectedCategory(category);
+        await persistCategory(category, userId);
+    }, [storageKey]);
+
+    /**
+     * A message log line is either plain text or an `[image]<path>` marker that has to be
+     * resolved through the ticket's attachment map before it can be rendered.
+     */
+    const parseMessageLine = (
+        line: string,
+        attachments?: Record<string, string> | null
+    ): { text: string; imageUrl?: string } => {
+        if (line.toLowerCase() === LEGACY_IMAGE_TEXT) {
+            return { text: 'Photo unavailable' };
+        }
+
+        if (!line.startsWith(IMAGE_TOKEN)) {
+            return { text: line };
+        }
+
+        const path = line.slice(IMAGE_TOKEN.length).trim();
+        const url = attachments?.[path];
+
+        return url ? { text: 'Photo', imageUrl: url } : { text: 'Photo unavailable' };
+    };
+
+    const mapTicketsToMessages = (tickets: SupportTicket[]): { messages: Message[]; latestCategory: SupportCategory | '' } => {
         const flattened: Array<{ dateKey: number; message: Message }> = [];
-        let latestCategory = '';
-        let latestCreatedAt = 0;
+        const latestCategory = pickLatestCategory(tickets);
 
         tickets.forEach((ticket) => {
             const createdAt = ticket.created_at ? new Date(ticket.created_at).getTime() : Date.now();
             const updatedAt = ticket.updated_at ? new Date(ticket.updated_at).getTime() : createdAt;
             const userText = ticket.message || ticket.description || '';
-            const category = normalizeCategory(ticket.subject || '');
-
-            if (!latestCategory || createdAt > latestCreatedAt) {
-                latestCategory = category;
-                latestCreatedAt = createdAt;
-            }
 
             if (userText.trim()) {
                 // Split messages that were concatenated with \n back into individual bubbles
@@ -101,7 +191,7 @@ export default function SupportScreen() {
                         dateKey: createdAt + idx,
                         message: {
                             id: `ticket_user_${ticket.id}_${idx}`,
-                            text: line.trim(),
+                            ...parseMessageLine(line.trim(), ticket.attachments),
                             isUser: true,
                             timestamp: new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         },
@@ -117,7 +207,6 @@ export default function SupportScreen() {
                         text: ticket.admin_reply,
                         isUser: false,
                         timestamp: new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
                     },
                 });
             }
@@ -152,14 +241,14 @@ export default function SupportScreen() {
             }
 
             if (latestCategory) {
-                setSelectedCategory((prev) => prev || latestCategory);
+                await applyCategory(latestCategory);
             }
         } catch (error) {
             console.error('Failed to sync support tickets:', error);
         } finally {
             setIsSyncing(false);
         }
-    }, [storageKey]);
+    }, [storageKey, applyCategory]);
 
     useEffect(() => {
         (async () => {
@@ -178,6 +267,11 @@ export default function SupportScreen() {
 
                 const key = `supportMessages:${currentUserId}`;
                 setStorageKey(key);
+
+                const storedCategory = await AsyncStorage.getItem(categoryStorageKey(currentUserId));
+                if (storedCategory) {
+                    setSelectedCategory(storedCategory);
+                }
 
                 const stored = await AsyncStorage.getItem(key);
                 if (stored) {
@@ -205,69 +299,119 @@ export default function SupportScreen() {
         await AsyncStorage.setItem(storageKey, JSON.stringify(updatedMessages));
     }
 
+    const resolveCategoryForSend = async (token: string): Promise<SupportCategory | ''> => {
+        if (selectedCategory) return normalizeCategory(selectedCategory);
+
+        const response = await apiCall(API_ENDPOINTS.USER.TICKETS.List, 'GET', undefined, token);
+        const tickets: SupportTicket[] = extractTicketsFromResponse(response);
+        const latestCategory = pickLatestCategory(tickets);
+        if (latestCategory) {
+            await applyCategory(latestCategory);
+        }
+        return latestCategory;
+    };
+
     const sendMessage = async () => {
-        if (message.trim()) {
-            if (!selectedCategory) {
-                Alert.alert('Select Category', 'Please select a support category before sending your message.');
-                return;
-            }
+        const text = message.trim();
+        const image = attachedImage;
+        if ((!text && !image) || isSending) return;
 
-            const newMessage: Message = {
-                id: Date.now().toString(),
-                text: message,
-                isUser: true,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-            await updateMessages([...messages, newMessage]);
-
-            const outgoingMessage = message;
-            setMessage('');
-
+        let category = normalizeCategory(selectedCategory);
+        if (!category) {
             try {
                 const token = await SecureStore.getItemAsync('auth_token');
-                if (!token) {
-                    throw new Error('No auth token found');
+                if (token) {
+                    category = await resolveCategoryForSend(token);
                 }
-
-                // Reuse latest open/pending ticket in the same category
-                // so the same support topic stays in one thread.
-                const ticketListResponse = await apiCall(API_ENDPOINTS.USER.TICKETS.List, 'GET', undefined, token);
-                const existingTickets: SupportTicket[] = extractTicketsFromResponse(ticketListResponse);
-
-                const reusableTicket = existingTickets.find((ticket) => {
-                    const subject = normalizeCategory(ticket.subject || '');
-                    const status = String((ticket as any)?.status || '').toLowerCase();
-                    return subject === selectedCategory && (status === 'open' || status === 'pending');
-                });
-
-                if (reusableTicket?.id) {
-                    const previousText = (reusableTicket.message || reusableTicket.description || '').trim();
-                    const mergedMessage = previousText
-                        ? `${previousText}\n${outgoingMessage}`
-                        : outgoingMessage;
-
-                    await apiCall(
-                        API_ENDPOINTS.USER.TICKETS.Update(Number(reusableTicket.id)),
-                        'PUT',
-                        { message: mergedMessage },
-                        token
-                    );
-                } else {
-                    await apiCall(
-                        API_ENDPOINTS.USER.TICKETS.Create,
-                        'POST',
-                        {
-                            subject: selectedCategory,
-                            message: outgoingMessage,
-                        },
-                        token
-                    );
-                }
-                await syncMessagesFromServer();
-            } catch (error: any) {
-                console.error('Failed to send support ticket:', error);
-                Alert.alert('Send Failed', error?.message || 'Failed to send support message. Please try again.');
+            } catch (error) {
+                console.error('Failed to resolve support category:', error);
             }
+        }
+
+        if (!category) {
+            Alert.alert('Select Category', 'Please select a support category before sending your message.');
+            return;
+        }
+
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const batchId = Date.now().toString();
+
+        // The server keeps text and image as separate lines, so mirror that locally.
+        const optimistic: Message[] = [];
+        if (text) {
+            optimistic.push({ id: `${batchId}_text`, text, isUser: true, timestamp, pending: true });
+        }
+        if (image) {
+            optimistic.push({
+                id: `${batchId}_image`,
+                text: 'Photo',
+                imageUrl: image.uri,
+                isUser: true,
+                timestamp,
+                pending: true,
+            });
+        }
+
+        const previousMessages = messages;
+        await updateMessages([...previousMessages, ...optimistic]);
+
+        setMessage('');
+        setAttachedImage(null);
+        setIsSending(true);
+
+        const buildBody = (fields: Record<string, string>) => {
+            if (!image) return fields;
+
+            const form = new FormData();
+            Object.entries(fields).forEach(([key, value]) => form.append(key, value));
+            form.append('attachment', {
+                uri: image.uri,
+                name: image.name,
+                type: image.type,
+            } as any);
+            return form;
+        };
+
+        try {
+            const token = await SecureStore.getItemAsync('auth_token');
+            if (!token) {
+                throw new Error('No auth token found');
+            }
+
+            const ticketListResponse = await apiCall(API_ENDPOINTS.USER.TICKETS.List, 'GET', undefined, token);
+            const existingTickets: SupportTicket[] = extractTicketsFromResponse(ticketListResponse);
+
+            const reusableTicket = existingTickets.find((ticket) => {
+                const subject = normalizeCategory(ticket.subject || '');
+                const status = String((ticket as any)?.status || '').toLowerCase();
+                return subject === category && (status === 'open' || status === 'pending');
+            });
+
+            if (reusableTicket?.id) {
+                await apiCall(
+                    API_ENDPOINTS.USER.TICKETS.AddMessage(Number(reusableTicket.id)),
+                    'POST',
+                    buildBody(text ? { message: text } : {}),
+                    token
+                );
+            } else {
+                await apiCall(
+                    API_ENDPOINTS.USER.TICKETS.Create,
+                    'POST',
+                    buildBody({ subject: category, ...(text ? { message: text } : {}) }),
+                    token
+                );
+            }
+            await syncMessagesFromServer();
+        } catch (error: any) {
+            console.error('Failed to send support ticket:', error);
+            // Drop the optimistic bubbles and hand the content back so the user can retry.
+            await updateMessages(previousMessages);
+            setMessage((current) => current || text);
+            setAttachedImage((current) => current || image);
+            Alert.alert('Send Failed', error?.message || 'Failed to send support message. Please try again.');
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -277,13 +421,13 @@ export default function SupportScreen() {
         border: dark ? '#232323' : '#e0e0e0',
         text: dark ? '#fff' : '#181818',
         textSecondary: dark ? '#b0b0b0' : '#6c6c6c',
-        primary: '#FF3B30',
+        primary: '#C61F3A',
         success: '#4CD964',
     };
     const handlePickImage = async () => {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
-            alert('Permission to access media library is required!');
+            Alert.alert('Permission required', 'Permission to access media library is required!');
             return;
         }
 
@@ -293,17 +437,25 @@ export default function SupportScreen() {
             quality: 0.8,
         });
 
-        if (!result.canceled && result.assets?.length > 0) {
-            const newMessage: Message = {
-                id: Date.now().toString(),
-                text: '',
-                imageUrl: result.assets[0].uri,
-                isUser: true,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-            await updateMessages([...messages, newMessage]);
+        if (result.canceled || !result.assets?.length) return;
+
+        const asset = result.assets[0];
+        if (asset.fileSize && asset.fileSize > MAX_ATTACHMENT_BYTES) {
+            Alert.alert('Image too large', 'Please attach an image smaller than 10MB.');
+            return;
         }
+
+        const type = asset.mimeType || 'image/jpeg';
+        const extension = type.split('/')[1] || 'jpg';
+
+        setAttachedImage({
+            uri: asset.uri,
+            name: asset.fileName || `support_${Date.now()}.${extension}`,
+            type,
+        });
     };
+
+    const canSend = Boolean(message.trim() || attachedImage) && !isSending;
 
     const styles = StyleSheet.create({
         container: {
@@ -384,12 +536,25 @@ export default function SupportScreen() {
             borderRadius: 20,
         },
         messageBubbleUser: {
-            backgroundColor: '#FF3B30',
+            backgroundColor: '#C61F3A',
             borderBottomRightRadius: 6,
         },
         messageBubbleAgent: {
             backgroundColor: dark ? '#38383A' : '#E5E5EA',
             borderBottomLeftRadius: 6,
+        },
+        messageBubbleImage: {
+            padding: 4,
+            overflow: 'hidden',
+        },
+        messageBubblePending: {
+            opacity: 0.6,
+        },
+        messageImage: {
+            width: 200,
+            height: 200,
+            borderRadius: 12,
+            backgroundColor: dark ? '#2a2a2a' : '#e5e5ea',
         },
         messageText: {
             fontSize: 16,
@@ -411,10 +576,36 @@ export default function SupportScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingTop: 12,
             backgroundColor: color.background,
             borderTopWidth: StyleSheet.hairlineWidth,
             borderTopColor: color.border,
+        },
+        attachPreview: {
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            backgroundColor: color.background,
+        },
+        attachPreviewBox: {
+            width: 72,
+            height: 72,
+            borderRadius: 10,
+            overflow: 'hidden',
+        },
+        attachPreviewImg: {
+            width: '100%',
+            height: '100%',
+        },
+        attachRemove: {
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            borderRadius: 10,
+            width: 20,
+            height: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
         },
         textInput: {
             backgroundColor: dark ? color.surface : '#f0f0f0',
@@ -424,12 +615,23 @@ export default function SupportScreen() {
             paddingVertical: 12,
             fontSize: 16,
             color: color.text,
-            marginRight: 12,
+            marginRight: 8,
             maxHeight: 100,
-            paddingRight: 24
         },
         sendButton: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: BRAND_PRIMARY,
+        },
+        sendButtonDisabled: {
+            backgroundColor: dark ? '#444' : '#CCCCCC',
+        },
+        iconButton: {
             padding: 8,
+            marginRight: 4,
         },
         modalOverlay: {
             flex: 1,
@@ -472,13 +674,13 @@ export default function SupportScreen() {
             justifyContent: 'center',
         },
         radioButtonSelected: {
-            borderColor: '#FF3B30',
+            borderColor: '#C61F3A',
         },
         radioButtonInner: {
             width: 10,
             height: 10,
             borderRadius: 5,
-            backgroundColor: '#FF3B30',
+            backgroundColor: '#C61F3A',
         },
     });
 
@@ -499,12 +701,15 @@ export default function SupportScreen() {
                     )}
                     <View style={[
                         styles.messageBubble,
-                        msg.isUser ? styles.messageBubbleUser : styles.messageBubbleAgent
+                        msg.isUser ? styles.messageBubbleUser : styles.messageBubbleAgent,
+                        msg.imageUrl && styles.messageBubbleImage,
+                        msg.pending && styles.messageBubblePending,
                     ]}>
                         {msg.imageUrl ? (
                             <Image
                                 source={{ uri: msg.imageUrl }}
-                                style={{ width: 200, height: 200, borderRadius: 12 }}
+                                style={styles.messageImage}
+                                resizeMode="cover"
                             />
                         ) : (
                             <Text style={[
@@ -522,10 +727,11 @@ export default function SupportScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <KeyboardAvoidingView
                 style={styles.container}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
             >
                 {/* Header */}
                 <View style={styles.header}>
@@ -536,10 +742,9 @@ export default function SupportScreen() {
                         <Ionicons name="chevron-back" size={24} color={color.text} />
                     </TouchableOpacity>
 
-                    <Image
-                        source={{ uri: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2' }}
-                        style={styles.avatar}
-                    />
+                    <View style={[styles.avatar, { backgroundColor: BRAND_PRIMARY, alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="headset" size={22} color="#fff" />
+                    </View>
 
                     <View style={styles.headerInfo}>
                         <Text style={styles.headerTitle}>Support</Text>
@@ -564,15 +769,42 @@ export default function SupportScreen() {
                 </TouchableOpacity>
 
                 {/* Messages */}
-                <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    ref={scrollRef}
+                    style={styles.messagesContainer}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                >
                     {isSyncing && (
                         <Text style={[styles.timestamp, { marginTop: 8 }]}>Syncing support messages...</Text>
                     )}
                     {messages.map(renderMessage)}
                 </ScrollView>
 
+                {attachedImage ? (
+                    <View style={styles.attachPreview}>
+                        <View style={styles.attachPreviewBox}>
+                            <Image source={{ uri: attachedImage.uri }} style={styles.attachPreviewImg} />
+                            <TouchableOpacity
+                                style={styles.attachRemove}
+                                onPress={() => setAttachedImage(null)}
+                            >
+                                <Ionicons name="close" size={12} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                ) : null}
+
                 {/* Input */}
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={handlePickImage}
+                        disabled={isSending}
+                    >
+                        <Ionicons name="image" size={24} color={isSending ? color.textSecondary : color.text} />
+                    </TouchableOpacity>
                     <TextInput
                         style={styles.textInput}
                         placeholder="Type a message"
@@ -582,13 +814,15 @@ export default function SupportScreen() {
                         multiline
                     />
                     <TouchableOpacity
-                        style={styles.sendButton}
-                        onPress={handlePickImage}
+                        style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                        onPress={sendMessage}
+                        disabled={!canSend}
                     >
-                        <Ionicons name="image" size={24} color={dark ? 'white' : 'black'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-                        <Feather name="send" size={24} color={dark ? 'white' : 'black'} />
+                        {isSending ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Feather name="send" size={18} color="#fff" />
+                        )}
                     </TouchableOpacity>
                 </View>
 
@@ -612,7 +846,7 @@ export default function SupportScreen() {
                                     key={category}
                                     style={styles.categoryOption}
                                    onPress={() => {
-  setSelectedCategory(category);
+  void applyCategory(category);
   setShowCategoryModal(false);
 
   // Only show agent welcome message if it's not already added
@@ -623,7 +857,6 @@ export default function SupportScreen() {
       text: 'An agent will be with you shortly',
       isUser: false,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
     };
     void updateMessages([...messages, agentMsg]);
   }

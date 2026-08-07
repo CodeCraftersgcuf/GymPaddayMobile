@@ -26,7 +26,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTransaction } from '@/utils/mutations/transactions';
 import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
-import { useIAP } from '@/utils/hooks/useIAP';
 import { useFocusEffect } from '@react-navigation/native';
 import { resolveLatestDepositorName } from '@/utils/resolveLatestUserProfile';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
@@ -53,7 +52,6 @@ export default function DepositPaymentTab() {
     const [userName, setUserName] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const { dark } = useTheme();
-    const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
     const queryClient = useQueryClient();
 
     const paymentDetails = {
@@ -136,34 +134,12 @@ export default function DepositPaymentTab() {
             return;
         }
 
-        // For iOS, use Apple In-App Purchase
-        if (Platform.OS === 'ios') {
-            if (amountValue < MINIMUM_AMOUNT_IOS) {
-                Alert.alert('Error', `Minimum deposit amount is ${MINIMUM_AMOUNT_IOS} Naira`);
-                return;
-            }
-
-            if (!isAvailable) {
-                Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-                return;
-            }
-
-            const success = await purchaseProduct(amountValue);
-            if (success) {
-                setShowSuccessModal(true);
-                // Reset form
-                setAmount('');
-                setDepositorName('');
-                setUseMyDetails(false);
-            }
-        } else {
-            // For Android, use the existing Flutterwave flow
-            if (!depositorName) {
-                Alert.alert('Error', 'Please fill in all fields');
-                return;
-            }
-            setCurrentView('payment');
+        // Same payment flow on iOS and Android (iOS visibility still gated by status-check)
+        if (!depositorName) {
+            Alert.alert('Error', 'Please fill in all fields');
+            return;
         }
+        setCurrentView('payment');
     };
 
     const handleUseMyDetails = () => {
@@ -218,47 +194,35 @@ export default function DepositPaymentTab() {
                 <View style={styles.inputContainer}>
                     <TextInput
                         style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? 'black' : 'white' }]}
-                        placeholder={Platform.OS === 'ios' ? `Amount (min ${MINIMUM_AMOUNT_IOS} Naira)` : "Amount"}
+                        placeholder="Amount"
                         placeholderTextColor="#999"
                         value={amount}
                         onChangeText={setAmount}
                         keyboardType="numeric"
-                        editable={!isIAPLoading}
                     />
-                    {Platform.OS === 'ios' && (
-                        <Text style={[styles.minAmountHint, { color: dark ? '#999' : '#666' }]}>
-                            Minimum deposit: {MINIMUM_AMOUNT_IOS} Naira
-                        </Text>
-                    )}
                 </View>
 
-                {/* Depositor's Name Input - Only show for Android */}
-                {Platform.OS !== 'ios' && (
-                    <>
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? 'black' : 'white' }]}
-                                placeholder="Depositor's Name"
-                                placeholderTextColor="#999"
-                                value={depositorName}
-                                onChangeText={setDepositorName}
-                            />
-                        </View>
+                <View style={styles.inputContainer}>
+                    <TextInput
+                        style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? 'black' : 'white' }]}
+                        placeholder="Depositor's Name"
+                        placeholderTextColor="#999"
+                        value={depositorName}
+                        onChangeText={setDepositorName}
+                    />
+                </View>
 
-                        {/* Use My Details Checkbox */}
-                        <TouchableOpacity
-                            style={styles.checkboxContainer}
-                            onPress={handleUseMyDetails}
-                        >
-                            <View style={[styles.checkbox, useMyDetails && styles.checkboxChecked]}>
-                                {useMyDetails && (
-                                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                                )}
-                            </View>
-                            <Text style={styles.checkboxText}>Use my details</Text>
-                        </TouchableOpacity>
-                    </>
-                )}
+                <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={handleUseMyDetails}
+                >
+                    <View style={[styles.checkbox, useMyDetails && styles.checkboxChecked]}>
+                        {useMyDetails && (
+                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                        )}
+                    </View>
+                    <Text style={styles.checkboxText}>Use my details</Text>
+                </TouchableOpacity>
 
                 {/* Exchange Rate */}
                 <View style={styles.exchangeRateContainer}>
@@ -266,17 +230,10 @@ export default function DepositPaymentTab() {
                     <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
                 </View>
                 <TouchableOpacity 
-                    style={[styles.proceedButton, isIAPLoading && styles.proceedButtonDisabled]} 
+                    style={styles.proceedButton} 
                     onPress={handleProceed}
-                    disabled={isIAPLoading}
                 >
-                    {isIAPLoading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                        <Text style={styles.proceedButtonText}>
-                            {Platform.OS === 'ios' ? 'Purchase GP Coins' : 'Proceed'}
-                        </Text>
-                    )}
+                    <Text style={styles.proceedButtonText}>Proceed</Text>
                 </TouchableOpacity>
             </ThemedView>
 
@@ -354,7 +311,7 @@ export default function DepositPaymentTab() {
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#940304']} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#C61F3A']} />
                 }
             >
                 {/* Header */}
@@ -463,18 +420,18 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         borderWidth: 2,
-        borderColor: '#940304',
+        borderColor: '#C61F3A',
         borderRadius: 4,
         marginRight: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
     checkboxChecked: {
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
     },
     checkboxText: {
         fontSize: 16,
-        color: '#940304',
+        color: '#C61F3A',
         fontWeight: '500',
     },
     exchangeRateContainer: {
@@ -495,7 +452,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     proceedButton: {
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
         marginHorizontal: 20,
         paddingVertical: 18,
         borderRadius: 12,

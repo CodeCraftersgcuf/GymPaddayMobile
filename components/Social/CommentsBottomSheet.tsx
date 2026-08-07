@@ -5,17 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  ScrollView,
   Image,
   Animated,
-  Keyboard,
   Platform,
-  KeyboardAvoidingView,
   FlatList,
   ActivityIndicator,
   BackHandler,
-  Alert
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { keyboardInputOffset, useKeyboardHeight } from '@/utils/useKeyboardHeight';
 import { useTheme } from '@/contexts/themeContext';
 import CommentItem from './CommentItem';
 import { images } from '@/constants';
@@ -54,6 +55,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   loading = false
 }) => {
   const { dark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [newComment, setNewComment] = React.useState('');
   const [localComments, setLocalComments] = React.useState<Comment[]>(comments);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
@@ -64,6 +66,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const scrollViewRef = useRef<FlatList>(null);
   const [replyToCommentId, setReplyToCommentId] = React.useState<string | null>(null);
   const [replyToUsername, setReplyToUsername] = React.useState<string | null>(null);
+  const keyboardHeight = useKeyboardHeight(visible);
 
   useEffect(() => {
     setLocalComments(comments);
@@ -157,7 +160,55 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
     return () => subscription.remove();
   }, [visible, onClose]);
 
+  const handleReplyPress = useCallback((commentId: string, username: string) => {
+    setReplyToCommentId(commentId);
+    setReplyToUsername(username);
+  }, []);
+
+  const handleDeletePress = useCallback((commentId: string, userId: string) => {
+    const currentUserIdStr = currentUserId?.toString();
+    const commentUserIdStr = userId?.toString();
+
+    if (currentUserIdStr && currentUserIdStr !== commentUserIdStr) {
+      Alert.alert('Not allowed', 'You can only delete your own comments.');
+      return;
+    }
+
+    if (!currentUserIdStr) {
+      Alert.alert('Error', 'Unable to verify user. Please try again.');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteMutation.mutate(Number(commentId)),
+        },
+      ]
+    );
+  }, [currentUserId, deleteMutation]);
+
+  const renderCommentItem = useCallback(
+    ({ item }: { item: Comment }) => (
+      <CommentItem
+        comment={item}
+        darkMode={dark}
+        onReplyPress={handleReplyPress}
+        onDeletePress={handleDeletePress}
+      />
+    ),
+    [dark, handleReplyPress, handleDeletePress]
+  );
+
+  // Must stay after all hooks — early return before useCallbacks caused crash on open
   if (!visible) return null;
+
+  const inputBottomPadding = keyboardInputOffset(keyboardHeight, insets.bottom, 10);
 
   const handleSendComment = () => {
     if (newComment.trim() && postId !== null && onAddComment) {
@@ -193,11 +244,10 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
       });
 
       onAddComment(text, postId, replyToCommentId || undefined);
-      setNewComment(''); // Clear input immediately
+      setNewComment('');
       setReplyToCommentId(null);
       setReplyToUsername(null);
 
-      // Scroll to bottom to show the new comment
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -208,52 +258,20 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   const textColor = dark ? '#FFFFFF' : '#000000';
   const inputBackgroundColor = dark ? '#333333' : '#F0F0F0';
   const borderColor = dark ? '#333333' : '#E0E0E0';
-  const handleReplyPress = useCallback((commentId: string, username: string) => {
-    setReplyToCommentId(commentId);
-    setReplyToUsername(username);
-  }, []);
-  const handleDeletePress = useCallback((commentId: string, userId: string) => {
-    // Compare user IDs (handle both string and number formats)
-    const currentUserIdStr = currentUserId?.toString();
-    const commentUserIdStr = userId?.toString();
-    
-    if (currentUserIdStr && currentUserIdStr !== commentUserIdStr) {
-      Alert.alert('Not allowed', 'You can only delete your own comments.');
-      return;
-    }
-    
-    if (!currentUserIdStr) {
-      Alert.alert('Error', 'Unable to verify user. Please try again.');
-      return;
-    }
-    
-    Alert.alert(
-      'Delete Comment',
-      'Are you sure you want to delete this comment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteMutation.mutate(Number(commentId)),
-        },
-      ]
-    );
-  }, [currentUserId, deleteMutation]);
-
-  const renderCommentItem = useCallback(
-    ({ item }: { item: Comment }) => (
-      <CommentItem
-        comment={item}
-        darkMode={dark}
-        onReplyPress={handleReplyPress}
-        onDeletePress={handleDeletePress}
-      />
-    ),
-    [dark, handleReplyPress, handleDeletePress]
-  );
 
   return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+    <KeyboardAvoidingView
+      style={styles.modalRoot}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+    >
     <Animated.View
       style={[
         styles.overlay,
@@ -274,6 +292,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
           styles.bottomSheet,
           {
             backgroundColor,
+            marginBottom: 0,
             transform: [
               {
                 translateY: slideAnim.interpolate({
@@ -285,11 +304,7 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
           }
         ]}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardAvoidContainer}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-        >
+        <View style={styles.keyboardAvoidContainer}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: borderColor }]}>
             <Text style={[styles.headerTitle, { color: textColor }]}>Comments</Text>
@@ -322,8 +337,10 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
                   </Text>
                 </View>
               }
-              contentContainerStyle={{ flexGrow: 1 }}
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: 8 }}
               scrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
             />
           )}
 
@@ -338,13 +355,17 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
                 setReplyToCommentId(null);
                 setReplyToUsername(null);
               }}>
-                <Text style={{ color: '#940304', marginTop: 4 }}>Cancel Reply</Text>
+                <Text style={{ color: '#C61F3A', marginTop: 4 }}>Cancel Reply</Text>
               </TouchableOpacity>
             </View>
           )}
 
           {/* Input Area */}
-          <View style={[styles.inputContainer, { backgroundColor, borderTopColor: borderColor }]}>
+          <View style={[styles.inputContainer, {
+            backgroundColor,
+            borderTopColor: borderColor,
+            paddingBottom: inputBottomPadding,
+          }]}>
             <TextInput
               style={[
                 styles.input,
@@ -364,23 +385,33 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
               style={[
                 styles.sendButton,
                 {
-                  backgroundColor: dark ? '#333333' : '#DDDDDD',
+                  backgroundColor: newComment.trim() ? '#C61F3A' : (dark ? '#333333' : '#DDDDDD'),
                 }
               ]}
               onPress={handleSendComment}
               disabled={!newComment.trim()}
             >
-              <Image source={images.notifcationIcon} style={{ height: 20, width: 20 }} />
+              <Image
+                source={images.notifcationIcon}
+                style={{ height: 20, width: 20 }}
+                tintColor={newComment.trim() ? '#FFFFFF' : (dark ? '#888' : '#666')}
+              />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Animated.View>
     </Animated.View>
+    </KeyboardAvoidingView>
+    </Modal>
   );
 
 };
 
 const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
   overlay: {
     position: 'absolute',
     top: 0,
@@ -401,7 +432,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     height: '80%',
-    paddingBottom: 50,
     overflow: 'hidden',
   },
   keyboardAvoidContainer: {
@@ -442,10 +472,10 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingTop: 10,
     alignItems: 'center',
     borderTopWidth: 1,
-    marginBottom: 20,
   },
   input: {
     flex: 1,

@@ -4,32 +4,32 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Image,
   TextInput,
   ScrollView,
   Dimensions,
   Alert,
-  Keyboard,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 import Modal from 'react-native-modal';
-import { useRouter } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import GiftsPanel from '@/components/Social/live/GiftsPanel';
 import TopupPanel from '@/components/Social/live/TopupPanel';
 import SendCoinsPanel from '@/components/Social/live/SendCoinsPanel';
 import { useLocalSearchParams } from 'expo-router';
-import { buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
+import { AGORA_LIVE_APP_ID, buildLiveStreamWebHtml } from '@/utils/liveStreamWebHtml';
 import WebView from 'react-native-webview';
-import { useLiveStreamChats } from '@/utils/hooks/useLiveStreamChats';
+import { keyboardInputOffset, useKeyboardHeight } from '@/utils/useKeyboardHeight';
+import { useLiveStreamChatList } from '@/utils/hooks/useLiveStreamChats';
 import { useSendLiveStreamMessage } from '@/utils/hooks/useSendLiveStreamMessage';
 import * as SecureStore from 'expo-secure-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 import { API_ENDPOINTS } from '@/apiConfig';
-import { useIosMonetizationHidden } from '@/utils/iosMonetization';
+import { getLiveVideoCallToken } from '@/utils/mutations/video';
 
 const { width, height } = Dimensions.get('window');
 
@@ -54,12 +54,12 @@ interface GiftItem {
 type PanelType = 'gifts' | 'topup' | 'sendCoins' | 'none';
 
 const User_liveViewMain: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const { channelName, id } = useLocalSearchParams<{ channelName: string; id: string }>();
   const streamId = id != null ? String(Array.isArray(id) ? id[0] : id) : '';
 
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const [dark, setDark] = useState<boolean>(true);
   const [streamEnded, setStreamEnded] = useState(false);
   const [message, setMessage] = useState<string>('');
@@ -72,17 +72,13 @@ const User_liveViewMain: React.FC = () => {
 
   const [loadingBalance, setLoadingBalance] = useState(true);
   React.useEffect(() => {
-    if (hideIosMonetization) {
-      setLoadingBalance(false);
-      return;
-    }
     (async () => {
       try {
-        setLoadingBalance(true); // start loading
+        setLoadingBalance(true);
         const token = await SecureStore.getItemAsync('auth_token');
-        if (!token) throw new Error('No token founds');
+        if (!token) throw new Error('No token found');
 
-        const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
+        const response = await fetch(API_ENDPOINTS.USER.BALANCE, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -91,21 +87,24 @@ const User_liveViewMain: React.FC = () => {
         });
 
         const result = await response.json();
-        console.log('Balance fetch result:', result);
 
-        if (response.ok && result.status === 'success') {
-          setBalance(Number(result.balance));
+        if (
+          response.ok &&
+          (result.status === 'success' || result.balance != null || result.data?.balance != null)
+        ) {
+          const raw = result.balance ?? result.data?.balance ?? 0;
+          setBalance(Number(raw) || 0);
         } else {
-          Alert.alert('Error', result.message || 'Failed to fetch balance');
+          console.warn('Balance fetch failed:', result?.message);
         }
       } catch (error) {
-        console.error('Balance fetch error:', error);
-        Alert.alert('Error', 'Unable to fetch wallet balance.');
+        // Soft-fail — gifts UI still works; don't block joining live with an alert.
+        console.warn('Balance fetch error:', error instanceof Error ? error.message : String(error));
       } finally {
-        setLoadingBalance(false); // stop loading
+        setLoadingBalance(false);
       }
     })();
-  }, [hideIosMonetization]);
+  }, []);
   const themeStyles = {
     backgroundColor: dark ? '#000000' : '#ffffff',
     secondaryBackground: dark ? '#181818' : '#f5f5f5',
@@ -126,11 +125,39 @@ const User_liveViewMain: React.FC = () => {
     }
   }, [streamId]);
 
-  useEffect(() => {
-    return () => {
-      leaveLiveStream();
-    };
-  }, [leaveLiveStream]);
+  const joinLiveStream = useCallback(async () => {
+    if (!streamId || streamEnded) return;
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) return;
+      const res = await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${streamId}/join`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (res.status === 410) {
+        setStreamEnded(true);
+      }
+    } catch (e) {
+      console.warn('joinLiveStream', e);
+    }
+  }, [streamId, streamEnded]);
+
+  // Register (and re-register) the viewer as audience while this screen is focused.
+  useFocusEffect(
+    useCallback(() => {
+      if (!streamId || streamEnded) return;
+
+      void joinLiveStream();
+      const heartbeat = setInterval(() => {
+        void joinLiveStream();
+      }, 30000);
+
+      return () => {
+        clearInterval(heartbeat);
+        void leaveLiveStream();
+      };
+    }, [streamId, streamEnded, joinLiveStream, leaveLiveStream])
+  );
 
   const { data: streamMeta } = useQuery({
     queryKey: ['liveStreamDetail', streamId],
@@ -157,13 +184,40 @@ const User_liveViewMain: React.FC = () => {
     if (!active || ended) setStreamEnded(true);
   }, [streamMeta]);
 
+  const channel = channelName != null ? String(Array.isArray(channelName) ? channelName[0] : channelName) : '';
+
+  const { data: audienceAgora, isError: audienceTokenError } = useQuery({
+    queryKey: ['liveAudienceToken', channel, streamId],
+    enabled: !!channel && !streamEnded,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const auth = await SecureStore.getItemAsync('auth_token');
+      if (!auth) throw new Error('No auth token');
+      let uid = 50000 + Math.floor(Math.random() * 100000);
+      try {
+        const raw = await SecureStore.getItemAsync('user_data');
+        if (raw) {
+          const id = Number(JSON.parse(raw)?.id);
+          if (Number.isFinite(id) && id >= 1) uid = Math.floor(id) % 2147483647;
+        }
+      } catch {
+        /* keep random uid */
+      }
+      const res = await getLiveVideoCallToken(
+        { channel_name: channel, uid, role: 'audience' },
+        auth,
+      );
+      return { token: String(res?.token || ''), uid };
+    },
+  });
+
   useEffect(() => {
     if (streamEnded) {
       queryClient.invalidateQueries({ queryKey: ['liveStreams'] });
     }
   }, [streamEnded, queryClient]);
 
-  const { data: chats = [], isLoading } = useLiveStreamChats(streamEnded ? '' : streamId);
+  const { chats, isLoading } = useLiveStreamChatList(streamEnded ? '' : streamId);
   const { mutateAsync: sendChatMessageAsync, isPending } = useSendLiveStreamMessage(
     streamEnded ? '' : streamId
   );
@@ -206,6 +260,12 @@ const User_liveViewMain: React.FC = () => {
   };
 
   const handleTopupSuccess = async (amount: number) => {
+    // amount <= 0 means "close panel / navigate to topup" — do not credit wallet
+    if (!amount || amount <= 0) {
+      setActivePanel('none');
+      return;
+    }
+
     try {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token found');
@@ -244,7 +304,7 @@ const User_liveViewMain: React.FC = () => {
     try {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) return;
-      const response = await fetch(API_ENDPOINTS.USER.PROFILE.Balance, {
+      const response = await fetch(API_ENDPOINTS.USER.BALANCE, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -252,8 +312,12 @@ const User_liveViewMain: React.FC = () => {
         },
       });
       const result = await response.json();
-      if (response.ok && result.status === 'success') {
-        setBalance(Number(result.balance));
+      if (
+        response.ok &&
+        (result.status === 'success' || result.balance != null || result.data?.balance != null)
+      ) {
+        const raw = result.balance ?? result.data?.balance ?? 0;
+        setBalance(Number(raw) || 0);
       }
     } catch (e) {
       console.warn('refreshWalletBalance', e);
@@ -284,28 +348,8 @@ const User_liveViewMain: React.FC = () => {
   };
 
   const [giftQuantities, setGiftQuantities] = React.useState<{ [id: string]: number }>({});
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  // Listen to keyboard events to adjust chat overlay position
-  useEffect(() => {
-    const keyboardWillShow = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-      }
-    );
-    const keyboardWillHide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardWillShow.remove();
-      keyboardWillHide.remove();
-    };
-  }, []);
+  const keyboardHeight = useKeyboardHeight();
+  const bottomInputOffset = keyboardInputOffset(keyboardHeight, insets.bottom);
 
   const updateQuantity = (id: string, change: number) => {
     setGiftQuantities(prev => {
@@ -314,7 +358,6 @@ const User_liveViewMain: React.FC = () => {
     });
   };
   const renderPanel = () => {
-    if (hideIosMonetization) return null;
     switch (activePanel) {
       case 'gifts':
         return (
@@ -348,7 +391,12 @@ const User_liveViewMain: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: themeStyles.backgroundColor }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: themeStyles.backgroundColor }]} edges={['top', 'left', 'right']}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 24}
+    >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: themeStyles.backgroundColor }]}>
         <TouchableOpacity
@@ -374,17 +422,25 @@ const User_liveViewMain: React.FC = () => {
               <Text style={styles.endedButtonText}>Leave</Text>
             </TouchableOpacity>
           </View>
-        ) : channelName ? (
+        ) : channel && audienceAgora?.token ? (
           <WebView
             originWhitelist={['*']}
             source={{
-              html: buildLiveStreamWebHtml(String(channelName), 'audience'),
-              baseUrl: 'https://skillverse.com.pk/',
+              html: buildLiveStreamWebHtml(channel, 'audience', {
+                appId: AGORA_LIVE_APP_ID,
+                token: audienceAgora.token,
+                uid: audienceAgora.uid,
+              }),
+              baseUrl: 'https://api.gympaddy.com/',
             }}
             javaScriptEnabled
             domStorageEnabled
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
+            mediaCapturePermissionGrantType="grant"
+            onPermissionRequest={(event: any) => {
+              event.grant?.(event.resources ?? event.nativeEvent?.resources);
+            }}
             allowsFullscreenVideo
             style={{ flex: 1 }}
             onMessage={(ev) => {
@@ -395,9 +451,13 @@ const User_liveViewMain: React.FC = () => {
               }
             }}
           />
+        ) : audienceTokenError ? (
+          <Text style={{ color: 'white', textAlign: 'center', marginTop: 20 }}>
+            Could not join live stream. Try again.
+          </Text>
         ) : (
           <Text style={{ color: 'white', textAlign: 'center', marginTop: 20 }}>
-            No channel specified
+            {channel ? 'Connecting…' : 'No channel specified'}
           </Text>
         )}
         {/* Chat Overlay – pinned to upper-left so it doesn't cover bottom gift / input controls */}
@@ -424,7 +484,7 @@ const User_liveViewMain: React.FC = () => {
                     <Text style={styles.messageText} selectable>
                       {chat.message}
                     </Text>
-                    {chat.hasGift && !hideIosMonetization && (
+                    {chat.hasGift && (
                       <View style={styles.giftContainer}>
                         <Text style={styles.giftEmoji}>🎁</Text>
                         <View style={styles.giftBadge}>
@@ -441,7 +501,7 @@ const User_liveViewMain: React.FC = () => {
       </View>
 
       <Modal
-        isVisible={!hideIosMonetization && activePanel !== 'none'}
+        isVisible={activePanel !== 'none'}
         onBackdropPress={closePanel}
         onBackButtonPress={closePanel}
         onSwipeComplete={closePanel}
@@ -456,54 +516,57 @@ const User_liveViewMain: React.FC = () => {
       >
         <View style={styles.bottomPanelContainer}>
           <View style={styles.giftSheetHandle} />
-          {renderPanel()}
+          <View style={styles.bottomPanelContent}>{renderPanel()}</View>
         </View>
       </Modal>
 
       {/* Bottom Input - Only show when no panel is active */}
       {activePanel === 'none' && !streamEnded && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        <View
+          style={[
+            styles.bottomContainer,
+            {
+              backgroundColor: themeStyles.backgroundColor,
+              paddingBottom: bottomInputOffset,
+              marginBottom: 0,
+            },
+          ]}
         >
-          <View style={[styles.bottomContainer, { backgroundColor: themeStyles.backgroundColor }]}>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: themeStyles.secondaryBackground,
-                    color: themeStyles.textColor,
-                  },
-                ]}
-                placeholder="Type a message"
-                placeholderTextColor={themeStyles.textColorSecondary}
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                maxLength={1000}
-                editable={!streamEnded}
-              />
-              <TouchableOpacity
-                style={[styles.sendButton, isPending && { opacity: 0.6 }]}
-                onPress={() => sendMessage()}
-                disabled={isPending || streamEnded}
-              >
-                <Icon name="send" size={20} color="white" />
-              </TouchableOpacity>
-              {!hideIosMonetization && (
-                <TouchableOpacity
-                  style={styles.giftButton}
-                  onPress={() => setActivePanel('gifts')}
-                  disabled={streamEnded}
-                >
-                  <Icon name="gift" size={24} color="#940304" />
-                </TouchableOpacity>
-              )}
-            </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: themeStyles.secondaryBackground,
+                  color: themeStyles.textColor,
+                },
+              ]}
+              placeholder="Type a message"
+              placeholderTextColor={themeStyles.textColorSecondary}
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              maxLength={1000}
+              editable={!streamEnded}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, isPending && { opacity: 0.6 }]}
+              onPress={() => sendMessage()}
+              disabled={isPending || streamEnded}
+            >
+              <Icon name="send" size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.giftButton}
+              onPress={() => setActivePanel('gifts')}
+              disabled={streamEnded}
+            >
+              <Icon name="gift" size={24} color="#C61F3A" />
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       )}
+    </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -625,7 +688,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   endedButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingHorizontal: 28,
     paddingVertical: 12,
     borderRadius: 24,
@@ -644,7 +707,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   giftBadge: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -670,7 +733,7 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
   },
   inputRow: {
     flexDirection: 'row',
@@ -693,15 +756,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     padding: 8,
   },
-  /** Must set a real height budget: maxHeight alone + flex children collapses to 0 on RN. */
+  /** Fixed height so the gifts grid can scroll in portrait without rotating the device. */
   bottomPanelContainer: {
     width: '100%',
-    minHeight: height * 0.52,
-    maxHeight: height * 0.88,
+    height: height * 0.58,
+    maxHeight: height * 0.72,
     backgroundColor: 'rgba(0, 0, 0, 0)',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: 'hidden',
+  },
+  bottomPanelContent: {
+    flex: 1,
+    minHeight: 0,
   },
 });
 

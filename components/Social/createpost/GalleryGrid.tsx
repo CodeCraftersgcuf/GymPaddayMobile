@@ -8,7 +8,7 @@ import {
   Text,
   Dimensions,
 } from 'react-native';
-import { GalleryMedia } from '@/app/create-post';
+import { GalleryMedia } from '@/app/createpost';
 import { Entypo, Ionicons } from '@expo/vector-icons';
 
 interface GalleryGridProps {
@@ -18,6 +18,7 @@ interface GalleryGridProps {
   onGalleryButtonPress: () => void;
   onCameraButtonPress: () => void; // Add this prop
   onViewMedia: (media: GalleryMedia) => void;
+  helperText?: string;
   disabled?: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function GalleryGrid({
   onGalleryButtonPress,
   onCameraButtonPress, // Add this parameter
   onViewMedia,
+  helperText,
   disabled = false
 }: GalleryGridProps) {
   const screenWidth = Dimensions.get('window').width;
@@ -47,6 +49,9 @@ export default function GalleryGrid({
 
   return (
     <View style={styles.container}>
+      {helperText ? (
+        <Text style={styles.helperText}>{helperText}</Text>
+      ) : null}
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
@@ -121,6 +126,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+    lineHeight: 17,
+  },
   scrollContent: {
     gap: 8,
     paddingRight: 16,
@@ -169,13 +180,13 @@ const styles = StyleSheet.create({
   },
   selectedMedia: {
     borderWidth: 3,
-    borderColor: '#ff3333',
+    borderColor: '#C61F3A',
   },
   selectedOverlay: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#ff3333',
+    backgroundColor: '#C61F3A',
     borderRadius: 10,
     width: 20,
     height: 20,

@@ -503,7 +503,7 @@ export default function MessageChat() {
 
   //   return (
   //     <Modal visible={showVoiceCall} animationType="slide">
-  //       <LinearGradient colors={['#FF3B30', '#8E44AD']} style={{ flex: 1 }}>
+  //       <LinearGradient colors={['#C61F3A', '#8E44AD']} style={{ flex: 1 }}>
   //         <View style={styles.voiceCallScreen}>
   //           <SafeAreaView style={styles.voiceCallContainer}>
   //             <View style={styles.voiceCallContent}>
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   sentContent: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     borderBottomRightRadius: 4,
     alignSelf: 'flex-end',
   },
@@ -898,7 +898,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    // backgroundColor: '#FF3B30',
+    // backgroundColor: '#C61F3A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -959,7 +959,7 @@ const styles = StyleSheet.create({
   },
   proceedButton: {
     flex: 1,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1081,7 +1081,7 @@ const styles = StyleSheet.create({
   // Voice Call Styles
   voiceCallScreen: {
     flex: 1,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
   },
   voiceCallContainer: {
     flex: 1,

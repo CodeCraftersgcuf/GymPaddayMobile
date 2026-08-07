@@ -1,12 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { AppState } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import { registerForPushNotificationsAsync, saveFcmTokenToServer } from '@/utils/notificationService';
+import { navigateFromNotification } from '@/utils/notificationNavigation';
 import { useRouter } from 'expo-router';
+import { mergeRecentlyPublishedIntoFeedCache } from '@/utils/queries/posts';
 import { queryClient } from '@/utils/queryClient';
-import { removePendingPost } from '@/utils/pendingPosts';
+import { removePendingPostByPostId } from '@/utils/pendingPosts';
 import { prefetchStoriesFromCache } from '@/utils/storyPrefetch';
 import Toast from 'react-native-toast-message';
+import * as SecureStore from 'expo-secure-store';
 
 function isForUser(data: Record<string, unknown>, userId: number | undefined): boolean {
   if (!userId) return false;
@@ -14,14 +17,18 @@ function isForUser(data: Record<string, unknown>, userId: number | undefined): b
   return parseInt(String(notifUserId), 10) === userId;
 }
 
-async function handleContentNotification(data: Record<string, unknown>) {
+async function handleContentNotification(
+  data: Record<string, unknown>,
+  userId?: number,
+) {
   const type = data.type as string | undefined;
 
   if (type === 'post_published') {
     const postId = data.post_id ? Number(data.post_id) : null;
-    if (postId) await removePendingPost(postId);
+    if (postId) await removePendingPostByPostId(postId);
     await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
     await queryClient.refetchQueries({ queryKey: ['userPosts'] });
+    mergeRecentlyPublishedIntoFeedCache(queryClient);
     Toast.show({
       type: 'success',
       text1: 'Post is live',
@@ -33,7 +40,7 @@ async function handleContentNotification(data: Record<string, unknown>) {
 
   if (type === 'post_failed') {
     const postId = data.post_id ? Number(data.post_id) : null;
-    if (postId) await removePendingPost(postId);
+    if (postId) await removePendingPostByPostId(postId);
     Toast.show({
       type: 'error',
       text1: 'Post failed',
@@ -44,6 +51,11 @@ async function handleContentNotification(data: Record<string, unknown>) {
   }
 
   if (type === 'story_published') {
+    const storyId = data.story_id ? Number(data.story_id) : null;
+    if (storyId && userId) {
+      const { clearPendingMyStory } = await import('@/utils/pendingMyStories');
+      clearPendingMyStory(userId, storyId);
+    }
     await queryClient.invalidateQueries({ queryKey: ['groupedStories'] });
     await queryClient.refetchQueries({ queryKey: ['groupedStories'] });
     prefetchStoriesFromCache();
@@ -57,6 +69,10 @@ async function handleContentNotification(data: Record<string, unknown>) {
   }
 
   if (type === 'story_failed') {
+    if (userId) {
+      const { clearPendingMyStoriesForUser } = await import('@/utils/pendingMyStories');
+      clearPendingMyStoriesForUser(userId);
+    }
     Toast.show({
       type: 'error',
       text1: 'Story failed',
@@ -66,19 +82,34 @@ async function handleContentNotification(data: Record<string, unknown>) {
   }
 }
 
-export default function NotificationManager({ token, user }: { token: string; user: any }) {
+async function readSession(): Promise<{ token: string; userId: number } | null> {
+  const token = await SecureStore.getItemAsync('auth_token');
+  const userData = await SecureStore.getItemAsync('user_data');
+  if (!token || !userData) return null;
+
+  try {
+    const user = JSON.parse(userData);
+    const userId = Number(user?.id);
+    if (!userId) return null;
+    return { token, userId };
+  } catch {
+    return null;
+  }
+}
+
+export default function NotificationManager() {
     const notificationListener = useRef<Notifications.Subscription | null>(null);
     const responseListener = useRef<Notifications.Subscription | null>(null);
-    const appState = useRef(AppState.currentState);
+    const listenersBoundForUser = useRef<number | null>(null);
     const router = useRouter();
-    const userId = user?.id;
 
     useEffect(() => {
         Notifications.setNotificationHandler({
             handleNotification: async (notification) => {
                 const data = notification?.request?.content?.data || {};
+                const session = await readSession();
                 const notifUserId = data.userId ?? data.user_id;
-                if (parseInt(String(notifUserId), 10) === userId) {
+                if (session && parseInt(String(notifUserId), 10) === session.userId) {
                     return {
                         shouldShowAlert: true,
                         shouldPlaySound: true,
@@ -92,17 +123,15 @@ export default function NotificationManager({ token, user }: { token: string; us
                 };
             },
         });
-    }, [userId]);
+    }, []);
 
     useEffect(() => {
-        if (!token || !userId) return;
+        const bindListeners = (userId: number) => {
+            if (listenersBoundForUser.current === userId) return;
+            listenersBoundForUser.current = userId;
 
-        const setupNotifications = async () => {
-            const fcmToken = await registerForPushNotificationsAsync();
-            if (fcmToken) {
-                await saveFcmTokenToServer(fcmToken, token);
-                console.log('✅ FCM token saved for user:', userId);
-            }
+            notificationListener.current?.remove();
+            responseListener.current?.remove();
 
             notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
                 const data = (notification.request.content.data || {}) as Record<string, unknown>;
@@ -123,7 +152,7 @@ export default function NotificationManager({ token, user }: { token: string; us
                     return;
                 }
 
-                handleContentNotification(data).catch(() => {});
+                handleContentNotification(data, userId).catch(() => {});
             });
 
             responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -145,16 +174,49 @@ export default function NotificationManager({ token, user }: { token: string; us
                     return;
                 }
 
-                handleContentNotification(data).catch(() => {});
+                const navigated = navigateFromNotification(router, {
+                    id: String(data.notification_id ?? ''),
+                    title: String(response.notification.request.content.title ?? ''),
+                    type: String(data.type ?? ''),
+                    data,
+                });
+                if (!navigated) {
+                    handleContentNotification(data, userId).catch(() => {});
+                }
             });
+        };
+
+        const setupNotifications = async () => {
+            const session = await readSession();
+            if (!session) return;
+
+            await new Promise<void>((resolve) => {
+                InteractionManager.runAfterInteractions(() => resolve());
+            });
+
+            const fcmToken = await registerForPushNotificationsAsync();
+            if (fcmToken) {
+                await saveFcmTokenToServer(fcmToken, session.token);
+                console.log('✅ FCM token saved for user:', session.userId);
+            }
+
+            bindListeners(session.userId);
         };
 
         setupNotifications();
 
+        const appStateSub = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') {
+                setupNotifications();
+            }
+        });
+
         return () => {
-            /* listeners cleaned up on remount */
+            appStateSub.remove();
+            notificationListener.current?.remove();
+            responseListener.current?.remove();
         };
-    }, [token, userId, router]);
+    }, [router]);
 
     return null;
 }

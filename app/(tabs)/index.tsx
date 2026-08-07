@@ -13,7 +13,7 @@ import {
   ViewToken,
   AppState,
 } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useScrollToTop } from '@react-navigation/native';
 import StoryContainer from '@/components/Social/StoryContainer';
 import PostItem from '@/components/Social/PostItem';
 import CommentsBottomSheet from '@/components/Social/CommentsBottomSheet';
@@ -27,7 +27,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 
 import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query';
-import { getUserPosts } from '@/utils/queries/posts';
+import { getUserPosts, mergeRecentlyPublishedIntoFeedCache } from '@/utils/queries/posts';
+import { queryClient } from '@/utils/queryClient';
 import * as SecureStore from 'expo-secure-store';
 import { getPostComments } from '@/utils/queries/comments';
 import { createComment } from '@/utils/mutations/comments';
@@ -50,10 +51,16 @@ import FeedVideoOverlay from '@/components/Social/FeedVideoOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { CachedImage } from '@/components/media/CachedImage';
+import PendingPostProgressCard from '@/components/Social/PendingPostProgressCard';
 import {
-  getPendingPosts,
+  getPendingPostsForUser,
+  getCurrentUserId,
+  prunePendingPostsExceptUser,
+  clearAllPendingPosts,
+  reconcilePendingPosts,
   subscribePendingPosts,
   resumePendingPostPolling,
+  removePendingPost,
   type PendingPost,
 } from '@/utils/pendingPosts';
 
@@ -63,7 +70,7 @@ function LoadingIndicator({ text = "Loading..." }) {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: dark ? '#000' : '#fff' }}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      <ActivityIndicator size="large" color="#940304" />
+      <ActivityIndicator size="large" color="#C61F3A" />
       <Text style={{ color: dark ? '#fff' : '#000', fontSize: 18, marginTop: 16 }}>{text}</Text>
     </View>
   );
@@ -82,6 +89,9 @@ export default function SocialFeedScreen() {
   const [hiddenPostIds, setHiddenPostIds] = useState<number[]>([]);
   const logoutTriggeredRef = useRef(false);
   const flatListRef = useRef<FlatList<any>>(null);
+  const navigation = useNavigation();
+  // Re-tap Socials tab → jump to top of feed (Instagram-style)
+  useScrollToTop(flatListRef);
   const scrollOffsetRef = useRef(0);
   const scrollRestoredRef = useRef(false);
   const savedActivePostRef = useRef<number | null>(null);
@@ -98,11 +108,32 @@ export default function SocialFeedScreen() {
   const reelsOpen = reelsPostId != null;
   const playbackEnabled = feedActive && !reelsOpen;
   const [pendingPosts, setPendingPosts] = useState<PendingPost[]>([]);
+  const prevPendingCountRef = useRef(0);
 
   const refreshPendingPosts = useCallback(async () => {
-    const items = await getPendingPosts();
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      setPendingPosts([]);
+      return;
+    }
+    await prunePendingPostsExceptUser(userId);
+    const items = await getPendingPostsForUser(userId);
     setPendingPosts(items);
   }, []);
+
+  const handlePendingPublished = useCallback((postId: number) => {
+    refreshPendingPosts();
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+  }, [refreshPendingPosts]);
+
+  const handlePendingFailed = useCallback((postId?: number) => {
+    refreshPendingPosts();
+    if (postId && postId > 0) {
+      setHiddenPostIds((prev) => (prev.includes(postId) ? prev : [...prev, postId]));
+    }
+  }, [refreshPendingPosts]);
 
   useEffect(() => {
     refreshPendingPosts();
@@ -111,15 +142,44 @@ export default function SocialFeedScreen() {
     });
   }, [refreshPendingPosts]);
 
+  useEffect(() => {
+    if (pendingPosts.length > prevPendingCountRef.current) {
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
+    }
+    prevPendingCountRef.current = pendingPosts.length;
+  }, [pendingPosts.length]);
+
   useFocusEffect(
     useCallback(() => {
-      refreshPendingPosts();
-      resumePendingPostPolling(
-        () => refreshPendingPosts(),
-        () => refreshPendingPosts(),
-      ).catch(() => {});
-    }, [refreshPendingPosts]),
+      (async () => {
+        const userId = await getCurrentUserId();
+        if (!userId) {
+          setPendingPosts([]);
+          return;
+        }
+        await prunePendingPostsExceptUser(userId);
+        await reconcilePendingPosts(userId, handlePendingPublished, handlePendingFailed);
+        await refreshPendingPosts();
+        await resumePendingPostPolling(userId, handlePendingPublished, handlePendingFailed);
+      })().catch(() => {});
+    }, [refreshPendingPosts, handlePendingPublished, handlePendingFailed]),
   );
+
+  useEffect(() => {
+    if (!isFocused || pendingPosts.length === 0) return;
+
+    const intervalId = setInterval(() => {
+      (async () => {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        await reconcilePendingPosts(userId, handlePendingPublished, handlePendingFailed);
+      })().catch(() => {});
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [isFocused, pendingPosts.length, handlePendingPublished, handlePendingFailed]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -148,6 +208,7 @@ export default function SocialFeedScreen() {
         SecureStore.deleteItemAsync('user_id'),
         SecureStore.deleteItemAsync('username'),
       ]);
+      await clearAllPendingPosts();
     } catch (storageError) {
       console.error('Failed to clear auth data after blocked/expired session:', storageError);
     }
@@ -212,6 +273,16 @@ export default function SocialFeedScreen() {
     }
   }, [isError, error]);
 
+  // Re-tap Social tab while focused: scroll to top + refresh feed for new posts
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('tabPress', () => {
+      if (!isFocused) return;
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      void queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+      void refetch();
+    });
+    return unsubscribe;
+  }, [navigation, isFocused, refetch]);
 
   const {
     data: groupedStories = [],
@@ -375,6 +446,10 @@ export default function SocialFeedScreen() {
     registerActivePostId(() => activePostIdRef.current);
   }, [registerFeedScroll, registerActivePostId]);
 
+  useEffect(() => {
+    mergeRecentlyPublishedIntoFeedCache(queryClient);
+  }, [data?.pages]);
+
   const posts = useMemo(() => {
     if (!data?.pages) return [];
     const allPosts = data.pages.flatMap((page) => page.data || []);
@@ -388,19 +463,11 @@ export default function SocialFeedScreen() {
   const feedData = useMemo(() => {
     const publishedIds = new Set(posts.map((p: any) => Number(p.id)));
     const placeholders = pendingPosts
-      .filter((p) => !publishedIds.has(p.postId))
+      .filter((p) => !p.postId || !publishedIds.has(p.postId))
       .map((p) => ({
-        id: `pending-${p.postId}`,
+        id: `pending-${p.clientId}`,
         isPending: true,
-        pendingPostId: p.postId,
-        caption: p.caption,
-        thumbnailUri: p.thumbnailUri,
-        user: posts[0]?.user ?? { username: 'You', profile_picture: '' },
-        content: p.caption || 'Processing your post…',
-        likes_count: 0,
-        comments_count: 0,
-        share_count: 0,
-        imagesUrl: p.thumbnailUri ? [p.thumbnailUri] : [],
+        pendingItem: p,
       }));
     return [...placeholders, ...posts];
   }, [posts, pendingPosts]);
@@ -574,8 +641,8 @@ export default function SocialFeedScreen() {
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
 
-    // Refresh posts
     await refetch();
+    mergeRecentlyPublishedIntoFeedCache(queryClient);
     await refetchStories();
 
     setRefreshing(false);
@@ -630,31 +697,20 @@ export default function SocialFeedScreen() {
   );
 
   const renderPendingPost = useCallback(
-    (item: any) => (
-      <View style={[styles.pendingCard, { backgroundColor: dark ? '#111' : '#f5f5f5' }]}>
-        {item.thumbnailUri ? (
-          <CachedImage
-            uri={item.thumbnailUri}
-            resolve={false}
-            style={styles.pendingThumb}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[styles.pendingThumb, styles.pendingThumbPlaceholder]} />
-        )}
-        <View style={styles.pendingOverlay}>
-          <ActivityIndicator size="small" color="#fff" />
-          <Text style={styles.pendingText}>Processing your post…</Text>
-        </View>
-      </View>
+    (item: PendingPost) => (
+      <PendingPostProgressCard
+        item={item}
+        dark={dark}
+        onDismiss={() => removePendingPost(item.clientId).then(() => refreshPendingPosts())}
+      />
     ),
-    [dark],
+    [dark, refreshPendingPosts],
   );
 
   const renderFeedPost = useCallback(
     ({ item, index }: { item: any; index: number }) => {
       if (item.isPending) {
-        return renderPendingPost(item);
+        return renderPendingPost(item.pendingItem);
       }
       return (
         <PostItem
@@ -687,7 +743,7 @@ export default function SocialFeedScreen() {
             <TouchableOpacity
               onPress={() => refetch()}
               style={{
-                backgroundColor: '#940304',
+                backgroundColor: '#C61F3A',
                 paddingHorizontal: 20,
                 paddingVertical: 10,
                 borderRadius: 8,
@@ -699,19 +755,16 @@ export default function SocialFeedScreen() {
           </View>
         )}
         {!isError && (
-          <StoryContainer
-            stories={sortedGroupedStories}
-            refreshing={refreshing || isFetchingStories}
-          />
+          <StoryContainer stories={sortedGroupedStories} />
         )}
         {showFeedSkeleton && (
           <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#940304" />
+            <ActivityIndicator size="large" color="#C61F3A" />
           </View>
         )}
       </>
     ),
-    [isError, posts.length, dark, error, refetch, sortedGroupedStories, refreshing, isFetchingStories]
+    [isError, posts.length, dark, error, refetch, sortedGroupedStories]
   );
 
   const feedListFooter = useCallback(
@@ -729,7 +782,7 @@ export default function SocialFeedScreen() {
             <TouchableOpacity
               onPress={() => fetchNextPage()}
               style={{
-                backgroundColor: '#940304',
+                backgroundColor: '#C61F3A',
                 paddingHorizontal: 15,
                 paddingVertical: 8,
                 borderRadius: 8,
@@ -778,7 +831,7 @@ export default function SocialFeedScreen() {
               data={isError && posts.length === 0 && pendingPosts.length === 0 ? [] : feedData}
               keyExtractor={(item) => String(item.id)}
               renderItem={renderFeedPost}
-              extraData={`${activePostId}-${playbackEnabled}-${pendingPosts.length}`}
+              extraData={`${activePostId}-${playbackEnabled}-${pendingPosts.length}-${pendingPosts[0]?.uploadProgress ?? 0}-${pendingPosts[0]?.status ?? ''}`}
               ListHeaderComponent={feedListHeader}
               ListFooterComponent={feedListFooter}
               contentContainerStyle={{ paddingBottom: 100 }}
@@ -798,8 +851,8 @@ export default function SocialFeedScreen() {
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={onRefresh}
-                  colors={['#940304']}
-                  tintColor={'#940304'}
+                  colors={['#C61F3A']}
+                  tintColor={'#C61F3A'}
                   title="Pull to refresh"
                   titleColor={dark ? '#ffffff' : '#000000'}
                 />
@@ -850,7 +903,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#940304',
+    color: '#C61F3A',
     fontStyle: 'italic',
   },
   headerRight: {
@@ -880,11 +933,11 @@ const styles = StyleSheet.create({
     height: 60,
     width: 60,
     borderRadius: 30,
-    backgroundColor: '#940304', // Red background for the button
+    backgroundColor: '#C61F3A', // Red background for the button
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5, // Shadow for Android
-    shadowColor: '#940304', // Shadow color for iOS
+    shadowColor: '#C61F3A', // Shadow color for iOS
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 4,

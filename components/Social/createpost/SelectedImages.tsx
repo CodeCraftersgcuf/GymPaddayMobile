@@ -6,7 +6,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { GalleryMedia } from '@/app/create-post';
+import { GalleryMedia } from '@/app/createpost';
 import { AntDesign } from '@expo/vector-icons';
 
 interface SelectedImagesProps {

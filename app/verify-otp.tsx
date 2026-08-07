@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: "bold",
-    color: "#940304",
+    color: "#C61F3A",
     textAlign: "center",
     marginBottom: 10,
   },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   emailHighlight: {
-    color: "#940304",
+    color: "#C61F3A",
     fontWeight: "bold",
   },
   otpContainer: {
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     borderColor: "#FF4444",
   },
   verifyButton: {
-    backgroundColor: "#940304",
+    backgroundColor: "#C61F3A",
     paddingVertical: 15,
     borderRadius: 10,
     marginTop: 16,

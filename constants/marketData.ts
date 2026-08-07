@@ -1,8 +1,9 @@
 export const categories = [
-  { id: 'gym', title: 'Gym Equipments ', icon: 'barbell', color: '#940304' },
+  { id: 'all', title: 'All Items', icon: 'apps', color: '#C61F3A' },
+  { id: 'gym', title: 'Gym Equipments ', icon: 'barbell', color: '#C61F3A' },
   { id: 'supplement', title: 'Supplement', icon: 'medical', color: '#0066FF' },
   { id: 'wears', title: 'Wears', icon: 'shirt', color: '#00AA00' },
-  { id: 'others', title: 'Others', icon: 'grid', color: '#8B00FF' },
+  { id: 'others', title: 'Others', icon: 'grid', color: '#C61F3A' },
 ];
 interface ListingItem {
   id: string;

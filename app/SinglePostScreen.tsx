@@ -1,6 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, StatusBar, ScrollView, Dimensions } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
+  StatusBar,
+  ScrollView,
+  Dimensions,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { Ionicons as Icon } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { useLocalSearchParams } from 'expo-router';
 import PostItem from '@/components/Social/PostItem';
@@ -13,10 +24,16 @@ import { mapPostFromApi } from '@/utils/mapFeedPost';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
 import { STALE_TIMES } from '@/utils/queryClient';
 import { findRawPostInAppCache, postQueryKey } from '@/utils/postCache';
+import { useSafeBack } from '@/utils/hooks/useSafeBack';
+import { useTheme } from '@/contexts/themeContext';
 
 const { width } = Dimensions.get('window');
 
 export default function SinglePostScreen() {
+  const { dark } = useTheme();
+  const goBack = useSafeBack();
+  const insets = useSafeAreaInsets();
+  const topPad = Math.max(insets.top, StatusBar.currentHeight ?? 0, 12);
   const { postId, videoThumbnail } = useLocalSearchParams<{
     postId?: string;
     videoThumbnail?: string;
@@ -24,6 +41,9 @@ export default function SinglePostScreen() {
   const numericPostId = Number(postId);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const cachedPost = findRawPostInAppCache(numericPostId);
+
+  const bg = dark ? '#000000' : '#FFFFFF';
+  const textColor = dark ? '#FFFFFF' : '#000000';
 
   const {
     data: rawPost,
@@ -69,7 +89,7 @@ export default function SinglePostScreen() {
     mutate: addComment,
     isPending: isAddingComment,
   } = useMutation({
-    mutationFn: async ({ text, postId }) => {
+    mutationFn: async ({ text, postId }: { text: string; postId: number }) => {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No token');
       return createComment({
@@ -82,7 +102,7 @@ export default function SinglePostScreen() {
     },
   });
 
-  const mapApiCommentsToInternal = (apiComments: any[]): Comment[] => {
+  const mapApiCommentsToInternal = (apiComments: any[]): any[] => {
     return (apiComments || []).map((item) => ({
       id: item.id.toString(),
       userId: item.user?.id?.toString() || '',
@@ -95,7 +115,7 @@ export default function SinglePostScreen() {
     }));
   };
 
-  const handleCommentPress = (comments: any[], postId: number) => {
+  const handleCommentPress = () => {
     setCommentModalVisible(true);
     refetchComments();
   };
@@ -104,37 +124,66 @@ export default function SinglePostScreen() {
     addComment({ text, postId });
   };
 
-  const handleMenu = (userId: number, postId: number) => {
-    console.log('Top menu pressed', userId, postId);
-  };
+  const handleMenu = (_userId: number, _postId: number) => {};
+
+  const header = (
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: bg,
+          borderBottomColor: dark ? '#222' : '#EFEFEF',
+          paddingTop: topPad,
+        },
+      ]}
+    >
+      <TouchableOpacity onPress={goBack} hitSlop={12} style={styles.backBtn} accessibilityLabel="Go back">
+        <Icon name="chevron-back" size={26} color={textColor} />
+      </TouchableOpacity>
+      <Text style={[styles.headerTitle, { color: textColor }]}>Post</Text>
+      <View style={styles.headerSpacer} />
+    </View>
+  );
 
   if (isLoading && !post) {
     const thumbUri = videoThumbnail ? resolveMediaUrl(String(videoThumbnail)) : null;
     return (
-      <View style={styles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
-        {thumbUri ? (
-          <Image
-            source={{ uri: thumbUri }}
-            style={styles.loadingPoster}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <>
-            <ActivityIndicator size="large" color="#940304" />
-            <Text style={{ color: '#000', marginTop: 10 }}>Loading post...</Text>
-          </>
-        )}
-      </View>
+      <SafeAreaView style={[styles.safe, { backgroundColor: bg }]} edges={['left', 'right']}>
+        <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={bg} />
+        {header}
+        <View style={styles.center}>
+          {thumbUri ? (
+            <Image
+              source={{ uri: thumbUri }}
+              style={styles.loadingPoster}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <>
+              <ActivityIndicator size="large" color="#C61F3A" />
+              <Text style={{ color: textColor, marginTop: 10 }}>Loading post...</Text>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!post && !isLoading) {
     return (
-      <View style={styles.center}>
-        <Text>{isError ? 'Failed to load post' : 'Post not found'}</Text>
-      </View>
+      <SafeAreaView style={[styles.safe, { backgroundColor: bg }]} edges={['left', 'right']}>
+        <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={bg} />
+        {header}
+        <View style={styles.center}>
+          <Text style={{ color: textColor }}>
+            {isError ? 'Failed to load post' : 'Post not found'}
+          </Text>
+          <TouchableOpacity onPress={goBack} style={styles.fallbackBack}>
+            <Text style={styles.fallbackBackText}>Go back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -143,44 +192,82 @@ export default function SinglePostScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.postWrap}>
-      <PostItem
-        post={post}
-        onCommentPress={() => handleCommentPress(post.recent_comments, post.id)}
-        handleMenu={handleMenu}
-      />
+    <SafeAreaView style={[styles.safe, { backgroundColor: bg }]} edges={['left', 'right']}>
+      <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={bg} />
+      {header}
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: bg }]}>
+        <View style={[styles.postWrap, { backgroundColor: bg }]}>
+          <PostItem
+            post={post}
+            onCommentPress={handleCommentPress}
+            handleMenu={handleMenu}
+          />
 
-      <CommentsBottomSheet
-        visible={commentModalVisible}
-        comments={mapApiCommentsToInternal(commentData)}
-        postId={Number(postId)}
-        onClose={() => setCommentModalVisible(false)}
-        onAddComment={handleAddComment}
-        loading={isLoadingComments || isAddingComment}
-      />
-      </View>
-    </ScrollView>
+          <CommentsBottomSheet
+            visible={commentModalVisible}
+            comments={mapApiCommentsToInternal(commentData)}
+            postId={Number(postId)}
+            onClose={() => setCommentModalVisible(false)}
+            onAddComment={handleAddComment}
+            loading={isLoadingComments || isAddingComment}
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  headerSpacer: {
+    width: 40,
+  },
   container: {
     flexGrow: 1,
-    backgroundColor: '#fff',
   },
   postWrap: {
-    backgroundColor: '#fff',
     paddingTop: 8,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
   loadingPoster: {
     width: width - 20,
     height: width - 20,
     borderRadius: 18,
+  },
+  fallbackBack: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#C61F3A',
+  },
+  fallbackBackText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

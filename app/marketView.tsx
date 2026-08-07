@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     itemPrice: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#940304',
+        color: '#C61F3A',
         marginBottom: 16,
     },
     sellerSection: {
@@ -459,13 +459,13 @@ const styles = StyleSheet.create({
     },
     quickActionButton: {
         borderWidth: 1,
-        borderColor: '#940304',
+        borderColor: '#C61F3A',
         borderRadius: 20,
         paddingHorizontal: 16,
         paddingVertical: 8,
     },
     quickActionText: {
-        color: '#940304',
+        color: '#C61F3A',
         fontSize: 14,
         fontWeight: '500',
     },
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top',
     },
     sendButton: {
-        backgroundColor: '#940304',
+        backgroundColor: '#C61F3A',
         borderRadius: 25,
         paddingVertical: 16,
         alignItems: 'center',
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     relatedPrice: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#940304',
+        color: '#C61F3A',
         marginBottom: 8,
     },
     relatedSellerInfo: {

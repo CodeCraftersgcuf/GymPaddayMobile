@@ -5,13 +5,15 @@ import { prefetchVideoUrl } from '@/utils/videoPrefetch';
 
 const FEED_VIDEO_CACHE_DIR = `${FileSystem.cacheDirectory}feed-videos/`;
 const MIN_MP4_BYTES = 48 * 1024;
-const MAX_CACHED_VIDEOS = 24;
+const MAX_CACHED_VIDEOS = 40;
 
 const localUriByPostId = new Map<number, string>();
 const accessOrder: number[] = [];
 const inFlight = new Set<number>();
-const queued = new Set<number>();
+const prefetchQueued = new Set<number>();
+const pinnedQueued = new Set<number>();
 const pendingRemote = new Map<number, string>();
+const cacheListeners = new Map<number, Set<(uri: string) => void>>();
 
 let activeFeedPostId: number | null = null;
 
@@ -40,6 +42,25 @@ function touchPost(postId: number): void {
   }
 }
 
+function notifyCached(postId: number, uri: string): void {
+  cacheListeners.get(postId)?.forEach((cb) => cb(uri));
+}
+
+export function subscribeFeedVideoCached(
+  postId: number,
+  listener: (uri: string) => void,
+): () => void {
+  if (!cacheListeners.has(postId)) {
+    cacheListeners.set(postId, new Set());
+  }
+  cacheListeners.get(postId)!.add(listener);
+  const existing = localUriByPostId.get(postId);
+  if (existing) listener(existing);
+  return () => {
+    cacheListeners.get(postId)?.delete(listener);
+  };
+}
+
 async function ensureCacheDir(): Promise<void> {
   const info = await FileSystem.getInfoAsync(FEED_VIDEO_CACHE_DIR);
   if (!info.exists) {
@@ -58,18 +79,50 @@ async function downloadMp4(postId: number, remoteUrl: string): Promise<string | 
   if (cached) {
     localUriByPostId.set(postId, cached);
     touchPost(postId);
+    notifyCached(postId, cached);
   }
   return cached;
 }
 
+function startDownload(postId: number): void {
+  const remote = pendingRemote.get(postId);
+  if (!remote) {
+    inFlight.delete(postId);
+    return;
+  }
+
+  inFlight.add(postId);
+  prefetchQueued.delete(postId);
+  pinnedQueued.delete(postId);
+
+  downloadMp4(postId, remote)
+    .catch(() => {})
+    .finally(() => {
+      inFlight.delete(postId);
+      pendingRemote.delete(postId);
+      drainQueue();
+    });
+}
+
 function drainQueue(): void {
-  if (getMediaBudgets().fullMp4Prefetch === 'off') return;
   if (inFlight.size >= maxConcurrent()) return;
 
-  for (const postId of queued) {
+  for (const postId of pinnedQueued) {
     if (inFlight.size >= maxConcurrent()) break;
     if (localUriByPostId.has(postId)) {
-      queued.delete(postId);
+      pinnedQueued.delete(postId);
+      continue;
+    }
+    startDownload(postId);
+    return;
+  }
+
+  if (getMediaBudgets().fullMp4Prefetch === 'off') return;
+
+  for (const postId of prefetchQueued) {
+    if (inFlight.size >= maxConcurrent()) break;
+    if (localUriByPostId.has(postId)) {
+      prefetchQueued.delete(postId);
       continue;
     }
     const budgets = getMediaBudgets();
@@ -80,42 +133,55 @@ function drainQueue(): void {
     ) {
       continue;
     }
-
-    inFlight.add(postId);
-    queued.delete(postId);
-    const remote = pendingRemote.get(postId);
-    if (!remote) {
-      inFlight.delete(postId);
-      continue;
-    }
-    downloadMp4(postId, remote)
-      .catch(() => {})
-      .finally(() => {
-        inFlight.delete(postId);
-        pendingRemote.delete(postId);
-        drainQueue();
-      });
-    break;
+    startDownload(postId);
+    return;
   }
 }
 
-/** Queue full MP4 download — only on good tier for the active post. */
-export function prefetchFeedVideoMp4(postId: number, mp4Url?: string | null): void {
+function queueDownload(postId: number, mp4Url: string, pinned: boolean): void {
   if (!postId || !mp4Url) return;
-  if (getMediaBudgets().fullMp4Prefetch === 'off') return;
-  if (localUriByPostId.has(postId) || inFlight.has(postId) || queued.has(postId)) return;
+  if (localUriByPostId.has(postId) || inFlight.has(postId)) return;
+
   pendingRemote.set(postId, mp4Url);
-  queued.add(postId);
+  if (pinned) {
+    prefetchQueued.delete(postId);
+    pinnedQueued.add(postId);
+  } else if (!pinnedQueued.has(postId)) {
+    prefetchQueued.add(postId);
+  }
   drainQueue();
 }
 
+/** Background MP4 warm for the active feed post (good network only). */
+export function prefetchFeedVideoMp4(postId: number, mp4Url?: string | null): void {
+  if (!postId || !mp4Url) return;
+  if (getMediaBudgets().fullMp4Prefetch === 'off') return;
+  queueDownload(postId, mp4Url, false);
+}
+
+/**
+ * After the user watches a video once, save MP4 to disk for instant replay
+ * (works offline on second play — Instagram-style).
+ */
+export function pinPostVideoForReplay(postId: number, mp4Url?: string | null): void {
+  if (!postId || !mp4Url) return;
+  if (localUriByPostId.has(postId)) return;
+  if (getNetworkTier() === 'offline') return;
+  queueDownload(postId, mp4Url, true);
+}
+
 export function cancelFeedVideoDownload(postId: number): void {
-  queued.delete(postId);
+  prefetchQueued.delete(postId);
+  pinnedQueued.delete(postId);
   pendingRemote.delete(postId);
 }
 
 export function getCachedFeedVideoUri(postId: number): string | undefined {
   return localUriByPostId.get(postId);
+}
+
+export function isFeedVideoCachedLocally(postId: number): boolean {
+  return localUriByPostId.has(postId);
 }
 
 export function clearCachedFeedVideo(postId: number): void {
@@ -126,9 +192,11 @@ export function clearCachedFeedVideo(postId: number): void {
   FileSystem.deleteAsync(`${FEED_VIDEO_CACHE_DIR}${postId}.mp4`, { idempotent: true }).catch(
     () => {},
   );
+  // Empty string tells subscribers to drop local playback and use CDN.
+  cacheListeners.get(postId)?.forEach((cb) => cb(''));
 }
 
-/** Playback: local MP4 → HLS (adaptive) → remote MP4 fallback. */
+/** Playback: local cache → MP4 → HLS. expo-av is more reliable with progressive MP4. */
 export async function pickFeedVideoPlaybackUrl(
   postId: number,
   mp4Url?: string | null,
@@ -140,16 +208,16 @@ export async function pickFeedVideoPlaybackUrl(
     return cached;
   }
 
-  if (hlsUrl) {
-    prefetchVideoUrl(hlsUrl);
-    return hlsUrl;
-  }
-
   if (mp4Url) {
     if (getMediaBudgets().fullMp4Prefetch === 'active' && activeFeedPostId === postId) {
       prefetchFeedVideoMp4(postId, mp4Url);
     }
     return mp4Url;
+  }
+
+  if (hlsUrl) {
+    prefetchVideoUrl(hlsUrl);
+    return hlsUrl;
   }
 
   return '';

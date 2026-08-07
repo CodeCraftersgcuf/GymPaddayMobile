@@ -32,6 +32,8 @@ import { useFeedVideoPoolOptional } from "@/contexts/FeedVideoPoolContext";
 // import { Heart, MessageCircle, Star, Share2, MoveVertical as MoreVertical } from 'lucide-react-native';
 import { useQuery } from "@tanstack/react-query";
 import { getLikenDislikePost, createShare } from "@/utils/queries/socialMedia";
+import { removePostFromFeedIfDeleted } from '@/utils/queries/posts';
+import { clearCachedFeedVideo } from '@/utils/feedVideoCache';
 import { useLikeState, getLikeEntry } from "@/utils/likeStore";
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -40,13 +42,7 @@ import { requestMediaLibraryWritePermissions } from '@/utils/mediaLibraryPermiss
 import { Video } from "expo-av";
 import VideoDetailModal from "./VideoDetailModal";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  getCachedFeedVideoUri,
-  pickFeedVideoPlaybackUrl,
-} from '@/utils/feedVideoCache';
-
-
-
+import { usePostVideoPlayback } from '@/utils/usePostVideoPlayback';
 const { width, height } = Dimensions.get("window");
 
 interface PostItemProps {
@@ -59,6 +55,7 @@ interface PostItemProps {
     timestamp: string;
     imagesUrl: string[];
     videoUrl?: string;
+    videoHlsUrl?: string | null;
     videoMp4Url?: string | null;
     videoThumbnailUrl?: string | null;
     view_count: number;
@@ -93,6 +90,13 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   // neighbors. Far posts show a lightweight thumbnail so we never exhaust the
   // device's video decoders — and the next post is always pre-buffered.
   const shouldLoadVideo = !isFeedManaged || isActive || Boolean(preloadVideo);
+  const { playbackUri, onPlaybackStarted, isLocalPlayback } = usePostVideoPlayback(
+    post.id,
+    post.videoMp4Url,
+    post.videoHlsUrl,
+    shouldLoadVideo,
+  );
+  const pinnedPlaybackRef = useRef(false);
   const feedVideo = useFeedVideoOptional();
   const feedPool = useFeedVideoPoolOptional();
   const openDetailRef = useRef(feedPool?.openVideoDetail);
@@ -112,6 +116,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [isBuffering, setIsBuffering] = useState<Record<number, boolean>>({});
   const [videoAspectRatio, setVideoAspectRatio] = useState<number | undefined>(undefined);
   const [showVideoControls, setShowVideoControls] = useState<Record<number, boolean>>({});
+  const [videoPlaybackFailed, setVideoPlaybackFailed] = useState<Record<number, boolean>>({});
   const [videoLoaded, setVideoLoaded] = useState<Record<number, boolean>>({});
   const controlsTimeoutRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({});
 
@@ -127,7 +132,6 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSeeMore, setShowSeeMore] = useState(false);
   const [videoFallbackUrls, setVideoFallbackUrls] = useState<Record<number, string>>({});
-  const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const videoRefs = useRef<Record<number, Video>>({});
   const [readyForDisplay, setReadyForDisplay] = useState(false);
   const [showBufferSpinner, setShowBufferSpinner] = useState(false);
@@ -212,36 +216,20 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
 
     setImagesData(mediaArray);
     setVideoFallbackUrls({});
-    setPlaybackUri(null);
+    setVideoPlaybackFailed({});
     setVideoLoaded({});
     setIsBuffering({});
     setIsPlaying({});
     setReadyForDisplay(false);
     setShowBufferSpinner(false);
-  }, [post]);
+    pinnedPlaybackRef.current = false;
+  }, [post.id, post.videoUrl, post.videoMp4Url, post.videoHlsUrl]);
 
-  useEffect(() => {
-    if (!shouldLoadVideo || (!post.videoUrl && !post.videoMp4Url)) {
-      return;
-    }
-
-    const cached = getCachedFeedVideoUri(post.id);
-    if (cached) {
-      setPlaybackUri(cached);
-      return;
-    }
-
-    let cancelled = false;
-    pickFeedVideoPlaybackUrl(post.id, post.videoMp4Url, post.videoUrl).then((uri) => {
-      if (!cancelled && uri) {
-        setPlaybackUri(uri);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldLoadVideo, post.id, post.videoMp4Url, post.videoUrl]);
+  const markPlaybackStarted = React.useCallback(() => {
+    if (pinnedPlaybackRef.current) return;
+    pinnedPlaybackRef.current = true;
+    onPlaybackStarted();
+  }, [onPlaybackStarted]);
 
   // When the post leaves the preload window the <Video> unmounts and its
   // decoded frame is released. Reset the "ready" flags so that, on remount
@@ -607,11 +595,15 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
               // far->near transition so there's never a black gap.
               const showVideoPoster =
                 Boolean(post.videoThumbnailUrl) &&
-                (!shouldLoadVideo || !videoLoaded[index] || !readyForDisplay);
+                !isLocalPlayback &&
+                (videoPlaybackFailed[index] ||
+                  !shouldLoadVideo ||
+                  !videoLoaded[index] ||
+                  !readyForDisplay);
 
               return isVideo ? (
                 <View style={styles.carouselVideoWrapper}>
-                  {shouldLoadVideo && (
+                  {shouldLoadVideo && !videoPlaybackFailed[index] && (
                   <Video
                     ref={(ref) => {
                       if (ref) {
@@ -640,6 +632,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                     onReadyForDisplay={() => {
                       setReadyForDisplay(true);
                       setShowBufferSpinner(false);
+                      markPlaybackStarted();
                       if (bufferSpinnerTimer.current) {
                         clearTimeout(bufferSpinnerTimer.current);
                         bufferSpinnerTimer.current = null;
@@ -652,6 +645,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       setVideoLoaded((prev) =>
                         prev[index] === true ? prev : { ...prev, [index]: true }
                       );
+                      markPlaybackStarted();
                       if (data.naturalSize) {
                         const ratio = data.naturalSize.width / data.naturalSize.height;
                         setVideoAspectRatio(ratio);
@@ -661,33 +655,85 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                       }
                     }}
                     onError={(error) => {
-                      console.error('Video playback error:', error);
                       const current = videoFallbackUrls[index] || videoSource;
-                      if (
-                        post.videoMp4Url &&
-                        current !== post.videoMp4Url &&
-                        !current?.startsWith('file://')
-                      ) {
+                      const errText =
+                        typeof error === 'string'
+                          ? error
+                          : (error as any)?.error
+                            || (error as any)?.message
+                            || JSON.stringify(error);
+
+                      // Corrupt / incomplete local cache — delete it and stream from CDN.
+                      if (current?.startsWith('file://')) {
+                        clearCachedFeedVideo(post.id);
+                        const remote =
+                          post.videoMp4Url || post.videoUrl || post.videoHlsUrl || null;
+                        if (remote) {
+                          if (__DEV__) {
+                            console.warn('Bad local video cache, falling back to CDN', {
+                              postId: post.id,
+                              uri: current,
+                              remote,
+                              error: errText,
+                            });
+                          }
+                          setVideoFallbackUrls((prev) => ({
+                            ...prev,
+                            [index]: remote,
+                          }));
+                          setVideoPlaybackFailed((prev) => {
+                            if (!prev[index]) return prev;
+                            const next = { ...prev };
+                            delete next[index];
+                            return next;
+                          });
+                          return;
+                        }
+                      }
+
+                      if (post.videoMp4Url && current !== post.videoMp4Url) {
+                        if (__DEV__) {
+                          console.warn('Video playback failed, falling back to MP4', {
+                            postId: post.id,
+                            uri: current,
+                            error: errText,
+                          });
+                        }
                         setVideoFallbackUrls((prev) => ({
                           ...prev,
                           [index]: post.videoMp4Url!,
                         }));
                         return;
                       }
-                      if (
-                        post.videoUrl &&
-                        current !== post.videoUrl
-                      ) {
+
+                      if (post.videoHlsUrl && current !== post.videoHlsUrl) {
+                        if (__DEV__) {
+                          console.warn('Video MP4 failed, falling back to HLS', {
+                            postId: post.id,
+                            uri: current,
+                            error: errText,
+                          });
+                        }
                         setVideoFallbackUrls((prev) => ({
                           ...prev,
-                          [index]: post.videoUrl!,
+                          [index]: post.videoHlsUrl!,
                         }));
                         return;
                       }
+
+                      setVideoPlaybackFailed((prev) => ({ ...prev, [index]: true }));
                       setIsBuffering((prev) =>
                         prev[index] === false ? prev : { ...prev, [index]: false }
                       );
                       setShowBufferSpinner(false);
+                      removePostFromFeedIfDeleted(post.id).catch(() => {});
+                      if (__DEV__) {
+                        console.warn('Video playback failed for post', {
+                          postId: post.id,
+                          uri: current,
+                          error: errText,
+                        });
+                      }
                     }}
                     onPlaybackStatusUpdate={(status) => {
                       if (!status.isLoaded || !('isPlaying' in status)) return;
@@ -703,6 +749,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
                         setVideoLoaded((prev) =>
                           prev[index] === true ? prev : { ...prev, [index]: true }
                         );
+                        markPlaybackStarted();
                       }
                       if (status.isBuffering && !playing && !readyForDisplay) {
                         if (!bufferSpinnerTimer.current) {
@@ -829,7 +876,7 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
               style={{ width: 25, height: 25 }}
             />
             <ThemeText style={styles.actionText}>{likesCount}</ThemeText>
-            {/* {likeLoading && <ActivityIndicator size="small" color="#ff4444" style={{ marginLeft: 8 }} />} */}
+            {/* {likeLoading && <ActivityIndicator size="small" color="#C61F3A" style={{ marginLeft: 8 }} />} */}
           </TouchableOpacity>
 
           {showComment && <TouchableOpacity style={styles.actionItem} onPress={handlePress}>
@@ -950,7 +997,9 @@ const PostItem: React.FC<PostItemProps> = ({ post, onCommentPress, handleMenu, s
       {!isFeedManaged && post.videoUrl ? (
         <VideoDetailModal
           visible={videoDetailOpen}
-          videoUrl={post.videoUrl}
+          postId={post.id}
+          videoUrl={post.videoUrl ?? null}
+          fallbackHlsUrl={post.videoHlsUrl}
           thumbnailUrl={post.videoThumbnailUrl}
           fallbackMp4Url={post.videoMp4Url}
           isMuted={isMuted}
@@ -1064,11 +1113,16 @@ const styles = StyleSheet.create({
 
   playButton: {
     position: 'absolute',
-    top: '45%',
-    left: '40%',
+    top: '50%',
+    left: '50%',
+    marginTop: -30,
+    marginLeft: -30,
+    width: 60,
+    height: 60,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 30,
-    padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 20,
   },
   videoPosterOverlay: {
@@ -1082,9 +1136,9 @@ const styles = StyleSheet.create({
   },
 
   playIcon: {
-    width: 30,
-    height: 30,
-    tintColor: '#940304',
+    width: 28,
+    height: 28,
+    tintColor: '#FFFFFF',
   },
   profileImage: {
     width: 40,
@@ -1216,7 +1270,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   activeDot: {
-    backgroundColor: "#940304",
+    backgroundColor: "#C61F3A",
   },
   closeButton: {
     position: "absolute",

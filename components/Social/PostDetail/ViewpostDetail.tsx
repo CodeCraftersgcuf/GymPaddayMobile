@@ -62,7 +62,7 @@ const handleFollow = () => {
         if (onHide) {
             onHide();
         }
-        // Close the bottom sheet after hiding
+        showToast('Post hidden from your feed.');
         if (onClose) {
             onClose();
         }
@@ -73,10 +73,9 @@ const handleFollow = () => {
     };
 
     const confirmReport = (reason: string) => {
-        console.log("Reported for:", reason);
         if (onReport) onReport();
-        showToast("Your report has been noted.");
-        if (onHide) onHide(); // reuse hide logic
+        showToast(`Report submitted (${reason}). Thank you.`);
+        if (onHide) onHide();
         if (onClose) onClose();
         setReportModalVisible(false);
     };

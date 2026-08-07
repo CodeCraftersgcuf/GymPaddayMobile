@@ -15,12 +15,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import { images } from '@/constants';
+import { usePostVideoPlayback } from '@/utils/usePostVideoPlayback';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export type VideoDetailModalProps = {
   visible: boolean;
+  postId?: number;
   videoUrl: string | null;
+  fallbackHlsUrl?: string | null;
   thumbnailUrl?: string | null;
   fallbackMp4Url?: string | null;
   isMuted: boolean;
@@ -30,7 +33,9 @@ export type VideoDetailModalProps = {
 
 export default function VideoDetailModal({
   visible,
+  postId,
   videoUrl,
+  fallbackHlsUrl,
   thumbnailUrl,
   fallbackMp4Url,
   isMuted,
@@ -41,18 +46,25 @@ export default function VideoDetailModal({
   const [ready, setReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const pinnedRef = useRef(false);
+
+  const { playbackUri, onPlaybackStarted, isLocalPlayback } = usePostVideoPlayback(
+    postId,
+    fallbackMp4Url,
+    fallbackHlsUrl,
+    visible && Boolean(postId || videoUrl || fallbackMp4Url || fallbackHlsUrl),
+  );
+
+  const sourceUrl = playbackUri || fallbackHlsUrl || fallbackMp4Url || videoUrl;
 
   useEffect(() => {
     if (!visible) {
       setReady(false);
       setIsPlaying(true);
-      setSourceUrl(null);
+      pinnedRef.current = false;
       videoRef.current?.pauseAsync().catch(() => {});
-      return;
     }
-    setSourceUrl(videoUrl);
-  }, [visible, videoUrl]);
+  }, [visible]);
 
   useEffect(() => {
     if (!visible || !sourceUrl) return;
@@ -65,7 +77,7 @@ export default function VideoDetailModal({
         setIsPlaying(true);
       } catch {
         if (fallbackMp4Url && sourceUrl !== fallbackMp4Url) {
-          setSourceUrl(fallbackMp4Url);
+          await ref.loadAsync({ uri: fallbackMp4Url }, { shouldPlay: true, isMuted }, false).catch(() => {});
         }
       }
     })();
@@ -99,7 +111,14 @@ export default function VideoDetailModal({
     if ('isPlaying' in status) {
       setIsPlaying(status.isPlaying);
     }
-  }, []);
+    if (status.isPlaying && (status.positionMillis ?? 0) > 0) {
+      setReady((prev) => (prev ? prev : true));
+      if (!pinnedRef.current) {
+        pinnedRef.current = true;
+        onPlaybackStarted();
+      }
+    }
+  }, [onPlaybackStarted]);
 
   if (!visible || !videoUrl) {
     return null;
@@ -114,7 +133,7 @@ export default function VideoDetailModal({
         </TouchableOpacity>
 
         <Pressable style={styles.videoStage} onPress={togglePlayPause}>
-          {thumbnailUrl && !ready ? (
+          {thumbnailUrl && !ready && !isLocalPlayback ? (
             <ExpoImage
               source={{ uri: thumbnailUrl }}
               style={styles.poster}
@@ -131,16 +150,24 @@ export default function VideoDetailModal({
             isMuted={isMuted}
             shouldPlay={isPlaying}
             useNativeControls={false}
-            onReadyForDisplay={() => setReady(true)}
+            onReadyForDisplay={() => {
+              setReady(true);
+              if (!pinnedRef.current) {
+                pinnedRef.current = true;
+                onPlaybackStarted();
+              }
+            }}
             onPlaybackStatusUpdate={onStatus}
             onError={() => {
               if (fallbackMp4Url && sourceUrl !== fallbackMp4Url) {
-                setSourceUrl(fallbackMp4Url);
+                videoRef.current
+                  ?.loadAsync({ uri: fallbackMp4Url }, { shouldPlay: true, isMuted }, false)
+                  .catch(() => {});
               }
             }}
           />
 
-          {isBuffering && !ready && (
+          {isBuffering && !ready && !isLocalPlayback && (
             <ActivityIndicator size="large" color="#fff" style={styles.spinner} />
           )}
 
@@ -193,13 +220,20 @@ const styles = StyleSheet.create({
   },
   playHint: {
     position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -34,
+    marginLeft: -34,
+    width: 68,
+    height: 68,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 36,
-    padding: 16,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playIcon: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     tintColor: '#fff',
   },
   muteBtn: {

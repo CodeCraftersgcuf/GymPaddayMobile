@@ -22,11 +22,12 @@ async function fetchMonetizationHiddenFromApi(): Promise<boolean> {
   try {
     const response = await fetch(IOS_STATUS_CHECK_URL, { method: 'GET' });
     const payload = await response.json();
-    const enabled = payload?.status === true;
+    // For now, always enable wallet/monetization on iOS (ignore API flag).
+    const enabled = true; // payload?.status === true;
     return !enabled;
   } catch (error) {
     console.warn('iOS status-check failed:', error);
-    return true;
+    return false;
   }
 }
 
@@ -44,8 +45,8 @@ export async function getIosMonetizationHidden(): Promise<boolean> {
 
 export function useIosMonetizationHidden() {
   const isIos = Platform.OS === 'ios';
-  const [loading, setLoading] = useState(isIos);
-  const [hidden, setHidden] = useState(isIos);
+  const [loading, setLoading] = useState(false);
+  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
     let cancelled = false;

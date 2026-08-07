@@ -10,12 +10,14 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { DEFAULT_PROFILE_IMAGE } from '@/constants/profilePlaceholder';
+import { LIVE_STREAM_API_BASE } from '@/utils/liveStreamConstants';
 
 const { width, height } = Dimensions.get('window');
 
 interface Props {
-  postImageUrl: string;
-  profilePictureUrl: string;
+  postImageUrl?: string | null;
+  profilePictureUrl?: string | null;
   title: string;
   userName: string;
   viewers?: number;
@@ -44,7 +46,7 @@ const LiveCard: React.FC<Props> = ({
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) throw new Error('No auth token');
 
-      const res = await fetch(`https://api.gympaddy.com/api/user/live-streams/${id}/join`, {
+      const res = await fetch(`${LIVE_STREAM_API_BASE}/live-streams/${id}/join`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -77,9 +79,15 @@ const LiveCard: React.FC<Props> = ({
   return (
     <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
       <View style={styles.card}>
-        <Image source={{ uri: postImageUrl }} style={styles.image} />
+        <Image
+          source={postImageUrl ? { uri: postImageUrl } : DEFAULT_PROFILE_IMAGE}
+          style={styles.image}
+        />
         <View style={styles.overlay}>
-          <Image source={{ uri: profilePictureUrl }} style={styles.avatar} />
+          <Image
+            source={profilePictureUrl ? { uri: profilePictureUrl } : DEFAULT_PROFILE_IMAGE}
+            style={styles.avatar}
+          />
           <View style={{ marginLeft: 8 }}>
             <Text style={styles.name}>{userName}</Text>
             <Text style={styles.meta}>{viewers} Viewers</Text>
@@ -103,7 +111,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    resizeMode: 'contain',
+    resizeMode: 'cover',
   },
   overlay: {
     position: 'absolute',
@@ -120,6 +128,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: '#333',
   },
   name: {
     color: '#fff',

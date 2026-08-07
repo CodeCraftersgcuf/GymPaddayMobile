@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { WithdrawData } from '@/app/withdraw';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { GP_RATE, WithdrawData } from '@/app/withdraw';
 import ThemedView from '@/components/ThemedView';
 import { useTheme } from '@/contexts/themeContext';
 import ThemeText from '@/components/ThemedText';
@@ -8,20 +8,20 @@ import ThemeText from '@/components/ThemedText';
 interface WithdrawSummaryProps {
   data: WithdrawData;
   onProceed: () => void;
+  isLoading?: boolean;
 }
 
-export default function WithdrawSummary({ data, onProceed }: WithdrawSummaryProps) {
+export default function WithdrawSummary({ data, onProceed, isLoading = false }: WithdrawSummaryProps) {
     const {dark} = useTheme();
   const amount = Number(data.amount);
-  const commission = 30; // N30 commission
-  const totalDeduction = amount + commission;
+  const gpDeducted = amount / GP_RATE;
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.totalAmount}>-{totalDeduction.toLocaleString()}</Text>
+        <Text style={styles.totalAmount}>-{gpDeducted.toFixed(2)}GP</Text>
         
-        <ThemedView style={[styles.detailsContainer,{borderColor: dark ? '#000' : '#fff',overflow:'hidden'}]}>
+        <ThemedView style={[styles.detailsContainer,{borderColor: dark ? '#3A3A3A' : '#D9D9D9',overflow:'hidden'}]}>
           <ThemedView style={[styles.detailRow,{borderBottomColor:dark ? '#202020': '#f0f0f0' }]}>
             <ThemeText style={styles.detailLabel}>Bank Name</ThemeText>
             <Text style={styles.detailValue}>{data.bankName}</Text>
@@ -38,19 +38,32 @@ export default function WithdrawSummary({ data, onProceed }: WithdrawSummaryProp
           </ThemedView>
           
           <ThemedView style={[styles.detailRow,{borderBottomColor:dark ? '#202020': '#f0f0f0' }]}>
-            <ThemeText style={styles.detailLabel}>Amount</ThemeText>
+            <ThemeText style={styles.detailLabel}>Payout</ThemeText>
             <Text style={styles.detailValue}>N{amount.toLocaleString()}</Text>
           </ThemedView>
           
           <ThemedView style={[styles.detailRow,{borderBottomColor:dark ? '#202020': '#f0f0f0' }]}>
-            <ThemeText style={styles.detailLabel}>Commission</ThemeText>
-            <Text style={styles.detailValue}>N{commission}</Text>
+            <ThemeText style={styles.detailLabel}>Wallet Deduction</ThemeText>
+            <Text style={styles.detailValue}>{gpDeducted.toFixed(2)}GP</Text>
           </ThemedView>
         </ThemedView>
+
+        <Text style={styles.noticeText}>
+          Your GP is reserved as soon as you submit. Flutterwave sends the NGN payout
+          automatically, and you will be notified when the bank transfer completes.
+        </Text>
       </View>
 
-      <TouchableOpacity style={styles.proceedButton} onPress={onProceed}>
-        <Text style={styles.proceedButtonText}>Proceed</Text>
+      <TouchableOpacity
+        style={[styles.proceedButton, isLoading && styles.proceedButtonDisabled]}
+        onPress={onProceed}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.proceedButtonText}>Submit Request</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -68,7 +81,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 48,
     fontWeight: '700',
-    color: '#940304',
+    color: '#C61F3A',
     textAlign: 'center',
     marginBottom: 40,
     marginTop: 20,
@@ -101,12 +114,22 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 16,
   },
+  noticeText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#888',
+    marginTop: 16,
+    textAlign: 'center',
+  },
   proceedButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 20,
+  },
+  proceedButtonDisabled: {
+    opacity: 0.6,
   },
   proceedButtonText: {
     color: '#fff',

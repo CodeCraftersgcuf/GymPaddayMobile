@@ -1,16 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Notification } from '../../types';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/themeContext';
 import { format } from 'date-fns';
+import type { AppNotification } from '@/utils/notificationNavigation';
 
 interface NotificationItemProps {
-  notification: Notification;
-  onPress?: (notification: Notification) => void;
+  notification: AppNotification;
+  interactive?: boolean;
+  onPress?: (notification: AppNotification) => void;
 }
 
-export default function NotificationItem({ notification, onPress }: NotificationItemProps) {
+export default function NotificationItem({ notification, interactive = false, onPress }: NotificationItemProps) {
   const { dark } = useTheme();
+  const isRead = Boolean(notification.is_read ?? notification.isRead);
 
   const handlePress = () => {
     onPress?.(notification);
@@ -21,33 +24,31 @@ export default function NotificationItem({ notification, onPress }: Notification
       style={[
         styles.container,
         dark ? styles.containerDark : styles.containerLight,
+        interactive && styles.interactive,
       ]}
       onPress={handlePress}
-      activeOpacity={0.7}
+      activeOpacity={interactive ? 0.7 : 1}
+      disabled={!onPress}
     >
       <View style={styles.content}>
-        <Text style={[
-          styles.message,
-          dark ? styles.messageDark : styles.messageLight
-        ]}>
-          {notification.title}
-        </Text>
-        <Text style={[
-          styles.message,
-          dark ? styles.messageDark : styles.messageLight,{fontSize:12}
-        ]}>
-          {notification.description}
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, dark ? styles.messageDark : styles.messageLight]}>
+            {notification.title}
+          </Text>
+          {interactive ? (
+            <Ionicons name="chevron-forward" size={16} color={dark ? '#9CA3AF' : '#6B7280'} />
+          ) : null}
+        </View>
+        <Text style={[styles.message, dark ? styles.messageDark : styles.messageLight]}>
+          {notification.description || notification.body}
         </Text>
         <View style={styles.header}>
-          {!notification.isRead && (
-            <View style={styles.unreadIndicator} />
-          )}
-          <Text style={[
-  styles.timestamp,
-  dark ? styles.timestampDark : styles.timestampLight
-]}>
-  {format(new Date(notification.created_at), 'MMM d, yyyy · h:mm a')}
-</Text>
+          {!isRead && <View style={styles.unreadIndicator} />}
+          <Text style={[styles.timestamp, dark ? styles.timestampDark : styles.timestampLight]}>
+            {notification.created_at
+              ? format(new Date(notification.created_at), 'MMM d, yyyy · h:mm a')
+              : ''}
+          </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -68,20 +69,35 @@ const styles = StyleSheet.create({
   containerDark: {
     backgroundColor: '#181818',
   },
+  interactive: {
+    borderWidth: 1,
+    borderColor: 'rgba(198, 31, 58, 0.12)',
+  },
   content: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
     flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: 10,
-    marginBottom:5,
+    marginBottom: 5,
   },
   unreadIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     marginRight: 12,
   },
   timestamp: {
@@ -96,9 +112,10 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   message: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 22,
     fontWeight: '400',
+    marginTop: 4,
   },
   messageLight: {
     color: '#111827',

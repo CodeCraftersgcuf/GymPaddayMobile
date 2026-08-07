@@ -12,8 +12,7 @@ import {
   Linking,
 } from "react-native";
 import { useTheme } from "@/contexts/themeContext";
-import { COLORS, images } from "@/constants";
-import { Image } from "expo-image";
+import { COLORS } from "@/constants";
 import { validationSignInSchema } from "@/constants/validation";
 import { Formik } from "formik";
 import { Link, useRouter } from "expo-router";
@@ -21,6 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import FloatingLabelInput from "@/components/login/FloatingLabelInput";
 import ThemeText from "@/components/ThemedText";
 import ThemedView from "@/components/ThemedView";
+import BrandLogo from "@/components/BrandLogo";
 
 // ✅ Import toast & mutation
 import Toast from "react-native-toast-message";
@@ -31,6 +31,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { prunePendingPostsExceptUser } from '@/utils/pendingPosts';
+import { setupPushNotifications } from '@/utils/notificationService';
 
 const Login = () => {const [checkingAuth, setCheckingAuth] = React.useState(true);
 
@@ -77,11 +79,16 @@ useEffect(() => {
           await SecureStore.setItemAsync("user_data", JSON.stringify(data.user));
           await SecureStore.setItemAsync("user_id", data.user.id.toString());
           await SecureStore.setItemAsync("username", data.user.username || "");
+          await prunePendingPostsExceptUser(Number(data.user.id));
           
           // ✅ Mark that onboarding was completed
           await AsyncStorage.setItem("hasSeenOnboarding", "true");
           
           console.log("✅ User data and token saved successfully");
+
+          setupPushNotifications(data.access_token).catch((error) => {
+            console.warn('Push notification setup failed after login:', error);
+          });
         } catch (storageError) {
           console.error("❌ Failed to save auth data:", storageError);
           Toast.show({
@@ -146,7 +153,7 @@ if (checkingAuth) {
           </TouchableOpacity>
         )}
         <LinearGradient
-          colors={["#940304", "#840000"]}
+          colors={["#C61F3A", "#9B1830"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ height: 150 }}
@@ -167,18 +174,17 @@ if (checkingAuth) {
             darkColor="transparent"
             style={{
               alignSelf: "center",
-              backgroundColor: "white",
+              backgroundColor: dark ? "transparent" : "white",
               transform: [{ translateY: -60 }],
               borderRadius: 10,
-              elevation: 5,
+              elevation: dark ? 0 : 5,
               padding: 10,
             }}
           >
-            <Image
-              source={images.logo}
+            <BrandLogo
               style={{
-                width: 70,
-                height: 70,
+                width: 150,
+                height: 130,
               }}
             />
           </ThemedView>
@@ -260,7 +266,7 @@ if (checkingAuth) {
                     <Pressable
                       onPress={() => handleSubmit()}
                       style={{
-                        backgroundColor: "#940304",
+                        backgroundColor: "#C61F3A",
                         paddingVertical: 15,
                         borderRadius: 10,
                       }}
@@ -333,13 +339,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
   forgotPassword: {
-    color: "#940304",
+    color: "#C61F3A",
     textAlign: "right",
     marginBottom: 16,
     fontSize: 14,
   },
   registerText: {
-    color: "#940304",
+    color: "#C61F3A",
     textAlign: "center",
     fontSize: 14,
     marginTop: 16,

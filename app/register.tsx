@@ -25,6 +25,7 @@ import { images } from "@/constants";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
+import BrandLogo from "@/components/BrandLogo";
 
 //Code Related to the integration
 import { useMutation } from "@tanstack/react-query";
@@ -160,15 +161,15 @@ export default function Register() {
     },
     logoContainer: {
       alignSelf: "center",
-      backgroundColor: "white",
+      backgroundColor: themedark ? "transparent" : "white",
       transform: [{ translateY: -60 }],
       borderRadius: 10,
-      elevation: 5,
+      elevation: themedark ? 0 : 5,
       marginBottom: -40,
       shadowColor: themedark ? 'white' : 'black',
       padding: 10,
     },
-    logo: { width: 70, height: 70 },
+    logo: { width: 150, height: 130 },
     formContainer: { transform: [{ translateY: 0 }] },
     title: {
       fontSize: 24,
@@ -183,7 +184,7 @@ export default function Register() {
     },
     form: { marginTop: 20, paddingHorizontal: 15 },
     registerButton: {
-      backgroundColor: "#940304",
+      backgroundColor: "#C61F3A",
       paddingVertical: 15,
       borderRadius: 10,
       marginTop: 16,
@@ -195,7 +196,7 @@ export default function Register() {
       fontSize: 16,
     },
     loginText: {
-      color: "#940304",
+      color: "#C61F3A",
       textAlign: "center",
       fontSize: 14,
       marginTop: 16,
@@ -209,7 +210,7 @@ export default function Register() {
       paddingHorizontal: 30,
       fontSize: 12,
     },
-    linkText: { color: "#940304" },
+    linkText: { color: "#C61F3A" },
     imagePickerContainer: {
       position: 'relative',
       alignSelf: 'center',
@@ -227,7 +228,7 @@ export default function Register() {
       width: 22,
       height: 22,
       borderRadius: 15,
-      backgroundColor: '#940304',
+      backgroundColor: '#C61F3A',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -242,7 +243,7 @@ export default function Register() {
       marginTop: 5,
     },
     errorText: {
-      color: '#940304',
+      color: '#C61F3A',
       fontSize: 12,
       textAlign: 'center',
       marginTop: 2,
@@ -269,7 +270,7 @@ export default function Register() {
       shadowRadius: 4,
     },
     selectedCard: {
-      borderColor: "#940304",
+      borderColor: "#C61F3A",
       borderWidth: 2,
     },
     genderImage: {
@@ -280,7 +281,7 @@ export default function Register() {
     },
     genderTextWrapper: {
       width: "100%",
-      backgroundColor: "#940304",
+      backgroundColor: "#C61F3A",
       paddingVertical: 10,
       alignItems: "center",
       borderBottomLeftRadius: 20,
@@ -340,7 +341,7 @@ export default function Register() {
           )}
           <ThemedView>
             <LinearGradient
-              colors={["#940304", "#840000"]}
+              colors={["#C61F3A", "#9B1830"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.headerGradient}
@@ -348,7 +349,7 @@ export default function Register() {
 
             <ThemedView style={styles.cardContainer}>
               <ThemedView style={styles.logoContainer}>
-                <Image source={images.logo} style={styles.logo} />
+                <BrandLogo style={styles.logo} />
               </ThemedView>
 
               {/* Required Profile Image Section */}

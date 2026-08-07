@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryClient } from '@/utils/queryClient';
-import { flushQueryCache, queryPersistOptions } from '@/utils/queryPersistence';
+import { flushQueryCache, queryPersistOptions, sanitizePersistedFeedQueries } from '@/utils/queryPersistence';
 import { warmStoryCacheOnDisk } from '@/utils/storyPrefetch';
 
 interface Props {
@@ -26,6 +26,7 @@ export default function AppQueryProvider({ children, onHydrated }: Props) {
       client={queryClient}
       persistOptions={queryPersistOptions}
       onSuccess={() => {
+        sanitizePersistedFeedQueries();
         warmStoryCacheOnDisk().catch(() => {});
         onHydrated?.();
       }}

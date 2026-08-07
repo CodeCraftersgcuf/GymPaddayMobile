@@ -1,215 +1,326 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
   ActivityIndicator,
   Platform,
   PermissionsAndroid,
+  StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   createAgoraRtcEngine,
   ChannelProfileType,
   ClientRoleType,
   RtcSurfaceView,
+  type IRtcEngine,
 } from 'react-native-agora';
-
-const APP_ID = '594b734537da44b7994c6a0194c25ffb'; // your actual app ID
+import { AGORA_LIVE_APP_ID } from '@/utils/liveStreamWebHtml';
 
 interface Props {
-  token?: string; // use empty string if you are not using tokens
+  token: string;
   channelName: string;
   uid: number;
   role: 'host' | 'audience';
+  showControls?: boolean;
 }
 
-export default function LiveStreamingPlayer({ channelName, uid, role }: Props) {
-  const engineRef = useRef<any>(null);
+export type LiveStreamingPlayerHandle = {
+  toggleMic: () => void;
+  toggleCamera: () => void;
+};
 
+const LiveStreamingPlayer = forwardRef<LiveStreamingPlayerHandle, Props>(function LiveStreamingPlayer(
+  { token, channelName, uid, role, showControls = true },
+  ref,
+) {
+  const engineRef = useRef<IRtcEngine | null>(null);
   const [joined, setJoined] = useState(false);
-  const [localUid, setLocalUid] = useState<number | null>(null);
   const [remoteUid, setRemoteUid] = useState<number | null>(null);
-  const [cameraWorking, setCameraWorking] = useState<'pending' | 'ok' | 'fail'>('pending');
-  const [previewActive, setPreviewActive] = useState(false);
-  const [status, setStatus] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('Starting camera…');
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
 
-  const log = (...args: any[]) => {
-    console.log('[AGORA]', ...args);
-    setStatus((prev) => [...prev.slice(-15), args.map(String).join(' ')]);
-  };
+  useImperativeHandle(ref, () => ({
+    toggleMic: () => {
+      const engine = engineRef.current;
+      if (!engine || role !== 'host') return;
+      setMicOn((prev) => {
+        const next = !prev;
+        try {
+          engine.muteLocalAudioStream(!next);
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    toggleCamera: () => {
+      const engine = engineRef.current;
+      if (!engine || role !== 'host') return;
+      setCamOn((prev) => {
+        const next = !prev;
+        try {
+          engine.muteLocalVideoStream(!next);
+          engine.enableLocalVideo(next);
+          if (next) engine.startPreview();
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+  }));
 
   useEffect(() => {
+    let cancelled = false;
+
     const init = async () => {
-      if (Platform.OS === 'android') {
-        // Check existing permission state first so we don't spam the system prompt.
-        const hasCamera = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.CAMERA
-        );
-        const hasAudio = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
-        );
-
-        let cameraGranted = hasCamera;
-        let audioGranted = hasAudio;
-
-        if (!hasCamera || !hasAudio) {
+      try {
+        if (Platform.OS === 'android') {
           const granted = await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
             PermissionsAndroid.PERMISSIONS.CAMERA,
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
           ]);
-          cameraGranted =
-            granted[PermissionsAndroid.PERMISSIONS.CAMERA] ===
-            PermissionsAndroid.RESULTS.GRANTED;
-          audioGranted =
+          const camOk =
+            granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
+          const micOk =
             granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] ===
             PermissionsAndroid.RESULTS.GRANTED;
+          if (!camOk || !micOk) {
+            setError('Camera and microphone permission required');
+            return;
+          }
         }
 
-        if (!cameraGranted || !audioGranted) {
-          setCameraWorking('fail');
+        if (!token) {
+          setError('Missing Agora token');
           return;
         }
-      }
 
-      const engine = createAgoraRtcEngine();
-      engineRef.current = engine;
+        const engine = createAgoraRtcEngine();
+        engineRef.current = engine;
 
-      log('Initializing Agora...');
-      engine.initialize({ appId: APP_ID });
-      engine.setChannelProfile(ChannelProfileType.ChannelProfileLiveBroadcasting);
-      engine.setClientRole(
-        role === 'host'
-          ? ClientRoleType.ClientRoleBroadcaster
-          : ClientRoleType.ClientRoleAudience
-      );
-
-      engine.enableVideo();
-      engine.enableAudio();
-      engine.setChannelProfile(ChannelProfileType.ChannelProfileLiveBroadcasting);
-      engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
-      engine.enableVideo();
-      engine.enableAudio();
-      engine.enableLocalVideo(true);
-      engine.enableLocalAudio(true);
-
-      if (role === 'host') {
-        try {
-          await engine.startPreview();
-          setCameraWorking('ok');
-          log('startPreview() success');
-
-        } catch (err) {
-          setCameraWorking('fail');
-          log('startPreview() failed:', err);
-        }
-      }
-
-      engine.addListener('onJoinChannelSuccess', (channel, actualUid, elapsed) => {
-        log('JoinChannelSuccess', JSON.stringify({ channel, actualUid, elapsed }));
-        setLocalUid(actualUid);
-        setJoined(true);
-      });
-
-      engine.addListener('onUserJoined', (uid) => {
-        log('Remote user joined:', uid);
-        setRemoteUid(uid);
-      });
-
-      engine.addListener('onUserOffline', (uid) => {
-        log('Remote user left:', uid);
-        setRemoteUid(null);
-      });
-
-      engine.addListener('onError', (err, msg) => {
-        log('[ENGINE ERROR]', err, msg);
-        setCameraWorking('fail');
-      });
-
-      engine.addListener('onWarning', (warn, msg) => {
-        log('[ENGINE WARNING]', warn, msg);
-      });
-
-      try {
-        log('Joining channel...', JSON.stringify({ channelName, uid }));
-        await engine.joinChannel(null, channelName, uid, {
-          clientRoleType:
-            role === 'host'
-              ? ClientRoleType.ClientRoleBroadcaster
-              : ClientRoleType.ClientRoleAudience,
+        engine.initialize({
+          appId: AGORA_LIVE_APP_ID,
+          channelProfile: ChannelProfileType.ChannelProfileLiveBroadcasting,
         });
-       
 
-        log('joinChannel() called.');
-      } catch (err) {
-        log('[ERROR] joinChannel failed:', err);
+        const clientRole =
+          role === 'host'
+            ? ClientRoleType.ClientRoleBroadcaster
+            : ClientRoleType.ClientRoleAudience;
+
+        engine.setClientRole(clientRole);
+        engine.enableAudio();
+        engine.setDefaultAudioRouteToSpeakerphone(true);
+        engine.setEnableSpeakerphone(true);
+
+        if (role === 'host') {
+          engine.enableLocalAudio(true);
+          engine.muteLocalAudioStream(false);
+          engine.enableVideo();
+          engine.enableLocalVideo(true);
+          engine.muteLocalVideoStream(false);
+          engine.startPreview();
+          setStatus('Joining channel…');
+        } else {
+          engine.enableVideo();
+          engine.enableAudio();
+          setStatus('Waiting for host…');
+        }
+
+        engine.registerEventHandler({
+          onJoinChannelSuccess: () => {
+            if (cancelled) return;
+            setJoined(true);
+            setStatus('');
+            if (role === 'host') {
+              try {
+                engine.muteLocalAudioStream(false);
+                engine.muteLocalVideoStream(false);
+              } catch {
+                /* ignore */
+              }
+            }
+          },
+          onUserJoined: (remote) => {
+            if (cancelled) return;
+            setRemoteUid(remote);
+            try {
+              engine.muteRemoteVideoStream(remote, false);
+              engine.muteRemoteAudioStream(remote, false);
+            } catch {
+              /* ignore */
+            }
+          },
+          onUserOffline: () => {
+            if (cancelled) return;
+            setRemoteUid(null);
+          },
+          onError: (errCode) => {
+            if (cancelled) return;
+            console.warn('[AGORA LIVE] error', errCode);
+            setError(`Agora error ${errCode}`);
+          },
+        });
+
+        engine.joinChannel({
+          token,
+          channelId: channelName,
+          uid,
+          options: {
+            clientRoleType: clientRole,
+            publishMicrophoneTrack: role === 'host',
+            publishCameraTrack: role === 'host',
+            autoSubscribeAudio: true,
+            autoSubscribeVideo: true,
+          },
+        });
+      } catch (err: any) {
+        if (cancelled) return;
+        console.warn('[AGORA LIVE] init failed', err);
+        setError(err?.message || 'Failed to start live camera');
       }
     };
-    
 
     init();
 
     return () => {
-      if (engineRef.current) {
-        log('Cleaning up Agora...');
-        engineRef.current.leaveChannel();
-        engineRef.current.release();
-        engineRef.current = null;
+      cancelled = true;
+      const engine = engineRef.current;
+      engineRef.current = null;
+      if (engine) {
+        try {
+          engine.stopPreview();
+          engine.leaveChannel();
+          engine.release();
+        } catch {
+          /* ignore */
+        }
       }
     };
-  }, [channelName, uid, role]);
+  }, [token, channelName, uid, role]);
+
+  const toggleMic = () => {
+    const engine = engineRef.current;
+    if (!engine || role !== 'host') return;
+    const next = !micOn;
+    try {
+      engine.muteLocalAudioStream(!next);
+      setMicOn(next);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const toggleCam = () => {
+    const engine = engineRef.current;
+    if (!engine || role !== 'host') return;
+    const next = !camOn;
+    try {
+      engine.muteLocalVideoStream(!next);
+      engine.enableLocalVideo(next);
+      if (next) {
+        engine.startPreview();
+      }
+      setCamOn(next);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   if (!joined) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="tomato" />
-        <Text style={{ color: '#fff', textAlign: 'center', margin: 10 }}>Joining channel...</Text>
-        <StatusConsole status={status} />
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#C61F3A" />
+        <Text style={styles.statusText}>{status}</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <Text style={{ color: '#fff', textAlign: 'center', margin: 8 }}>
-        You are a {role === 'host' ? 'Host' : 'Audience'}
-      </Text>
+    <View style={styles.flex}>
+      {role === 'host' ? (
+        camOn ? (
+          <RtcSurfaceView canvas={{ uid: 0, renderMode: 1 }} style={styles.flex} />
+        ) : (
+          <View style={styles.center}>
+            <Ionicons name="videocam-off" size={48} color="#888" />
+            <Text style={styles.statusText}>Camera off</Text>
+          </View>
+        )
+      ) : remoteUid != null ? (
+        <RtcSurfaceView canvas={{ uid: remoteUid, renderMode: 1 }} style={styles.flex} />
+      ) : (
+        <View style={styles.center}>
+          <Text style={styles.statusText}>Waiting for host video…</Text>
+        </View>
+      )}
 
-      <View style={{ flex: 1 }}>
-        {/* Host: Show their own camera */}
-        {role === 'host' && localUid !== null && (
-          <RtcSurfaceView
-            canvas={{ uid: 0, renderMode: 1 }}
-            style={{ flex: 1, backgroundColor: cameraWorking === 'ok' ? '#000' : '#600' }}
-            onLayout={() => {
-              if (!previewActive) {
-                setPreviewActive(true);
-                log('✅ Camera preview rendered (RtcSurfaceView onLayout, localUid=' + localUid + ').');
-              }
-            }}
-          />
-        )}
-
-        {/* Audience: Show host video */}
-        {role === 'audience' && remoteUid !== null && (
-          <RtcSurfaceView
-            canvas={{ uid: remoteUid, renderMode: 1 }}
-            style={{ flex: 1, backgroundColor: '#222' }}
-          />
-        )}
-      </View>
-
-      <StatusConsole status={status} />
+      {role === 'host' && showControls ? (
+        <View style={styles.controls}>
+          <TouchableOpacity
+            style={[styles.controlBtn, !micOn && styles.controlBtnOff]}
+            onPress={toggleMic}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={micOn ? 'mic' : 'mic-off'} size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.controlBtn, !camOn && styles.controlBtnOff]}
+            onPress={toggleCam}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={camOn ? 'videocam' : 'videocam-off'} size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
-}
+});
 
-function StatusConsole({ status }: { status: string[] }) {
-  if (!status.length) return null;
-  return (
-    <View style={{ backgroundColor: '#111', padding: 8, marginTop: 10 }}>
-      <Text style={{ color: '#fff', fontSize: 12, marginBottom: 4 }}>Logs:</Text>
-      {status.map((line, i) => (
-        <Text key={i} style={{ color: '#ccc', fontSize: 10 }}>{line}</Text>
-      ))}
-    </View>
-  );
-}
+export default LiveStreamingPlayer;
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: '#000' },
+  center: {
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  statusText: { color: '#fff', marginTop: 12, textAlign: 'center' },
+  errorText: { color: '#ff8a80', textAlign: 'center' },
+  controls: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 18,
+  },
+  controlBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(42,42,42,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlBtnOff: {
+    backgroundColor: '#C61F3A',
+  },
+});

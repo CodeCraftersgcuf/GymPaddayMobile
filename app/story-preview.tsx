@@ -4,6 +4,7 @@ import {
   Image,
   Text,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   Dimensions,
   Animated,
@@ -135,12 +136,29 @@ export default function StoryPreview() {
     }
   }, [currentIndex, selectedMusicMap]);
 
+  const replayPreviewVideo = useCallback(async () => {
+    if (!isVideo || !videoRef.current) return;
+    try {
+      const status = await videoRef.current.getStatusAsync();
+      if (!status.isLoaded) return;
+      videoPlaybackStartedRef.current = false;
+      await videoRef.current.setPositionAsync(0);
+      await videoRef.current.playAsync();
+      if (selectedMusicMap[currentIndex]?.preview) {
+        await syncPreviewMusicWithVideo();
+      }
+    } catch {
+      /* noop */
+    }
+  }, [isVideo, currentIndex, selectedMusicMap, syncPreviewMusicWithVideo]);
+
   useEffect(() => {
     if (!currentMedia) return;
     progressAnim.setValue(1);
     videoPlaybackStartedRef.current = false;
     if (isVideo && videoRef.current) {
-      videoRef.current.setPositionAsync(0);
+      videoRef.current.setPositionAsync(0).catch(() => {});
+      videoRef.current.playAsync().catch(() => {});
     }
 
     if (soundRef.current) {
@@ -154,7 +172,7 @@ export default function StoryPreview() {
     if (currentMusic?.preview) {
       Audio.Sound.createAsync(
         { uri: currentMusic.preview },
-        { shouldPlay: !isVideo, isLooping: true, volume: 0.5 },
+        { shouldPlay: !isVideo, isLooping: true, volume: 0.7 },
       )
         .then(({ sound: newSound }) => {
           soundRef.current = newSound;
@@ -165,7 +183,7 @@ export default function StoryPreview() {
         })
         .catch(console.error);
     }
-  }, [currentIndex]);
+  }, [currentIndex, currentMedia?.uri, isVideo, selectedMusicMap, syncPreviewMusicWithVideo]);
 
   const handleMusicSelect = async (item: StoryMusic) => {
     if (isPreviewingMusic) return;
@@ -320,7 +338,6 @@ export default function StoryPreview() {
         ),
       );
 
-      queryClient.invalidateQueries({ queryKey: ['groupedStories'] });
       prefetchStoriesFromCache();
       queryClient.invalidateQueries({ queryKey: ['userPosts'] });
 
@@ -330,6 +347,8 @@ export default function StoryPreview() {
         text2: 'Finishing up in the background…',
       });
       setIsUploading(false);
+      // Keep optimistic ring — do not invalidate stories here (causes blink).
+      // story_published notification / pull-to-refresh will refresh when ready.
       router.replace('/(tabs)');
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -359,7 +378,7 @@ export default function StoryPreview() {
             <Animated.View
               style={[
                 styles.progressBarFill,
-                index === currentIndex && { flex: progressAnim, backgroundColor: '#940304' },
+                index === currentIndex && { flex: progressAnim, backgroundColor: '#C61F3A' },
                 index < currentIndex && { flex: 1, backgroundColor: '#FFFFFF' },
                 index > currentIndex && { flex: 0, backgroundColor: 'transparent' },
               ]}
@@ -392,18 +411,29 @@ export default function StoryPreview() {
             style={styles.video}
             resizeMode={ResizeMode.CONTAIN}
             isMuted={Boolean(selectedMusicMap[currentIndex])}
-            shouldPlay={true}
+            isLooping
+            shouldPlay
             useNativeControls={false}
+            progressUpdateIntervalMillis={150}
             onPlaybackStatusUpdate={(status) => {
-              if (!status.isLoaded || !status.isPlaying) return;
-              if (videoPlaybackStartedRef.current) return;
-              videoPlaybackStartedRef.current = true;
-              syncPreviewMusicWithVideo();
+              if (!status.isLoaded) return;
+              if (
+                selectedMusicMap[currentIndex]?.preview &&
+                (status.isPlaying || (status.positionMillis ?? 0) > 0) &&
+                !videoPlaybackStartedRef.current
+              ) {
+                videoPlaybackStartedRef.current = true;
+                syncPreviewMusicWithVideo();
+              }
             }}
           />
         ) : (
           <Image source={{ uri: currentMedia.uri }} style={styles.image} resizeMode="contain" />
         )}
+
+        {isVideo ? (
+          <Pressable style={styles.videoTapOverlay} onPress={replayPreviewVideo} />
+        ) : null}
         
         {/* Narrow edge zones only — back/close uses header X; avoids taps on media dismissing */}
         <TouchableOpacity
@@ -540,7 +570,7 @@ export default function StoryPreview() {
                   onPress={() => handleMusicSelect(item)}
                 >
                   <View style={styles.musicItemLeft}>
-                    <Ionicons name="musical-notes" size={24} color="#940304" />
+                    <Ionicons name="musical-notes" size={24} color="#C61F3A" />
                     <View style={styles.musicInfo}>
                       <Text style={styles.musicTitleLarge} numberOfLines={1}>
                         {item.title}
@@ -551,7 +581,7 @@ export default function StoryPreview() {
                     </View>
                   </View>
                   {selectedMusicMap[currentIndex]?.id === item.id && (
-                    <Ionicons name="checkmark-circle" size={24} color="#940304" />
+                    <Ionicons name="checkmark-circle" size={24} color="#C61F3A" />
                   )}
                 </TouchableOpacity>
               )}
@@ -655,6 +685,14 @@ const styles = StyleSheet.create({
     width: '18%',
     zIndex: 8,
   },
+  videoTapOverlay: {
+    position: 'absolute',
+    top: 120,
+    left: '20%',
+    right: '20%',
+    bottom: 160,
+    zIndex: 6,
+  },
   musicIndicator: {
     position: 'absolute',
     bottom: 100,
@@ -682,7 +720,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 30,
     alignSelf: 'center',
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 30,
@@ -774,7 +812,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   categoryTabActive: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
   },
   categoryEmoji: {
     fontSize: 16,
@@ -819,7 +857,7 @@ const styles = StyleSheet.create({
   musicItemSelected: {
     backgroundColor: '#ffebee',
     borderWidth: 2,
-    borderColor: '#940304',
+    borderColor: '#C61F3A',
   },
   musicItemLeft: {
     flexDirection: 'row',

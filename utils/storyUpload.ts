@@ -2,11 +2,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { QueryClient } from '@tanstack/react-query';
 import { API_ENDPOINTS } from '@/apiConfig';
 import type { GroupedUserStories, StoryItem } from '@/utils/types/story';
+import { rememberPendingMyStory } from '@/utils/pendingMyStories';
 
 type StoryMedia = {
   id: string | number;
   uri: string;
   mediaType: string;
+  trimStart?: number;
+  trimDuration?: number;
 };
 
 type StoryMusic = {
@@ -32,6 +35,16 @@ export async function uploadStoryMedia(
     parameters.music_title = music.title;
     parameters.music_url = music.preview;
     if (music.artist) parameters.music_artist = music.artist;
+  }
+
+  if (
+    isVideo &&
+    typeof media.trimStart === 'number' &&
+    typeof media.trimDuration === 'number' &&
+    media.trimDuration > 0
+  ) {
+    parameters.trim_start = String(media.trimStart);
+    parameters.trim_duration = String(media.trimDuration);
   }
 
   const uploadResult = await FileSystem.uploadAsync(uploadUrl, media.uri, {
@@ -91,13 +104,16 @@ export function optimisticallyAddMyStory(
     },
   };
 
+  // Sticky across refetches — query cache alone was getting wiped for ~1s.
+  rememberPendingMyStory(user.id, optimistic);
+
   queryClient.setQueryData<GroupedUserStories[]>(['groupedStories'], (old) => {
     const groups = old ?? [];
     const mineIdx = groups.findIndex((g) => String(g.user.id) === String(user.id));
     if (mineIdx >= 0) {
       const next = [...groups];
-      const group = { ...next[mineIdx], stories: [optimistic, ...next[mineIdx].stories] };
-      next[mineIdx] = group;
+      const existing = next[mineIdx].stories.filter((s) => Number(s.id) !== Number(optimistic.id));
+      next[mineIdx] = { ...next[mineIdx], stories: [optimistic, ...existing] };
       return next;
     }
     return [

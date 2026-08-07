@@ -15,13 +15,12 @@ interface UserSectionProps {
 }
 
 import * as SecureStore from 'expo-secure-store';
+import { DEFAULT_PROFILE_IMAGE } from '@/constants/profilePlaceholder';
 
 export default function UserSection({ postText, onTextChange, disabled = false }: UserSectionProps) {
   const theme = useTheme();
   const dark = theme?.dark ?? false; // Safety check
-  const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
-
-  const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -29,17 +28,13 @@ export default function UserSection({ postText, onTextChange, disabled = false }
         const userDataStr = await SecureStore.getItemAsync('user_data');
         if (userDataStr) {
           const userData = JSON.parse(userDataStr);
-          if (userData.profile_picture_url) {
-            setProfileImage(userData.profile_picture_url);
-          } else {
-            setProfileImage(defatulImage); // fallback to prop
-          }
+          setProfileImage(userData.profile_picture_url || null);
         } else {
-          setProfileImage(defatulImage); // fallback to prop
+          setProfileImage(null);
         }
       } catch (error) {
         console.error('Error loading user data:', error);
-        setProfileImage(defatulImage); // fallback to prop
+        setProfileImage(null);
       }
     })();
   }, []);
@@ -47,7 +42,7 @@ export default function UserSection({ postText, onTextChange, disabled = false }
     <View style={[styles.container, { backgroundColor: dark ? 'black' : '#fff', }]}>
       <View style={styles.userInfo}>
         <Image
-          source={{ uri: profileImage }}
+          source={profileImage ? { uri: profileImage } : DEFAULT_PROFILE_IMAGE}
           style={styles.avatar}
         />
         <View style={{ flex: 1 }}>
@@ -72,14 +67,14 @@ export default function UserSection({ postText, onTextChange, disabled = false }
           />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 44 }}>
             {postText.length >= 450 && (
-              <Text style={{ fontSize: 11, color: postText.length >= 500 ? '#F44336' : '#FF9800', flex: 1 }}>
+              <Text style={{ fontSize: 11, color: postText.length >= 500 ? '#C61F3A' : '#FF9800', flex: 1 }}>
                 {postText.length >= 500 ? 'Character limit reached!' : `Approaching limit (${500 - postText.length} remaining)`}
               </Text>
             )}
             <Text style={{ 
               fontSize: 12, 
               color: postText.length >= 500 
-                ? '#F44336' 
+                ? '#C61F3A' 
                 : postText.length >= 450 
                   ? '#FF9800' 
                   : dark ? '#666' : '#999', 

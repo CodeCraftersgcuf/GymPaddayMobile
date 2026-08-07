@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   Image,
   Alert,
   TouchableOpacity,
@@ -17,6 +16,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import WalletCard from '@/components/more/main/WalletCard';
 import SettingItem from '@/components/more/main/SettingItem';
@@ -31,11 +31,13 @@ import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/
 import { useMutation } from '@tanstack/react-query';
 import { topUpWallet } from '@/utils/mutations/wallets';
 import Toast from 'react-native-toast-message';
-import { useIAP } from '@/utils/hooks/useIAP';
 import { resolveLatestUserSnapshot } from '@/utils/resolveLatestUserProfile';
+import { clearAllPendingPosts } from '@/utils/pendingPosts';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 import * as Clipboard from 'expo-clipboard';
-import { WebView } from 'react-native-webview';
+import FlutterwaveWebView from '@/components/payments/FlutterwaveWebView';
+import { buildFlutterwaveCheckoutHtml } from '@/utils/flutterwaveCheckout';
+import { DEFAULT_PROFILE_IMAGE } from '@/constants/profilePlaceholder';
 
 
 
@@ -56,9 +58,8 @@ export default function More() {
   const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const route = useRouter();
-  const defatulImage = "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400";
 
-  const [profileImage, setProfileImage] = useState<string | null>(defatulImage);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const [loadingBalance, setLoadingBalance] = useState(true);
 
@@ -71,8 +72,6 @@ export default function More() {
   const [userEmail, setUserEmail] = useState('');
   const [currentView, setCurrentView] = useState<'deposit' | 'payment' | 'flutterwave'>('deposit');
   const [webViewUri, setWebViewUri] = useState<string | null>(null);
-  const webViewRef = React.useRef<WebView>(null);
-  const { purchaseProduct, isLoading: isIAPLoading, MINIMUM_AMOUNT_IOS, isAvailable } = useIAP();
 
   React.useEffect(() => {
     (async () => {
@@ -80,14 +79,10 @@ export default function More() {
         const snap = await resolveLatestUserSnapshot();
         setUserName(snap.displayName);
         setUserEmail(snap.email);
-        if (snap.profilePictureUrl) {
-          setProfileImage(snap.profilePictureUrl);
-        } else {
-          setProfileImage(defatulImage);
-        }
+        setProfileImage(snap.profilePictureUrl || null);
       } catch (error) {
         console.error('Error loading user snapshot:', error);
-        setProfileImage(defatulImage);
+        setProfileImage(null);
       }
     })();
   }, []);
@@ -113,8 +108,9 @@ export default function More() {
 
         const result = await response.json();
 
-        if (response.ok && result.status === 'success') {
-          setBalance(Number(result.balance));
+        if (response.ok && (result.status === 'success' || result.balance != null || result.data?.balance != null)) {
+          const raw = result.balance ?? result.data?.balance ?? 0;
+          setBalance(Number(raw) || 0);
         } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
           setBalance(0);
         } else {
@@ -135,9 +131,7 @@ export default function More() {
       const snap = await resolveLatestUserSnapshot();
       setUserName(snap.displayName);
       setUserEmail(snap.email);
-      if (snap.profilePictureUrl) {
-        setProfileImage(snap.profilePictureUrl);
-      }
+      setProfileImage(snap.profilePictureUrl || null);
 
       if (!hideIosMonetization) {
         setLoadingBalance(true);
@@ -153,8 +147,9 @@ export default function More() {
         });
 
         const result = await response.json();
-        if (response.ok && result.status === 'success') {
-          setBalance(Number(result.balance));
+        if (response.ok && (result.status === 'success' || result.balance != null || result.data?.balance != null)) {
+          const raw = result.balance ?? result.data?.balance ?? 0;
+          setBalance(Number(raw) || 0);
         } else if (response.status === 404 || (result?.message || '').toLowerCase().includes('wallet not found')) {
           setBalance(0);
         }
@@ -169,8 +164,7 @@ export default function More() {
 
 
   const userProfile = {
-    name: 'Sarah Johnson',
-    image: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400',
+    name: 'User',
   };
 
   const handleToggleBalance = () => {
@@ -178,9 +172,6 @@ export default function More() {
   };
 
   const handleTopup = () => {
-    if (Platform.OS === 'ios') {
-      return;
-    }
     setShowTopupModal(true);
   };
 
@@ -223,108 +214,30 @@ export default function More() {
       return;
     }
 
-    // For iOS, use Apple In-App Purchase
-    if (Platform.OS === 'ios') {
-      if (amountValue < MINIMUM_AMOUNT_IOS) {
-        Alert.alert('Error', `Minimum deposit amount is ${MINIMUM_AMOUNT_IOS} Naira`);
-        return;
-      }
-
-      if (!isAvailable) {
-        Alert.alert('Error', 'In-App Purchases are not available. Please try again later.');
-        return;
-      }
-
-      const success = await purchaseProduct(amountValue);
-      if (success) {
-        setShowSuccessModal(true);
-        // Reset form
-        setTopupAmount('');
-        setDepositorName('');
-        setUseMyDetails(false);
-      }
-    } else {
-      // For Android, use Flutterwave payment gateway
-      // Use email from user data, or fallback to a default for testing
-      const paymentEmail = userEmail && userEmail !== 'test@example.com' 
-        ? userEmail 
-        : 'user@gympaddy.com'; // Fallback email for payment
-      
-      console.log('💳 Opening Flutterwave payment gateway...', {
-        amount: amountValue,
-        email: paymentEmail,
-        platform: Platform.OS
-      });
-      
-      // Generate unique order ID
-      const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Create HTML content with Flutterwave payment
-      const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Flutterwave Payment</title>
-  <script src="https://checkout.flutterwave.com/v3.js"></script>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <style>
-    html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #ffffff; }
-  </style>
-</head>
-<body>
-<script>
-  function makePayment() {
-    const amount = ${amountValue};
-    const order_id = "${orderId}";
-    const email = "${paymentEmail}";
-    const customerName = ${JSON.stringify(userName || paymentEmail)};
-
-    FlutterwaveCheckout({
-      public_key: "FLWPUBK-40e0f9f66bc483c5234bc8ca12529396-X",
-      tx_ref: "txref_" + Date.now(),
-      amount: parseFloat(amount),
-      currency: "NGN",
-      payment_options: "card,ussd",
-      customer: {
-        email: email,
-        name: customerName
-      },
-      callback: function (response) {
-        console.log("🔍 Flutterwave callback:", response);
-
-        const isSuccess =
-          response.status === "successful" ||
-          response.status === "completed" ||
-          response.charge_response_code === "00";
-
-        const message = {
-          event: isSuccess ? "success" : "failed",
-          data: response
-        };
-
-        window.ReactNativeWebView.postMessage(JSON.stringify(message));
-      },
-      onclose: function () {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ event: "closed" }));
-      },
-      customizations: {
-        title: "GymPaddy",
-        description: \`Wallet top-up · Order \${order_id}\`,
-        logo: "${MEDIA_CDN_URL}/logo.png"
-      }
+    // Same Flutterwave payment flow on iOS and Android
+    const paymentEmail = userEmail && userEmail !== 'test@example.com' 
+      ? userEmail 
+      : 'user@gympaddy.com';
+    
+    console.log('💳 Opening Flutterwave payment gateway...', {
+      amount: amountValue,
+      email: paymentEmail,
+      platform: Platform.OS
     });
-  }
+    
+    // Generate unique order ID
+    const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  window.onload = makePayment;
-</script>
-</body>
-</html>
-      `;
+    const htmlContent = buildFlutterwaveCheckoutHtml({
+      amount: amountValue,
+      email: paymentEmail,
+      customerName: userName || paymentEmail,
+      orderId,
+    });
       
       setWebViewUri(htmlContent);
       setCurrentView('flutterwave');
       console.log('✅ Flutterwave view set, currentView:', 'flutterwave');
-    }
   };
 
   const handleUseMyDetails = () => {
@@ -426,9 +339,6 @@ export default function More() {
   };
 
   const handleWithdraw = () => {
-    if (Platform.OS === 'ios') {
-      return;
-    }
     route.push('/withdraw');
   };
 
@@ -476,6 +386,7 @@ export default function More() {
               style: 'destructive',
               onPress: async () => {
                 try {
+                  await clearAllPendingPosts();
                   await SecureStore.deleteItemAsync('auth_token');
                   await SecureStore.deleteItemAsync('user_data');
                   // Optionally clear other sensitive data here
@@ -505,8 +416,8 @@ export default function More() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#FF3B30']}
-            tintColor="#FF3B30"
+            colors={['#C61F3A']}
+            tintColor="#C61F3A"
             title="Pull to refresh"
             titleColor={dark ? '#fff' : '#000'}
           />
@@ -516,7 +427,10 @@ export default function More() {
         <ThemedView darkColor='#181818' style={styles.header}>
           <Text style={[styles.headerTitle, { fontFamily: 'Caveat_400Regular', }]}>Wallet</Text>
           <TouchableOpacity onPress={() => route.push('/EditProfile')}>
-            <Image source={{ uri: profileImage || '' }} style={styles.headerProfileImage} />
+            <Image
+              source={profileImage ? { uri: profileImage } : DEFAULT_PROFILE_IMAGE}
+              style={styles.headerProfileImage}
+            />
           </TouchableOpacity>
         </ThemedView>
 
@@ -609,7 +523,8 @@ export default function More() {
         animationType="slide"
         onRequestClose={handleCloseTopupModal}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: dark ? 'black' : 'white' }]}>
+        <SafeAreaProvider>
+          <SafeAreaView style={[styles.modalContainer, { backgroundColor: dark ? 'black' : 'white' }]} edges={['top', 'left', 'right', 'bottom']}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={handleBackFromPayment} style={styles.modalCloseButton}>
               <Ionicons 
@@ -628,20 +543,10 @@ export default function More() {
             <View style={{ flex: 1 }}>
               {/* WebView for Flutterwave */}
               <View style={[styles.webViewWrapper, { backgroundColor: dark ? '#000' : '#fff', flex: 1 }]}>
-                <WebView
-                  ref={webViewRef}
-                  source={{ html: webViewUri }}
-                  style={styles.webView}
+                <FlutterwaveWebView
+                  html={webViewUri}
+                  dark={dark}
                   onMessage={handleWebViewMessage}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  startInLoadingState={true}
-                  renderLoading={() => (
-                    <View style={[styles.loadingContainer, { backgroundColor: dark ? '#000' : '#fff' }]}>
-                      <ActivityIndicator size="large" color="#940304" />
-                      <Text style={[styles.loadingText, { color: dark ? '#fff' : '#666' }]}>Loading payment gateway...</Text>
-                    </View>
-                  )}
                 />
               </View>
             </View>
@@ -652,45 +557,35 @@ export default function More() {
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? '#181818' : 'white' }]}
-                    placeholder={Platform.OS === 'ios' ? `Amount (min ${MINIMUM_AMOUNT_IOS} Naira)` : "Amount"}
+                    placeholder="Amount"
                     placeholderTextColor="#999"
                     value={topupAmount}
                     onChangeText={setTopupAmount}
                     keyboardType="numeric"
-                    editable={!isIAPLoading}
                   />
-                  {Platform.OS === 'ios' && (
-                    <Text style={[styles.minAmountHint, { color: dark ? '#999' : '#666' }]}>
-                      Minimum deposit: {MINIMUM_AMOUNT_IOS} Naira
-                    </Text>
-                  )}
                 </View>
 
-                {Platform.OS !== 'ios' && (
-                  <>
-                    <View style={styles.inputContainer}>
-                      <TextInput
-                        style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? '#181818' : 'white' }]}
-                        placeholder="Depositor's Name"
-                        placeholderTextColor="#999"
-                        value={depositorName}
-                        onChangeText={setDepositorName}
-                      />
-                    </View>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={[styles.textInput, { color: dark ? 'white' : 'black', backgroundColor: dark ? '#181818' : 'white' }]}
+                    placeholder="Depositor's Name"
+                    placeholderTextColor="#999"
+                    value={depositorName}
+                    onChangeText={setDepositorName}
+                  />
+                </View>
 
-                    <TouchableOpacity
-                      style={styles.checkboxContainer}
-                      onPress={handleUseMyDetails}
-                    >
-                      <View style={[styles.checkbox, useMyDetails && styles.checkboxChecked]}>
-                        {useMyDetails && (
-                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                        )}
-                      </View>
-                      <Text style={styles.checkboxText}>Use my details</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={handleUseMyDetails}
+                >
+                  <View style={[styles.checkbox, useMyDetails && styles.checkboxChecked]}>
+                    {useMyDetails && (
+                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxText}>Use my details</Text>
+                </TouchableOpacity>
 
                 <View style={styles.exchangeRateContainer}>
                   <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
@@ -742,25 +637,21 @@ export default function More() {
             <TouchableOpacity
               style={[
                 styles.proceedButton,
-                isIAPLoading && styles.proceedButtonDisabled,
                 currentView !== 'deposit' && !paymentDetails.accountNumber && { opacity: 0.5 }
               ]}
               onPress={currentView === 'deposit' ? handleTopupProceed : handlePaymentMade}
-              disabled={isIAPLoading || (currentView !== 'deposit' && !paymentDetails.accountNumber)}
+              disabled={currentView !== 'deposit' && !paymentDetails.accountNumber}
             >
-              {isIAPLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.proceedButtonText}>
-                  {currentView === 'deposit' 
-                    ? (Platform.OS === 'ios' ? 'Purchase GP Coins' : 'Proceed')
-                    : (paymentDetails.accountNumber ? 'I have made payment' : 'Payment details unavailable')}
-                </Text>
-              )}
+              <Text style={styles.proceedButtonText}>
+                {currentView === 'deposit' 
+                  ? 'Proceed'
+                  : (paymentDetails.accountNumber ? 'I have made payment' : 'Payment details unavailable')}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
           )}
         </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
 
       {/* Success Modal */}
@@ -937,7 +828,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     // fontWeight: 'bold',
-    color: '#FF3B30',
+    color: '#C61F3A',
     // fontStyle: 'italic',
     // paddingVertical:10
   },
@@ -1016,18 +907,18 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#940304',
+    borderColor: '#C61F3A',
     borderRadius: 4,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
   },
   checkboxText: {
     fontSize: 16,
-    color: '#940304',
+    color: '#C61F3A',
     fontWeight: '500',
   },
   exchangeRateContainer: {
@@ -1047,7 +938,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   proceedButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     marginHorizontal: 20,
     paddingVertical: 18,
     borderRadius: 12,
@@ -1173,7 +1064,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   deleteConfirmButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     marginTop: 20,
     paddingVertical: 16,
     borderRadius: 12,

@@ -39,7 +39,7 @@ export default function LiveStreamDiscoverScreen() {
 
   const renderSectionContent = () => {
     if (isLoading && !data) {
-      return <ActivityIndicator size="large" color="red" />;
+      return <ActivityIndicator size="large" color="#C61F3A" />;
     }
 
     if (error) {
@@ -76,7 +76,7 @@ export default function LiveStreamDiscoverScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#940304" />
+          <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#C61F3A" />
         }
       >
         <Section title="Top Live Streams" />

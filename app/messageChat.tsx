@@ -21,9 +21,10 @@ import { useTheme } from "@/contexts/themeContext";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from "expo-router";
+import { apiCall, ApiError } from '@/utils/customApiCall';
 import { fetchChatMessages } from '@/utils/queries/chat';
 import { API_ENDPOINTS } from '@/apiConfig';
-import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { resolveChatImageUrl, resolveChatImageCdnUrl } from '@/utils/mediaUrl';
 import { UNREAD_MESSAGES_QUERY_KEY } from '@/utils/queries/chat';
 import { fetchUserProfile } from '@/utils/queries/profile';
 import { sendChatMessage } from '@/utils/mutations/chat';
@@ -43,6 +44,66 @@ import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get('window');
 import { RtcSurfaceView } from 'react-native-agora';
+
+function mapServerChatMessage(msg: any) {
+  const imageUrl = resolveChatImageUrl(msg.image_url || msg.imagePath || msg.image || null);
+  const rawText = msg.message || '';
+  const text = imageUrl && rawText === 'Sent an image' ? '' : rawText;
+
+  return {
+    id: String(msg.id),
+    isCurrentUser: msg.direction === 'sent',
+    text,
+    timestamp: new Date(msg.created_at),
+    senderPicture: msg.direction === 'sent'
+      ? msg.sender?.profile_picture_url
+      : msg.receiver?.profile_picture_url,
+    image: imageUrl,
+    imageRaw: msg.image_url || msg.imagePath || msg.image || null,
+  };
+}
+
+function ChatMessageImage({
+  uri,
+  raw,
+  marginBottom = 0,
+}: {
+  uri: string;
+  raw?: string | null;
+  marginBottom?: number;
+}) {
+  const candidates = useMemo(() => {
+    const primary = uri;
+    const cdn = resolveChatImageCdnUrl(raw || uri);
+    return [primary, cdn].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i);
+  }, [uri, raw]);
+
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const src = candidates[candidateIndex] ?? null;
+
+  useEffect(() => {
+    setCandidateIndex(0);
+  }, [uri, raw]);
+
+  if (!src) return null;
+
+  return (
+    <CachedImage
+      uri={src}
+      resolve={false}
+      onError={() => {
+        setCandidateIndex((current) => (current + 1 < candidates.length ? current + 1 : current));
+      }}
+      style={{
+        width: 160,
+        height: 160,
+        borderRadius: 10,
+        marginBottom,
+        backgroundColor: '#eee',
+      }}
+    />
+  );
+}
 
 export default function MessageChat() {
   const { dark } = useTheme();
@@ -114,7 +175,13 @@ export default function MessageChat() {
     },
     enabled: !!conversation_id,
     placeholderData: (previousData) => previousData,
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const err = query.state.error as ApiError | null;
+      if (err?.statusCode === 429) return 30_000;
+      return 3_000;
+    },
+    refetchIntervalInBackground: false,
+    retry: (failureCount, error: any) => error?.statusCode !== 429 && failureCount < 2,
   });
   const [lastCallId, setLastCallId] = useState<number | null>(null);
 
@@ -136,22 +203,7 @@ export default function MessageChat() {
   const [receiverUid, setReceiverUid] = useState<number | null>(null);
 
   const serverMessages = useMemo(() => (
-    data?.messages?.map((msg: any) => {
-      let imageUrl = msg.image_url || msg.imagePath || msg.image || null;
-      if (imageUrl) {
-        imageUrl = resolveMediaUrl(imageUrl);
-      }
-      return {
-        id: String(msg.id),
-        isCurrentUser: msg.direction === 'sent',
-        text: msg.message || '',
-        timestamp: new Date(msg.created_at),
-        senderPicture: msg.direction === 'sent'
-          ? msg.sender?.profile_picture_url
-          : msg.receiver?.profile_picture_url,
-        image: imageUrl,
-      };
-    }) || []
+    data?.messages?.map((msg: any) => mapServerChatMessage(msg)) || []
   ), [data?.messages]);
 
   const messages = useMemo(() => (
@@ -193,7 +245,7 @@ export default function MessageChat() {
           });
         }
         console.log('Sending message with image:', payload.text, payload.imageUri);
-        const response = await fetch('https://api.gympaddy.com/api/user/chat-messages', {
+        const response = await fetch(API_ENDPOINTS.USER.CHAT_MESSAGES.Create, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -202,7 +254,6 @@ export default function MessageChat() {
           body: formData,
         });
         const resJson = await response.json();
-        console.log('Image message response:', resJson);
         if (!response.ok) {
           throw new Error(resJson?.message || 'Failed to send image message');
         }
@@ -216,8 +267,33 @@ export default function MessageChat() {
         );
       }
     },
-    onSuccess: () => {
-      refetch();
+    onSuccess: (res) => {
+      const payload = res?.data;
+      if (!payload?.id || !conversation_id) return;
+
+      queryClient.setQueryData(['chatMessages', conversation_id], (old: any) => {
+        if (!old?.messages) return old;
+        const exists = old.messages.some((m: any) => String(m.id) === String(payload.id));
+        if (exists) return old;
+
+        const imageUrl = resolveChatImageUrl(payload.image_url || payload.image);
+        return {
+          ...old,
+          messages: [
+            ...old.messages,
+            {
+              id: payload.id,
+              message: payload.message,
+              sender: payload.sender,
+              receiver: payload.receiver,
+              direction: 'sent',
+              created_at: payload.created_at,
+              image: payload.image,
+              image_url: imageUrl,
+            },
+          ],
+        };
+      });
     },
     onError: (err) => {
       console.log('Send message error:', err);
@@ -256,8 +332,7 @@ export default function MessageChat() {
       sendMessageMutation.mutate(
         { text: messageText, imageUri: imageUri },
         {
-          onSuccess: async () => {
-            await refetch();
+          onSuccess: () => {
             setOptimisticMessages(prev => prev.filter(msg => msg.id !== optimisticId));
           },
           onError: () => {
@@ -312,7 +387,7 @@ export default function MessageChat() {
       } catch (error) {
         console.log('Incoming call check failed:', error);
       }
-    }, 3000);
+    }, 15000);
 
     return () => clearInterval(interval);
   }, [lastCallId]);
@@ -407,17 +482,10 @@ export default function MessageChat() {
         >
           {/* Render image if present */}
           {(item.image || item.image_url || item.imagePath) && (
-            <CachedImage
+            <ChatMessageImage
               uri={item.image || item.image_url || item.imagePath}
-              resolve={false}
-              style={{
-                width: 160,
-                height: 160,
-                borderRadius: 10,
-                marginBottom: item.text ? 8 : 0,
-                alignSelf: isCurrentUser ? 'flex-end' : 'flex-start',
-                backgroundColor: '#eee',
-              }}
+              raw={item.imageRaw || item.image_url || item.imagePath}
+              marginBottom={item.text ? 8 : 0}
             />
           )}
           {item.text ? (
@@ -449,16 +517,8 @@ export default function MessageChat() {
     },
     enabled: !!otherUser?.id,
     staleTime: 60 * 1000,
-    refetchInterval: 10000,
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    retry: (failureCount, error: any) => {
-      // Don't retry on rate limit errors (429)
-      if (error?.statusCode === 429) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    gcTime: 10 * 60 * 1000,
+    retry: (failureCount, error: any) => error?.statusCode !== 429 && failureCount < 2,
   });
 
   // Merge otherUserProfile data to get updated online status
@@ -472,7 +532,7 @@ export default function MessageChat() {
     setRefreshing(false);
   };
 
-  // Polling handled by react-query `refetchInterval: 3000` above.
+  // Polling handled by react-query `refetchInterval` above (3s, 30s on 429).
 
   // Load current user data for optimistic message avatar
   useEffect(() => {
@@ -495,16 +555,27 @@ export default function MessageChat() {
 
   const handlePickImage = async () => {
     try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission required',
+          'Permission to access your photos is required to send images in chat.',
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
+        allowsEditing: true,
         quality: 0.8,
       });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAttachedImage(result.assets[0].uri);
-      }
+
+      if (result.canceled || !result.assets?.length) return;
+
+      setAttachedImage(result.assets[0].uri);
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image.');
+      console.error('Failed to pick chat image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
@@ -520,7 +591,7 @@ export default function MessageChat() {
       >
         {isLoading && !data ? (
           <View style={styles.loadingCenter}>
-            <ActivityIndicator size="large" color="#940304" />
+            <ActivityIndicator size="large" color="#C61F3A" />
           </View>
         ) : (
           <View style={styles.flex}>
@@ -654,9 +725,9 @@ export default function MessageChat() {
                 disabled={(!newMessage.trim() && !attachedImage) || isSending || sendMessageMutation.isPending || sendMessageMutation.isLoading}
               >
                 {isSending || sendMessageMutation.isPending || sendMessageMutation.isLoading ? (
-                  <ActivityIndicator size="small" color={dark ? 'white' : 'black'} />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor={dark ? 'white' : "black"} />
+                  <Image source={images.notifcationIcon} style={{ width: 25, height: 25 }} tintColor="#FFFFFF" />
                 )}
               </TouchableOpacity>
             </View>
@@ -815,7 +886,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   sentContent: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     borderBottomRightRadius: 4,
     alignSelf: 'flex-end',
   },
@@ -892,12 +963,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    // backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    // backgroundColor: '#ccc',
+    backgroundColor: '#CCCCCC',
   },
 
   // Popup Styles
@@ -953,7 +1024,7 @@ const styles = StyleSheet.create({
   },
   proceedButton: {
     flex: 1,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1066,7 +1137,7 @@ const styles = StyleSheet.create({
   // Voice Call Styles
   voiceCallScreen: {
     flex: 1,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
   },
   voiceCallContainer: {
     flex: 1,

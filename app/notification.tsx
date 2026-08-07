@@ -1,46 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, Text } from 'react-native';
 import { useTheme } from '@/contexts/themeContext';
-import { Notification } from '@/components/types';
 import NotificationItem from '@/components/more/notifications/NotificationItem';
 import Header from '@/components/more/withdraw/Header';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { API_ENDPOINTS } from '@/apiConfig';
+import { ensureNotificationPermission } from '@/utils/notificationService';
+import {
+  AppNotification,
+  isInteractiveNotification,
+  navigateFromNotification,
+} from '@/utils/notificationNavigation';
 
 export default function NotificationsScreen() {
   const { dark } = useTheme();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const getToken = async () => {
-    return await SecureStore.getItemAsync('auth_token');
-  };
-//    const token=await
-     
+
+  const getToken = async () => SecureStore.getItemAsync('auth_token');
 
   const fetchNotifications = async () => {
     try {
       const token = await getToken();
       const response = await fetch(API_ENDPOINTS.USER.NOTIFICATIONS.List, {
         headers: {
-          Authorization: `Bearer ${token}`, // Replace with your auth method
+          Authorization: `Bearer ${token}`,
           Accept: 'application/json',
         },
       });
       const data = await response.json();
       const rawItems = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
 
-      const formatted = rawItems.map((item: any) => ({
+      const formatted: AppNotification[] = rawItems.map((item: any) => ({
         id: String(item.id),
         title: item.title,
         description: item.body,
+        body: item.body,
+        type: item.type,
+        data: item.data ?? null,
         is_read: typeof item.is_read === 'boolean' ? item.is_read : Boolean(item.read_at),
         created_at: item.created_at,
       }));
       setNotifications(formatted);
 
-      // Mark all unread notifications as read when user opens notifications page.
       if (token) {
         const unreadIds = rawItems
           .filter((item: any) => {
@@ -68,18 +72,28 @@ export default function NotificationsScreen() {
   };
 
   useEffect(() => {
+    ensureNotificationPermission(true).catch(() => {});
     fetchNotifications();
   }, []);
 
-  const handleNotificationPress = (notification: Notification) => {
-    // Mark notification as read
+  const handleNotificationPress = (notification: AppNotification) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notification.id ? { ...n, is_read: true } : n))
     );
+
+    if (!isInteractiveNotification(notification)) {
+      return;
+    }
+
+    navigateFromNotification(router, notification);
   };
 
-  const renderNotification = ({ item }: { item: Notification }) => (
-    <NotificationItem notification={item} onPress={handleNotificationPress} />
+  const renderNotification = ({ item }: { item: AppNotification }) => (
+    <NotificationItem
+      notification={item}
+      interactive={isInteractiveNotification(item)}
+      onPress={handleNotificationPress}
+    />
   );
 
   const renderEmptyState = () => (

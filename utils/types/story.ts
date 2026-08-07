@@ -17,6 +17,9 @@ export interface StoryItem {
   processing_status?: 'pending' | 'processing' | 'ready' | 'failed';
   viewed_by_me?: boolean;
   is_followed?: boolean;
+  music_url?: string | null;
+  music_title?: string | null;
+  music_artist?: string | null;
   created_at: string;
   expires_at: string;
   user: User;

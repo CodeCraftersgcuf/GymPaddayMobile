@@ -45,7 +45,7 @@ export default function SettingItem({ item, onPress }: SettingItemProps) {
           <IconComponent
             name={item.icon as any}
             size={20}
-            color={item.isDestructive ? '#FF3B30' : dark ? 'white' : 'black'}
+            color={item.isDestructive ? '#C61F3A' : dark ? 'white' : 'black'}
           />
         </View>
       )}
@@ -100,6 +100,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   destructiveText: {
-    color: '#FF3B30',
+    color: '#C61F3A',
   },
 });

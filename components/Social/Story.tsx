@@ -40,7 +40,7 @@ const StoryComponent: React.FC<Props> = ({ story, userId }) => {
       onPressIn={handlePressIn}
       onPress={handlePress}
     >
-      <LinearGradient colors={["#940304", "#0000FF"]} style={styles.gradient}>
+      <LinearGradient colors={["#C61F3A", "#9B1830"]} style={styles.gradient}>
         <CachedAvatar uri={story.user.profile_picture_url} size={56} style={styles.avatar} />
       </LinearGradient>
       <ThemeText style={styles.name}>

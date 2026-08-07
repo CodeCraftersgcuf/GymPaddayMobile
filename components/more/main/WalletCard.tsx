@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { images } from '@/constants';
 import { useTheme } from '@/contexts/themeContext';
 import ThemeText from '@/components/ThemedText';
+import { DEFAULT_PROFILE_IMAGE } from '@/constants/profilePlaceholder';
 
 import * as SecureStore from 'expo-secure-store';
 
@@ -83,57 +84,52 @@ export default function WalletCard({
 
         <View style={styles.header}>
           <View style={styles.userInfo}>
-            <Image source={{ uri: profileImage }} style={styles.userImage} />
+            <Image
+              source={profileImage ? { uri: profileImage } : DEFAULT_PROFILE_IMAGE}
+              style={styles.userImage}
+            />
             <Text style={styles.walletTitle}>My Wallet</Text>
           </View>
         </View>
 
-        {Platform.OS !== 'ios' && (
-          <View style={styles.balanceSection}>
-            <Text style={styles.balanceLabel}>Balance</Text>
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceAmount}>
-                {loading
-                  ? 'Fetching...'
-                  : `${Platform.OS === 'ios' ? '' : 'GP '}${isBalanceHidden ? getHiddenBalance(balance) : formatBalance(balance)}`}
-              </Text>
-              <TouchableOpacity onPress={onToggleBalance} style={styles.eyeButton}>
-                <AntDesign
-                  name={isBalanceHidden ? 'eyeo' : 'eye'}
-                  size={24}
-                  color="#ffffff"
-                />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.balanceSubtext}>
-              {/* Saldo saat ini tersimpan secara aman */}
+        <View style={styles.balanceSection}>
+          <Text style={styles.balanceLabel}>Balance</Text>
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceAmount}>
+              {loading
+                ? 'Fetching...'
+                : `GP ${isBalanceHidden ? getHiddenBalance(balance) : formatBalance(balance)}`}
             </Text>
+            <TouchableOpacity onPress={onToggleBalance} style={styles.eyeButton}>
+              <AntDesign
+                name={isBalanceHidden ? 'eyeo' : 'eye'}
+                size={24}
+                color="#ffffff"
+              />
+            </TouchableOpacity>
           </View>
-        )}
+          <Text style={styles.balanceSubtext}>
+            {/* Saldo saat ini tersimpan secara aman */}
+          </Text>
+        </View>
       </ImageBackground>
 
-      {Platform.OS !== 'ios' && (
       <View style={[styles.actionsContainer, { backgroundColor: dark ? '#181818' : 'white' }]}>
-        {Platform.OS !== 'ios' && (
-          <>
-            <TouchableOpacity style={[styles.actionButton,{ borderRightWidth: 1,}]} onPress={onTopup}>
-              <Image source={images.topUp} style={{ width: 20, height: 20, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
-              <ThemeText style={styles.actionText}>Topup</ThemeText>
-            </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionButton,{ borderRightWidth: 1,}]} onPress={onTopup}>
+          <Image source={images.topUp} style={{ width: 20, height: 20, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
+          <ThemeText style={styles.actionText}>Topup</ThemeText>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.actionButton,{ borderRightWidth: 1,}]} onPress={onWithdraw}>
-              <Image source={images.withdraw} style={{ width: 18, height: 18, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
-              <ThemeText style={styles.actionText}>Withdraw</ThemeText>
-            </TouchableOpacity>
-          </>
-        )}
+        <TouchableOpacity style={[styles.actionButton,{ borderRightWidth: 1,}]} onPress={onWithdraw}>
+          <Image source={images.withdraw} style={{ width: 18, height: 18, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
+          <ThemeText style={styles.actionText}>Withdraw</ThemeText>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={onTransaction}>
           <Image source={images.transactions} style={{ width: 20, height: 20, objectFit: 'contain' }} tintColor={dark ? 'white' : "black"} />
           <ThemeText style={styles.actionText}>Transaction</ThemeText>
         </TouchableOpacity>
       </View>
-      )}
     </View>
   );
 }

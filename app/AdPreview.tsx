@@ -55,7 +55,7 @@ export default function AdPreview() {
   }, [token, postId]);
 
   if (loading || !token) {
-    return <ActivityIndicator style={{ flex: 1 }} size="large" color="#940304" />;
+    return <ActivityIndicator style={{ flex: 1 }} size="large" color="#C61F3A" />;
   }
 
   if (!post) {
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   progressBarFill: {
     width: '20%',
     height: '100%',
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     borderRadius: 10,
   },
   heading: {
@@ -300,11 +300,16 @@ const styles = StyleSheet.create({
   },
   playPauseButton: {
     position: 'absolute',
-    top: '45%',
-    left: '45%',
+    top: '50%',
+    left: '50%',
+    marginTop: -25,
+    marginLeft: -25,
+    width: 50,
+    height: 50,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
     borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   muteButton: {
     position: 'absolute',
@@ -327,7 +332,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeDot: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
   },
   captionBox: {
     backgroundColor: '#f2f2f2',
@@ -340,7 +345,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   nextButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingVertical: 15,
     borderRadius: 10,
     marginTop: 'auto',

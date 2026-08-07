@@ -40,7 +40,7 @@ export default function SummaryCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     marginHorizontal: 20,
     marginTop: 20,
     marginBottom: 30,

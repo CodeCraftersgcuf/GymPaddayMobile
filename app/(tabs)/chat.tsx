@@ -15,6 +15,7 @@ import ThemedView from '@/components/ThemedView';
 // Integration
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchConnectedUsers, fetchChatMessages } from '@/utils/queries/chat';
+import { ApiError } from '@/utils/customApiCall';
 import * as SecureStore from 'expo-secure-store';
 
 export default function Chat() {
@@ -49,6 +50,13 @@ export default function Chat() {
     placeholderData: (previousData) => previousData,
     staleTime: 2 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
+    refetchInterval: (query) => {
+      const err = query.state.error as ApiError | null;
+      if (err?.statusCode === 429) return 30_000;
+      return 3_000;
+    },
+    refetchIntervalInBackground: false,
+    retry: (failureCount, error: any) => error?.statusCode !== 429 && failureCount < 2,
   });
   // console.log("The data from API:", data?.conversations);
 
@@ -197,7 +205,7 @@ export default function Chat() {
         {/* Show loading indicator while users are loading */}
         {isLoading && !data ? (
           <View style={{ paddingVertical: 24 }}>
-            <ActivityIndicator size="small" color="#940304" />
+            <ActivityIndicator size="small" color="#C61F3A" />
           </View>
         ) : (
           <AvatarList users={apiUsers} onAvatarPress={handleAvatarPress} />
@@ -206,7 +214,7 @@ export default function Chat() {
         <ThemedView style={styles.conversationsWrapper} darkColor={dark ? '#202020' : 'white'}>
           {isLoading && !data ? (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
-              <ActivityIndicator size="small" color="#940304" />
+              <ActivityIndicator size="small" color="#C61F3A" />
             </View>
           ) : (
             <ConversationList

@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   profileCard: {
     margin: 16,
     padding: 20,
-    backgroundColor: '#ff5e62',
+    backgroundColor: '#C61F3A',
     borderRadius: 16,
     alignItems: 'center',
   },
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   sentBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     borderBottomRightRadius: 4,
   },
   receivedBubble: {
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#C61F3A',
     alignItems: 'center',
     justifyContent: 'center',
   },

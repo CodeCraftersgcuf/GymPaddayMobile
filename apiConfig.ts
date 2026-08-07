@@ -3,6 +3,8 @@
 
 const API_DOMAIN = "https://api.gympaddy.com/api";
 const MEDIA_CDN_URL = "https://media.gympaddy.com";
+/** Laravel public disk — chat images often live here before R2 sync. */
+const API_STORAGE_BASE = "https://api.gympaddy.com/storage";
 
 const API_ENDPOINTS = {
   AUTH: {
@@ -27,6 +29,10 @@ const API_ENDPOINTS = {
       EditProfile: API_DOMAIN + "/user/edit-profile",
       DeleteAccount: API_DOMAIN + "/user/delete-account",
     },
+    PRESENCE: {
+      Heartbeat: API_DOMAIN + "/user/heartbeat",
+      Offline: API_DOMAIN + "/user/offline",
+    },
     POSTS: {
       BoostPost: (id: number) => API_DOMAIN + `/user/boost-post/${id}`,
       List: API_DOMAIN + "/user/posts",
@@ -38,6 +44,7 @@ const API_ENDPOINTS = {
     STORIES: {
       List: API_DOMAIN + "/user/get/stories",
       Create: API_DOMAIN + "/user/stories",
+      Delete: (id: number) => API_DOMAIN + `/user/stories/${id}`,
       View: API_DOMAIN + "/user/view-story",
       Music: API_DOMAIN + "/user/story-music",
     },
@@ -60,6 +67,12 @@ const API_ENDPOINTS = {
       Delete: (id: number) => API_DOMAIN + `/user/wallets/${id}`,
       TopUp: API_DOMAIN + "/user/top-up",
       Withdraw: API_DOMAIN + "/user/wallet/withdraw",
+    },
+    WITHDRAWALS: {
+      List: API_DOMAIN + "/user/withdrawals",
+      Create: API_DOMAIN + "/user/withdrawals",
+      Banks: API_DOMAIN + "/user/withdrawals/banks",
+      ResolveAccount: API_DOMAIN + "/user/withdrawals/resolve-account",
     },
     GIFTS: {
       List: API_DOMAIN + "/user/gifts",
@@ -174,6 +187,7 @@ const API_ENDPOINTS = {
       Show: (id: number) => API_DOMAIN + `/user/tickets/${id}`,
       Update: (id: number) => API_DOMAIN + `/user/tickets/${id}`,
       Delete: (id: number) => API_DOMAIN + `/user/tickets/${id}`,
+      AddMessage: (id: number) => API_DOMAIN + `/user/tickets/${id}/messages`,
     },
     VIDEO_CALLS: {
       LiveVideoCallToken: API_DOMAIN + "/video-call/live-token",
@@ -200,4 +214,4 @@ const API_ENDPOINTS = {
   },
 };
 
-export { API_DOMAIN, MEDIA_CDN_URL, API_ENDPOINTS };
+export { API_DOMAIN, API_STORAGE_BASE, MEDIA_CDN_URL, API_ENDPOINTS };

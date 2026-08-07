@@ -1,5 +1,11 @@
 import { API_ENDPOINTS } from "../../apiConfig";
 import { apiCall } from "../customApiCall";
+import {
+  uploadPostMultipart,
+  type PostUploadFields,
+  type PostUploadFile,
+  type PostUploadProgress,
+} from "../postUpload";
 
 /** RN + axios PUT + FormData sets wrong Content-Type (urlencoded); use fetch like create. */
 async function fetchPostMultipart(
@@ -22,7 +28,7 @@ async function fetchPostMultipart(
   try {
     result = JSON.parse(text);
   } catch {
-    console.error(
+    console.warn(
       '❌ Server returned non-JSON response (status ' + response.status + '):',
       text.substring(0, 500)
     );
@@ -39,14 +45,21 @@ async function fetchPostMultipart(
 export const createPost = async ({
   data,
   token,
+  onProgress,
+  files,
+  fields,
 }: {
   data: FormData;
   token: string;
+  onProgress?: (progress: PostUploadProgress) => void;
+  files?: PostUploadFile[];
+  fields?: PostUploadFields;
 }) => {
   try {
-    return await fetchPostMultipart(API_ENDPOINTS.USER.POSTS.Create, 'POST', data, token);
+    return await uploadPostMultipart(data, token, onProgress, { files, fields });
   } catch (error: any) {
-    console.error('❌ Create Post Error:', error);
+    // Use warn — console.error(Error) opens a RedBox that looks like an app crash.
+    console.warn('❌ Create Post Error:', error?.message || String(error));
     throw error;
   }
 };
@@ -155,7 +168,7 @@ export const updatePost = async ({
     try {
       return await fetchPostMultipart(url, 'PUT', data, token);
     } catch (error: any) {
-      console.error('❌ Update Post Error:', error);
+      console.warn('❌ Update Post Error:', error?.message || String(error));
       throw error;
     }
   }

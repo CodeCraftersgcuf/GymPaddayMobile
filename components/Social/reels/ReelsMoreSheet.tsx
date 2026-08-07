@@ -80,7 +80,7 @@ export default function ReelsMoreSheet({
             <Ionicons
               name={row.icon}
               size={24}
-              color={row.destructive ? '#ff3b30' : '#fff'}
+              color={row.destructive ? '#C61F3A' : '#fff'}
               style={styles.rowIcon}
             />
             <Text style={[styles.rowLabel, row.destructive && styles.destructive]}>{row.label}</Text>
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   destructive: {
-    color: '#ff3b30',
+    color: '#C61F3A',
   },
   cancel: {
     marginTop: 8,

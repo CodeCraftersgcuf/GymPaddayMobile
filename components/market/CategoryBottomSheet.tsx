@@ -78,7 +78,7 @@ const CategoryBottomSheet = forwardRef<BottomSheet, CategoryBottomSheetProps>(
                 
                 <View style={[
                   styles.radioButton,
-                  { borderColor: selectedCategory === category.id ? '#940304' : theme.borderColor }
+                  { borderColor: selectedCategory === category.id ? '#C61F3A' : theme.borderColor }
                 ]}>
                   {selectedCategory === category.id && (
                     <View style={styles.radioButtonInner} />
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
   },
 });
 

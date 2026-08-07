@@ -7,10 +7,12 @@ import {
   Alert,
   Platform,
   TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { MediaType } from 'expo-media-library';
 import { requestMediaLibraryReadPermissions } from '@/utils/mediaLibraryPermissions';
 import Header from '@/components/Social/createpost/Header';
@@ -23,16 +25,20 @@ import { useLocalSearchParams } from 'expo-router';
 
 //Code related to integration
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createPost, updatePost } from '@/utils/mutations/posts';
+import { updatePost } from '@/utils/mutations/posts';
 import { getPostById, patchPostInUserPostsInfiniteCache } from '@/utils/queries/posts';
+import { notifyUploadStarted } from '@/utils/backgroundUpload';
 import {
-  notifyUploadFailed,
-  notifyUploadReceived,
-  notifyUploadStarted,
-} from '@/utils/backgroundUpload';
+  POST_VIDEO_LIMIT_LABEL,
+  POST_VIDEO_MAX_SIZE_BYTES,
+  POST_VIDEO_MAX_SIZE_MB,
+} from '@/utils/uploadLimits';
+import { ensureLocalFileUri } from '@/utils/ensureLocalFileUri';
+import type { PostUploadFile } from '@/utils/postUpload';
+import { enqueuePostUpload } from '@/utils/postUploadQueue';
 import {
   addPendingPost,
-  pollUntilPublished,
+  getCurrentUserId,
 } from '@/utils/pendingPosts';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
@@ -45,6 +51,7 @@ export interface GalleryMedia {
   height: number;
   mediaType: 'photo' | 'video';
   duration?: number;
+  fileSizeBytes?: number | null;
 }
 
 export default function CreatePostScreen() {
@@ -58,7 +65,6 @@ export default function CreatePostScreen() {
   const [galleryMedia, setGalleryMedia] = useState<GalleryMedia[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<GalleryMedia[]>([]);
   const [postText, setPostText] = useState('');
-  const [permissionStatus, setPermissionStatus] = useState<MediaLibrary.PermissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewingMedia, setViewingMedia] = useState<GalleryMedia | null>(null);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
@@ -109,57 +115,7 @@ export default function CreatePostScreen() {
     }
   }, [existingPost, isEditMode, initialDataLoaded]);
 
-  // Create post mutation
-  const createPostMutation = useMutation({
-    mutationFn: createPost,
-    onSuccess: async (response: any) => {
-      const isAsync = Boolean(response?.async);
-      const postId = Number(response?.post?.id);
-
-      if (isAsync && Number.isFinite(postId)) {
-        await notifyUploadReceived('post');
-        const firstThumb = selectedMedia.find((m) => m.mediaType === 'photo')?.uri
-          ?? selectedMedia[0]?.uri
-          ?? null;
-        await addPendingPost({
-          postId,
-          createdAt: Date.now(),
-          caption: postText.trim() || undefined,
-          thumbnailUri: firstThumb,
-        });
-        pollUntilPublished(postId).catch(() => {});
-        Toast.show({
-          type: 'success',
-          text1: 'Upload received',
-          text2: 'Processing your post — it will appear in your feed shortly.',
-          visibilityTime: 2500,
-        });
-      } else {
-        await notifyUploadReceived('post');
-        await queryClient.invalidateQueries({ queryKey: ['userPosts'] });
-        await queryClient.refetchQueries({ queryKey: ['userPosts'] });
-        Toast.show({
-          type: 'success',
-          text1: 'Post Created!',
-          text2: 'Your post has been shared successfully',
-          visibilityTime: 500,
-        });
-      }
-      setIsSubmittingLocal(false);
-      setTimeout(() => router.back(), 600);
-    },
-    onError: async (error: any) => {
-      await notifyUploadFailed('post', error?.message);
-      console.error('❌ Post Creation Error:', error);
-      setIsSubmittingLocal(false);
-      handleMutationError(error, 'Failed to Create Post');
-    },
-  });
-
   // Update post mutation
-  // const updatePostMutation = ()=>{
-  //   console.log('📝 Updating Post...')
-  // }
   const updatePostMutation = useMutation({
     mutationFn: updatePost,
     onSuccess: async (updatedPost: unknown) => {
@@ -184,13 +140,13 @@ export default function CreatePostScreen() {
       setTimeout(() => router.back(), 600);
     },
     onError: (error: any) => {
-      console.error('❌ Post Update Error:', error);
+      console.warn('❌ Post Update Error:', error?.message || String(error));
       setIsSubmittingLocal(false); // Re-enable input on error
       handleMutationError(error, 'Failed to Update Post');
     },
   });
 
-  const isSubmitting = isSubmittingLocal || createPostMutation.isPending || updatePostMutation.isPending;
+  const isSubmitting = isSubmittingLocal || updatePostMutation.isPending;
 
   const handleMutationError = (error: any, defaultMessage: string) => {
     if (error?.response) {
@@ -217,6 +173,40 @@ export default function CreatePostScreen() {
     requestPermissionAndLoadGallery();
   }, []);
 
+  const openAppSettings = () => {
+    Linking.openSettings().catch(() => {});
+  };
+
+  const getLocalFileSizeBytes = async (uri: string): Promise<number | null> => {
+    if (!uri || uri.startsWith('http')) return null;
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists && typeof info.size === 'number') {
+        return info.size;
+      }
+    } catch {
+      /* content:// URIs may not be readable on some Android builds */
+    }
+    return null;
+  };
+
+  const validateSelectedMedia = async (): Promise<string | null> => {
+    const newVideos = selectedMedia.filter(
+      (m) => m.mediaType === 'video' && !m.id.startsWith('existing_'),
+    );
+    if (newVideos.length > 1) {
+      return 'Only one video is allowed per post.';
+    }
+
+    for (const media of newVideos) {
+      const sizeBytes = media.fileSizeBytes ?? await getLocalFileSizeBytes(media.uri);
+      if (sizeBytes != null && sizeBytes > POST_VIDEO_MAX_SIZE_BYTES) {
+        return `Video is too large. Maximum size is ${POST_VIDEO_MAX_SIZE_MB}MB.`;
+      }
+    }
+    return null;
+  };
+
   const requestPermissionAndLoadGallery = async () => {
     try {
       if (Platform.OS === 'web') {
@@ -232,34 +222,26 @@ export default function CreatePostScreen() {
           { id: '8', uri: 'https://videos.pexels.com/video-files/1851190/1851190-uhd_2560_1440_30fps.mp4', width: 300, height: 400, mediaType: 'video', duration: 12000 },
         ];
         setGalleryMedia(placeholderMedia);
-        setPermissionStatus(MediaLibrary.PermissionStatus.GRANTED);
         setLoading(false);
         console.log('Web platform detected - using placeholder media');
         return;
       }
 
-      // Request permission for mobile platforms
+      // Android: use ImagePicker (Add Media / Camera) — avoids MediaLibrary granular permission issues.
+      if (Platform.OS === 'android') {
+        setGalleryMedia([]);
+        setLoading(false);
+        return;
+      }
+
       const granted = await requestMediaLibraryReadPermissions();
-      setPermissionStatus(
-        granted ? MediaLibrary.PermissionStatus.GRANTED : MediaLibrary.PermissionStatus.DENIED,
-      );
       console.log('Media library permission status:', granted ? 'granted' : 'denied');
 
       if (granted) {
         await loadGalleryMedia();
-      } else {
-        Alert.alert(
-          'Permission Required',
-          'This app needs access to your photo library to display media.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Settings', onPress: () => requestMediaLibraryReadPermissions() },
-          ]
-        );
       }
     } catch (error) {
       console.error('Error requesting permission:', error);
-      Alert.alert('Error', 'Failed to request permissions');
     } finally {
       setLoading(false);
     }
@@ -324,9 +306,14 @@ export default function CreatePostScreen() {
           'We need access to your photo library to select media. Please grant permission in your device settings.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => ImagePicker.requestMediaLibraryPermissionsAsync() },
+            { text: 'Open Settings', onPress: openAppSettings },
           ]
         );
+        return;
+      }
+
+      if (Platform.OS === 'android') {
+        await pickMedia('mixed');
         return;
       }
 
@@ -363,23 +350,49 @@ export default function CreatePostScreen() {
       aspect: [18, 32],
       quality: 0.6,
       videoQuality: ImagePicker.VideoQuality?.High || 1,
-      videoMaxDuration: 30,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newMedia: GalleryMedia[] = result.assets.map((asset, index) => ({
-        id: `picker_${Date.now()}_${index}`,
-        uri: asset.uri,
-        width: asset.width || 300,
-        height: asset.height || 400,
-        mediaType: asset.type === 'video' ? 'video' : 'photo',
-        duration: asset.duration,
-      }));
+      const newMedia: GalleryMedia[] = [];
+      for (let index = 0; index < result.assets.length; index++) {
+        const asset = result.assets[index];
+        const mediaType = asset.type === 'video' ? 'video' : 'photo';
+        const sizeBytes = mediaType === 'video' ? await getLocalFileSizeBytes(asset.uri) : null;
+        if (mediaType === 'video') {
+          if (sizeBytes != null && sizeBytes > POST_VIDEO_MAX_SIZE_BYTES) {
+            Alert.alert(
+              'Video too large',
+              `Maximum video size is ${POST_VIDEO_MAX_SIZE_MB}MB.`,
+            );
+            continue;
+          }
+        }
+        newMedia.push({
+          id: `picker_${Date.now()}_${index}`,
+          uri: asset.uri,
+          width: asset.width || 300,
+          height: asset.height || 400,
+          mediaType,
+          duration: asset.duration,
+          fileSizeBytes: sizeBytes,
+        });
+      }
+
+      if (newMedia.length === 0) return;
+
+      const hasNewVideo = newMedia.some((m) => m.mediaType === 'video');
+      const existingVideos = selectedMedia.filter((m) => m.mediaType === 'video');
+      if (hasNewVideo && existingVideos.length > 0) {
+        Alert.alert('One video only', 'This post already has a video. Remove it before adding another.');
+        return;
+      }
+      if (newMedia.filter((m) => m.mediaType === 'video').length > 1) {
+        Alert.alert('One video only', 'You can add only one video per post.');
+        return;
+      }
 
       setSelectedMedia(prev => [...prev, ...newMedia]);
       console.log('Media picked successfully:', newMedia.length, 'items');
-
-      Alert.alert('Success', 'Media added to your post!', [{ text: 'OK' }]);
     } else {
       console.log('Media picker cancelled');
     }
@@ -405,7 +418,7 @@ export default function CreatePostScreen() {
           'We need camera access to take photos and videos. Please grant permission in your device settings.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => ImagePicker.requestCameraPermissionsAsync() },
+            { text: 'Open Settings', onPress: openAppSettings },
           ]
         );
         return;
@@ -440,27 +453,35 @@ export default function CreatePostScreen() {
         aspect: [4, 3],
         quality: 0.8,
         videoQuality: ImagePicker.VideoQuality?.High || 1,
-        videoMaxDuration: 30,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newMedia: GalleryMedia[] = result.assets.map((asset, index) => ({
-          id: `camera_${Date.now()}_${index}`,
+        const asset = result.assets[0];
+        const mediaType = asset.type === 'video' ? 'video' : 'photo';
+        const sizeBytes = mediaType === 'video' ? await getLocalFileSizeBytes(asset.uri) : null;
+        if (mediaType === 'video') {
+          if (sizeBytes != null && sizeBytes > POST_VIDEO_MAX_SIZE_BYTES) {
+            Alert.alert('Video too large', `Maximum video size is ${POST_VIDEO_MAX_SIZE_MB}MB.`);
+            return;
+          }
+          if (selectedMedia.some((m) => m.mediaType === 'video')) {
+            Alert.alert('One video only', 'This post already has a video. Remove it before recording another.');
+            return;
+          }
+        }
+
+        const newMedia: GalleryMedia[] = [{
+          id: `camera_${Date.now()}_0`,
           uri: asset.uri,
           width: asset.width || 300,
           height: asset.height || 400,
-          mediaType: asset.type === 'video' ? 'video' : 'photo',
+          mediaType,
           duration: asset.duration,
-        }));
+          fileSizeBytes: sizeBytes,
+        }];
 
         setSelectedMedia(prev => [...prev, ...newMedia]);
         console.log('Camera media captured successfully:', newMedia.length, 'items');
-
-        Alert.alert(
-          'Success',
-          `${type === 'photo' ? 'Photo' : 'Video'} captured and added to your post!`,
-          [{ text: 'OK' }]
-        );
       } else {
         console.log('Camera capture cancelled');
       }
@@ -518,6 +539,18 @@ export default function CreatePostScreen() {
         return;
       }
 
+      const mediaError = await validateSelectedMedia();
+      if (mediaError) {
+        setIsSubmittingLocal(false);
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid media',
+          text2: mediaError,
+          visibilityTime: 4000,
+        });
+        return;
+      }
+
       // Get auth token
       const token = await SecureStore.getItemAsync('auth_token');
       console.log("The Token is: ", token);
@@ -541,6 +574,7 @@ export default function CreatePostScreen() {
       }
 
       // Process and add media files
+      const uploadFiles: PostUploadFile[] = [];
       if (selectedMedia.length > 0) {
         console.log(`📸 Processing ${selectedMedia.length} media file(s)...`);
         for (let i = 0; i < selectedMedia.length; i++) {
@@ -556,21 +590,25 @@ export default function CreatePostScreen() {
             const fileExtension = media.mediaType === 'video' ? 'mp4' : 'jpg';
             const mimeType = media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
             const fileName = `media_${Date.now()}_${i}.${fileExtension}`;
+            const localUri = await ensureLocalFileUri(media.uri, fileExtension);
 
             console.log(`📎 Adding media ${i + 1}/${selectedMedia.length}: ${fileName} (${media.mediaType})`);
-            
-            formData.append('media[]', {
-              uri: media.uri,
+
+            const file: PostUploadFile = {
+              uri: localUri,
               name: fileName,
               type: mimeType,
-            } as any);
+            };
+            uploadFiles.push(file);
+            formData.append('media[]', file as any);
           } catch (error) {
-            console.error(`❌ Error processing media ${i}:`, error);
+            console.warn(`❌ Error processing media ${i}:`, error instanceof Error ? error.message : error);
             Toast.show({
               type: 'error',
               text1: 'Media Processing Error',
               text2: `Failed to process media file ${i + 1}`,
             });
+            setIsSubmittingLocal(false);
             return;
           }
         }
@@ -599,11 +637,44 @@ export default function CreatePostScreen() {
         });
       } else {
         console.log('✨ Creating new post');
-        notifyUploadStarted('post');
-        createPostMutation.mutate({
-          data: formData,
-          token,
+        const clientId = `upload-${Date.now()}`;
+        const userId = await getCurrentUserId();
+        if (!userId) {
+          setIsSubmittingLocal(false);
+          Toast.show({
+            type: 'error',
+            text1: 'Authentication Error',
+            text2: 'Please log in again to create posts',
+          });
+          return;
+        }
+
+        await addPendingPost({
+          clientId,
+          userId,
+          status: 'uploading',
+          createdAt: Date.now(),
+          caption: postText.trim() || undefined,
+          thumbnailUri: null,
         });
+
+        const fields = postText.trim()
+          ? { title: postText.trim(), content: postText.trim() }
+          : undefined;
+
+        // Start upload in module scope BEFORE navigating — screen unmount must not cancel it.
+        enqueuePostUpload({
+          clientId,
+          userId,
+          token,
+          data: formData,
+          files: uploadFiles,
+          fields,
+        });
+
+        notifyUploadStarted('post');
+        setIsSubmittingLocal(false);
+        router.replace('/(tabs)');
       }
 
     } catch (error) {
@@ -653,14 +724,11 @@ export default function CreatePostScreen() {
     );
   }
 
-  if (permissionStatus !== MediaLibrary.PermissionStatus.GRANTED && Platform.OS !== 'web') {
+  if (loading && !isEditMode) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: dark ? 'black' : 'white' }]}>
-        <View style={styles.permissionContainer}>
-          <Text style={styles.permissionTitle}>Permission Required</Text>
-          <Text style={styles.permissionText}>
-            This app needs access to your photo library to display media.
-          </Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
@@ -681,9 +749,13 @@ export default function CreatePostScreen() {
           { color: theme.dark ? '#aaa' : '#666' },
         ]}
       >
-        Tip: Photos and videos are shown in full in the feed (letterboxed if needed). Use tall or wide shots
-        without important details at the very edges.
+        {POST_VIDEO_LIMIT_LABEL} Photos and videos are shown in full in the feed (letterboxed if needed).
       </Text>
+      {Platform.OS === 'android' && galleryMedia.length === 0 && (
+        <Text style={[styles.androidPickerHint, { color: theme.dark ? '#888' : '#777' }]}>
+          Tap Add Media or Camera below to choose photos and videos.
+        </Text>
+      )}
       <SelectedMedia
         selectedMedia={selectedMedia}
         onRemoveMedia={handleMediaRemove}
@@ -697,6 +769,7 @@ export default function CreatePostScreen() {
         onGalleryButtonPress={handleGalleryButtonPress}
         onCameraButtonPress={handleCameraButtonPress}
         onViewMedia={handleMediaView}
+        helperText={Platform.OS === 'android' ? POST_VIDEO_LIMIT_LABEL : undefined}
         disabled={isSubmitting}
       />
       <MediaViewModal
@@ -713,8 +786,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 4,
     marginTop: 4,
+  },
+  androidPickerHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   container: {
     flex: 1,
@@ -729,7 +808,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   errorActionBtn: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,
@@ -746,23 +825,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  permissionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
-  },
-  permissionText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
   },
 });

@@ -26,6 +26,7 @@ import { editUserProfile } from '@/utils/mutations/profile';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useNavigation } from '@react-navigation/native';
+import { DEFAULT_PROFILE_IMAGE } from '@/constants/profilePlaceholder';
 
 export default function EditProfileScreen() {
   const { dark } = useTheme();
@@ -283,7 +284,7 @@ export default function EditProfileScreen() {
       shadowRadius: 4,
     },
     selectedCard: {
-      borderColor: "#940304",
+      borderColor: "#C61F3A",
       borderWidth: 2,
     },
     genderImage: {
@@ -294,7 +295,7 @@ export default function EditProfileScreen() {
     },
     genderTextWrapper: {
       width: "100%",
-      backgroundColor: "#940304",
+      backgroundColor: "#C61F3A",
       paddingVertical: 10,
       alignItems: "center",
       borderBottomLeftRadius: 20,
@@ -339,9 +340,7 @@ export default function EditProfileScreen() {
               onPress={handleImagePress}
             >
               <Image
-                source={{
-                  uri: profileImage || 'https://ui-avatars.com/api/?name=User'
-                }}
+                source={profileImage ? { uri: profileImage } : DEFAULT_PROFILE_IMAGE}
                 style={styles.profileImage}
               />
               <View style={styles.cameraOverlay}>
@@ -528,7 +527,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -547,7 +546,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   saveButton: {
-    backgroundColor: '#940304',
+    backgroundColor: '#C61F3A',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

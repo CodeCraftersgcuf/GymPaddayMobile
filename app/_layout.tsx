@@ -14,12 +14,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, View } from "react-native";
 import NotificationManager from "./NotificationManager";
+import { usePresenceHeartbeat } from "@/utils/presenceHeartbeat";
 
 // Prevent the splash screen from auto-hiding before boot preload completes
 SplashScreen.preventAutoHideAsync();
 
 function BootAwareRoot({ token, userDetails }: { token: string | null; userDetails: any }) {
   const boot = useAppBoot();
+
+  usePresenceHeartbeat(token);
 
   useEffect(() => {
     if (boot.phase === 'ready') {
@@ -56,7 +59,9 @@ function BootAwareRoot({ token, userDetails }: { token: string | null; userDetai
         <Stack.Screen name="marketProfile" options={{ headerShown: false }} />
         <Stack.Screen name="UserListing" options={{ headerShown: false }} />
         <Stack.Screen name="UserProfile" options={{ headerShown: false }} />
+        <Stack.Screen name="SinglePostScreen" options={{ headerShown: false }} />
         <Stack.Screen name="goLive" options={{ headerShown: false }} />
+        <Stack.Screen name="LiveStreamDiscoverScreen" options={{ headerShown: false }} />
         <Stack.Screen name="BoostPostScreen" options={{ headerShown: false }} />
         <Stack.Screen name="BoostPostScreen_review" options={{ headerShown: false }} />
         <Stack.Screen name="BoostPostScreen_Final" options={{ headerShown: false }} />
@@ -66,9 +71,7 @@ function BootAwareRoot({ token, userDetails }: { token: string | null; userDetai
         <Stack.Screen name="daily-call-screen" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
-      {token && userDetails && (
-        <NotificationManager token={token} user={userDetails} />
-      )}
+      <NotificationManager />
       <Toast />
     </>
   );
@@ -116,7 +119,7 @@ export default function RootLayout() {
   if (!isAppReady || !fontsReady) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" }}>
-        <ActivityIndicator size="large" color="#940304" />
+        <ActivityIndicator size="large" color="#C61F3A" />
       </View>
     );
   }

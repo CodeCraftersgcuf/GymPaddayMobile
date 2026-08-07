@@ -26,7 +26,7 @@ export const AdCard: React.FC<AdCardProps> = ({
     border: dark ? '#232323' : '#e0e0e0',
     text: dark ? '#fff' : '#181818',
     textSecondary: dark ? '#b0b0b0' : '#6c6c6c',
-    primary: '#FF3B30',
+    primary: '#C61F3A',
     success: '#4CD964',
   };
 
