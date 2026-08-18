@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GP_RATE, MAX_WITHDRAWAL_NAIRA, MIN_WITHDRAWAL_NAIRA, WithdrawData } from '@/app/withdraw';
+import { GP_RATE, MIN_WITHDRAWAL_NAIRA, MAX_WITHDRAWAL_NAIRA, WithdrawData } from '@/app/withdraw';
 import { useTheme } from '@/contexts/themeContext';
 import { WithdrawalBank } from '@/utils/queries/withdrawals';
 

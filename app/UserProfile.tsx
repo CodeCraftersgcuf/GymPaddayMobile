@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
+  Modal,
+  TextInput,
   type ViewToken,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -28,6 +30,8 @@ import * as Clipboard from 'expo-clipboard';
 import { followUnfollowUser, getFollowerList, getFollowingList } from '@/utils/queries/socialMedia';
 import { useTheme } from '@/contexts/themeContext';
 import { ChatMessagePayload, sendChatMessage } from '@/utils/mutations/chat';
+import { createGift } from '@/utils/mutations/gifts';
+import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 import Toast from 'react-native-toast-message';
 import { blockUser, restrictUser } from '@/utils/utils/userPrivacyStorage';
 // import { blockUser, restrictUser } from '@/utils/userPrivacyStorage'; // adjust path
@@ -152,6 +156,7 @@ function getVideoPostsForGrid(posts: any[]): ProfileGridItem[] {
 
 export default function ProfileScreen() {
   const { dark } = useTheme();
+  const { blocked: hideIosMonetization } = useIosMonetizationHidden();
   const goBack = useSafeBack();
   const theme = {
     background: dark ? '#000000' : '#FAFAFA',
@@ -163,6 +168,9 @@ export default function ProfileScreen() {
   };
 
   const [activeTab, setActiveTab] = useState('posts');
+  const [showGiftModal, setShowGiftModal] = useState(false);
+  const [giftAmount, setGiftAmount] = useState('10');
+  const [sendingGift, setSendingGift] = useState(false);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const followersSheetRef = useRef<BottomSheet>(null);
   const followingSheetRef = useRef<BottomSheet>(null);
@@ -432,6 +440,41 @@ export default function ProfileScreen() {
     },
   });
 
+  const handleSendProfileGift = async () => {
+    const amount = Number(giftAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Toast.show({ type: 'error', text1: 'Enter a valid GP amount' });
+      return;
+    }
+    setSendingGift(true);
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) throw new Error('Not authenticated');
+      await createGift({
+        token,
+        data: {
+          to_user_id: Number(user_id),
+          name: 'GP Gift',
+          value: amount,
+          message: `Sent ${amount} GP`,
+        },
+      });
+      setShowGiftModal(false);
+      Toast.show({
+        type: 'success',
+        text1: 'Gift sent',
+        text2: `${amount} GP sent successfully`,
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Gift failed',
+        text2: err?.message || 'Could not send gift',
+      });
+    } finally {
+      setSendingGift(false);
+    }
+  };
   // Add refreshing state for pull-to-refresh
   const [refreshing, setRefreshing] = useState(false);
 
@@ -582,6 +625,17 @@ export default function ProfileScreen() {
               >
                 <Text style={[styles.messageButtonText, { color: 'white' }]}>Message</Text>
               </TouchableOpacity>
+              {!hideIosMonetization && (
+                <TouchableOpacity
+                  style={[styles.messageButton, styles.giftProfileBtn]}
+                  onPress={() => {
+                    setGiftAmount('10');
+                    setShowGiftModal(true);
+                  }}
+                >
+                  <Text style={[styles.messageButtonText, { color: '#C61F3A' }]}>Gift GP</Text>
+                </TouchableOpacity>
+              )}
               {data?.is_business && (
                 <TouchableOpacity
                   onPress={() => handleListingPress()}
@@ -667,6 +721,7 @@ export default function ProfileScreen() {
       openFollowersSheet,
       openFollowingSheet,
       handleListingPress,
+      hideIosMonetization,
     ],
   );
 
@@ -840,6 +895,53 @@ export default function ProfileScreen() {
           loading={isLoadingFollowing}
           emptyText="No following found."
         />
+
+        <Modal
+          visible={showGiftModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowGiftModal(false)}
+        >
+          <View style={styles.giftModalOverlay}>
+            <View style={[styles.giftModalCard, { backgroundColor: theme.secondary }]}>
+              <Text style={[styles.giftModalTitle, { color: theme.text }]}>Send GP Gift</Text>
+              <Text style={[styles.giftModalHint, { color: theme.textSecondary }]}>
+                Enter how many GP coins to send to {data?.user?.username || 'this user'}.
+              </Text>
+              <TextInput
+                style={[
+                  styles.giftModalInput,
+                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                ]}
+                keyboardType="numeric"
+                value={giftAmount}
+                onChangeText={setGiftAmount}
+                placeholder="10"
+                placeholderTextColor={theme.textSecondary}
+              />
+              <View style={styles.giftModalActions}>
+                <TouchableOpacity
+                  style={[styles.giftModalBtn, styles.giftModalCancel]}
+                  onPress={() => setShowGiftModal(false)}
+                  disabled={sendingGift}
+                >
+                  <Text style={{ color: theme.text }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.giftModalBtn, styles.giftModalSend]}
+                  onPress={handleSendProfileGift}
+                  disabled={sendingGift}
+                >
+                  {sendingGift ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Send</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </GestureHandlerRootView >
   );
@@ -935,6 +1037,55 @@ const styles = StyleSheet.create({
   listingBtn: {
     borderWidth: 1,
     borderColor: 'red'
+  },
+  giftProfileBtn: {
+    borderWidth: 1,
+    borderColor: '#C61F3A',
+    backgroundColor: 'transparent',
+  },
+  giftModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  giftModalCard: {
+    borderRadius: 16,
+    padding: 20,
+  },
+  giftModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  giftModalHint: {
+    fontSize: 14,
+    marginBottom: 14,
+  },
+  giftModalInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  giftModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  giftModalBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  giftModalCancel: {
+    backgroundColor: 'rgba(128,128,128,0.2)',
+  },
+  giftModalSend: {
+    backgroundColor: '#C61F3A',
   },
   messageButtonText: {
     fontSize: 14,

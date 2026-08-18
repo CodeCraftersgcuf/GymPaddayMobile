@@ -252,10 +252,11 @@ const styles = StyleSheet.create({
   },
   conversationsWrapper: {
     flex: 1,
-    marginTop: 20,
+    marginTop: 12,
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
-    elevation: 5,
+    overflow: 'hidden',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -263,5 +264,5 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-  }
+  },
 });

@@ -325,15 +325,15 @@ const User_liveViewMain: React.FC = () => {
   };
 
   const handleSendSuccess = async (amount: number) => {
-    const coins = amount * 10;
     setActivePanel('none');
     const giftText = `Sent ${selectedGift?.emoji} x${amount}`;
     if (streamEnded) return;
     try {
+      // `amount` from SendCoinsPanel is GP quantity (already in GP coins).
       await sendChatMessageAsync({
         message: giftText,
         type: 'gift',
-        amount: String(coins),
+        amount: String(amount),
       });
       await refreshWalletBalance();
     } catch (e: any) {

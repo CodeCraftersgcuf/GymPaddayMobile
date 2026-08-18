@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -7,19 +7,15 @@ import {
     StreamCall,
     Call,
     CallContent,
-    useCallStateHooks,
-    CallingState,
 } from '@stream-io/video-react-native-sdk';
-import { Audio } from 'expo-av';
 import * as SecureStore from 'expo-secure-store';
-// import { StreamAudioVideo } from '@stream-io/video-react-native-sdk';
+import { startCallRingtone, stopCallRingtone } from '@/utils/callRingtone';
 
 const API_URL = 'https://api.gympaddy.com/api/user';
 
 export default function StreamIncomingCall() {
     const router = useRouter();
     const {
-        receiver_id,
         call_id,
         call_type,
         caller_name = 'Unknown',
@@ -30,72 +26,28 @@ export default function StreamIncomingCall() {
     const [call, setCall] = useState<Call | null>(null);
     const [joined, setJoined] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
-    console.log("call type for incoming", call_type)
-    // 🚀 useCallStateHooks - listens to lifecycle changes
-    const { useCallCallingState } = useCallStateHooks();
-    const callingState = useCallCallingState();
+    const [isMuted, setIsMuted] = useState(false);
+    const ringingRef = useRef(true);
 
-    // 🔊 Play ringtone when screen loads
+    // Ringtone must start as soon as this screen opens (before Stream join).
     useEffect(() => {
-        const playRingtone = async () => {
-            try {
-                const { sound } = await Audio.Sound.createAsync(
-                    require('../../assets/music/audio.mp3')
-                );
-                setSound(sound);
-                await sound.setIsLoopingAsync(true);
-                await sound.playAsync();
-            } catch {
-                /* ringtone optional if playback fails */
-            }
-        };
-
-        playRingtone();
-
+        ringingRef.current = true;
+        startCallRingtone().catch(() => {});
         return () => {
-            if (sound) {
-                sound.unloadAsync().catch(() => {});
-            }
+            ringingRef.current = false;
+            stopCallRingtone().catch(() => {});
         };
     }, []);
 
-    // ✅ Track call lifecycle state (ex: LEFT, FAILED, etc.)
-    useEffect(() => {
-        if (!callingState) return;
+    const stopRinging = async () => {
+        ringingRef.current = false;
+        await stopCallRingtone();
+    };
 
-        switch (callingState) {
-            case CallingState.LEFT:
-            case CallingState.RECONNECTING_FAILED:
-                router.replace('/(tabs)');
-                break;
-
-            case CallingState.OFFLINE:
-                Alert.alert('You are offline');
-                break;
-
-            case CallingState.RECONNECTING:
-                console.log('Reconnecting to call...');
-                break;
-
-            case CallingState.MIGRATING:
-                console.log('Migrating to new SFU node...');
-                break;
-
-            default:
-                break;
-        }
-    }, [callingState]);
-
-    // ✅ Accept call
     const handleAcceptCall = async () => {
         if (isJoining) return;
         setIsJoining(true);
-
-        if (sound) {
-            await sound.stopAsync();
-            await sound.unloadAsync();
-        }
+        await stopRinging();
 
         try {
             const token = await SecureStore.getItemAsync('auth_token');
@@ -124,9 +76,7 @@ export default function StreamIncomingCall() {
                 token: streamToken,
             });
             const normalizedCallType = String(call_type).toLowerCase();
-
             const streamCallType = normalizedCallType === 'video' ? 'default' : 'audio_room';
-
             const callObj = streamClient.call(streamCallType, String(call_id));
 
             await callObj.join({
@@ -137,6 +87,11 @@ export default function StreamIncomingCall() {
             if (call_type !== 'video') {
                 await callObj.microphone.enable();
             }
+
+            callObj.on('call.ended', () => {
+                router.replace('/(tabs)');
+            });
+
             setClient(streamClient);
             setCall(callObj);
             setJoined(true);
@@ -147,28 +102,23 @@ export default function StreamIncomingCall() {
         }
     };
 
-    // ❌ Decline call
     const handleDecline = async () => {
-        if (sound) {
-            await sound.stopAsync();
-            await sound.unloadAsync();
+        await stopRinging();
+        try {
+            if (call) await call.leave();
+        } catch {
+            /* ignore */
         }
-
-        if (call) {
-            await call.leave(); // ensure proper leave
-        }
-
-        router.replace('/');
+        router.replace('/(tabs)');
     };
-    const [isMuted, setIsMuted] = useState(false);
 
     const handleToggleMic = async () => {
         if (!call) return;
         try {
             if (isMuted) {
-                await call.microphone.enable();   // Unmute
+                await call.microphone.enable();
             } else {
-                await call.microphone.disable();  // Mute
+                await call.microphone.disable();
             }
             setIsMuted(!isMuted);
         } catch (error) {
@@ -176,8 +126,6 @@ export default function StreamIncomingCall() {
         }
     };
 
-
-    // 🎥 Full call UI
     if (joined && client && call) {
         const isVideoCall = String(call_type).toLowerCase() === 'video';
 
@@ -210,7 +158,7 @@ export default function StreamIncomingCall() {
                                     style={[styles.voiceBtn, { backgroundColor: '#C61F3A' }]}
                                     onPress={async () => {
                                         await call.leave();
-                                        router.replace('/');
+                                        router.replace('/(tabs)');
                                     }}
                                 >
                                     <Text style={styles.voiceBtnText}>End</Text>
@@ -223,7 +171,6 @@ export default function StreamIncomingCall() {
         );
     }
 
-    // 📞 Incoming call UI
     return (
         <View style={styles.container}>
             <Image
@@ -236,6 +183,7 @@ export default function StreamIncomingCall() {
             />
             <Text style={styles.name}>{caller_name}</Text>
             <Text style={styles.callTypeText}>{String(call_type).toUpperCase()} CALL</Text>
+            <Text style={styles.ringingHint}>Incoming call…</Text>
 
             <View style={styles.buttons}>
                 <TouchableOpacity
@@ -255,37 +203,12 @@ export default function StreamIncomingCall() {
 }
 
 const styles = StyleSheet.create({
-    voiceCallContainer: {
-        flex: 1,
-        backgroundColor: '#0a0a0a',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    voiceButtons: {
-        flexDirection: 'row',
-        marginTop: 40,
-        width: '100%',
-        justifyContent: 'space-around',
-    },
-    voiceBtn: {
-        backgroundColor: '#4CAF50',
-        paddingVertical: 12,
-        paddingHorizontal: 30,
-        borderRadius: 30,
-    },
-    voiceBtnText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-
     container: {
         flex: 1,
-        backgroundColor: '#0a0a0a',
-        justifyContent: 'center',
+        backgroundColor: '#000',
         alignItems: 'center',
-        paddingHorizontal: 20,
+        justifyContent: 'center',
+        paddingHorizontal: 24,
     },
     avatar: {
         width: 140,
@@ -296,41 +219,69 @@ const styles = StyleSheet.create({
         borderColor: '#fff',
     },
     name: {
-        fontSize: 24,
-        fontWeight: 'bold',
         color: '#fff',
+        fontSize: 22,
+        fontWeight: '700',
+        marginBottom: 8,
+        textAlign: 'center',
     },
     callTypeText: {
-        fontSize: 18,
-        color: '#bbb',
-        marginTop: 8,
+        color: '#ccc',
+        fontSize: 14,
+        marginBottom: 8,
+        letterSpacing: 1,
+    },
+    ringingHint: {
+        color: '#C61F3A',
+        fontSize: 15,
+        marginBottom: 36,
     },
     buttons: {
         flexDirection: 'row',
-        marginTop: 40,
-        width: '100%',
-        justifyContent: 'space-around',
+        gap: 16,
     },
     acceptButton: {
-        backgroundColor: '#4CAF50',
-        paddingVertical: 12,
-        paddingHorizontal: 30,
-        borderRadius: 30,
+        backgroundColor: '#22C55E',
+        paddingHorizontal: 28,
+        paddingVertical: 14,
+        borderRadius: 28,
     },
     declineButton: {
         backgroundColor: '#C61F3A',
-        paddingVertical: 12,
-        paddingHorizontal: 30,
-        borderRadius: 30,
+        paddingHorizontal: 28,
+        paddingVertical: 14,
+        borderRadius: 28,
     },
     acceptText: {
         color: '#fff',
+        fontWeight: '700',
         fontSize: 16,
-        fontWeight: 'bold',
     },
     declineText: {
         color: '#fff',
+        fontWeight: '700',
         fontSize: 16,
-        fontWeight: 'bold',
+    },
+    voiceCallContainer: {
+        flex: 1,
+        backgroundColor: '#000',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    voiceButtons: {
+        flexDirection: 'row',
+        gap: 16,
+        marginTop: 40,
+    },
+    voiceBtn: {
+        backgroundColor: '#333',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 28,
+    },
+    voiceBtnText: {
+        color: '#fff',
+        fontWeight: '600',
     },
 });

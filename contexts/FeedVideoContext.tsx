@@ -6,10 +6,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
-
-const STORAGE_KEY = 'feed_video_muted';
 
 type FeedVideoContextValue = {
   isMuted: boolean;
@@ -20,8 +17,8 @@ type FeedVideoContextValue = {
 const FeedVideoContext = createContext<FeedVideoContextValue | null>(null);
 
 export function FeedVideoProvider({ children }: { children: React.ReactNode }) {
+  // Videos always start muted; user must tap the mute icon to hear audio.
   const [isMuted, setIsMuted] = useState(true);
-  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -33,44 +30,13 @@ export function FeedVideoProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (cancelled) return;
-        if (raw === '0') setIsMuted(false);
-        else if (raw === '1') setIsMuted(true);
-      } catch {
-        /* keep default */
-      } finally {
-        if (!cancelled) setHydrated(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const setMuted = useCallback((muted: boolean) => {
+    setIsMuted(muted);
   }, []);
-
-  const persist = useCallback((muted: boolean) => {
-    AsyncStorage.setItem(STORAGE_KEY, muted ? '1' : '0').catch(() => {});
-  }, []);
-
-  const setMuted = useCallback(
-    (muted: boolean) => {
-      setIsMuted(muted);
-      if (hydrated) persist(muted);
-    },
-    [hydrated, persist]
-  );
 
   const toggleMuted = useCallback(() => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      if (hydrated) persist(next);
-      return next;
-    });
-  }, [hydrated, persist]);
+    setIsMuted((prev) => !prev);
+  }, []);
 
   const value = useMemo(
     () => ({ isMuted, setMuted, toggleMuted }),

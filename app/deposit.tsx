@@ -29,6 +29,7 @@ import Toast from 'react-native-toast-message';
 import { useFocusEffect } from '@react-navigation/native';
 import { resolveLatestDepositorName } from '@/utils/resolveLatestUserProfile';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
+import { GP_RATE } from '@/constants/gp';
 
 type ViewMode = 'deposit' | 'payment';
 
@@ -227,7 +228,7 @@ export default function DepositPaymentTab() {
                 {/* Exchange Rate */}
                 <View style={styles.exchangeRateContainer}>
                     <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                    <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
+                    <Text style={styles.exchangeRateValue}>N{GP_RATE.toLocaleString()} / 1GP</Text>
                 </View>
                 <TouchableOpacity 
                     style={styles.proceedButton} 
@@ -289,7 +290,7 @@ export default function DepositPaymentTab() {
             </ThemedView>
             <View style={[styles.exchangeRateContainer, { marginHorizontal: 20 }]}>
                 <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                <Text style={styles.exchangeRateValue}>N2,000 / 2GP</Text>
+                <Text style={styles.exchangeRateValue}>N{GP_RATE.toLocaleString()} / 1GP</Text>
             </View>
 
 

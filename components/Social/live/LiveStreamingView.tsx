@@ -61,25 +61,9 @@ async function ensureLiveMediaPermissions(): Promise<{ ok: boolean; message?: st
 }
 
 /**
- * Prefer Agora WebView (same path as Expo Go).
- * Native react-native-agora hangs on "Joining channel…" on EAS/dev builds;
- * WebView is JS-only and shippable via OTA.
+ * Live streaming uses Agora WebView only.
+ * Native react-native-agora previously hung on "Joining channel…" on EAS builds.
  */
-function canUseNativeAgora(): boolean {
-  return false;
-}
-
-/** Lazy load kept for a future native re-enable; currently unused while WebView is forced. */
-function loadNativeLivePlayer(): React.ComponentType<any> | null {
-  if (!canUseNativeAgora()) return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('./LiveStreamingPlayer').default;
-  } catch {
-    return null;
-  }
-}
-
 async function resolveAgoraUid(): Promise<number> {
   try {
     const raw = await SecureStore.getItemAsync('user_data');
@@ -145,7 +129,6 @@ export default function LiveStreamingView({
   const chatScrollRef = useRef<ScrollView>(null);
   const [cameraReadyForWeb, setCameraReadyForWeb] = useState(false);
   const [mediaPermissionError, setMediaPermissionError] = useState<string | null>(null);
-  const [NativeLivePlayer, setNativeLivePlayer] = useState<React.ComponentType<any> | null>(null);
 
   const { data: agoraAuth, isPending: agoraTokenPending, isError: agoraTokenError } = useQuery({
     queryKey: ['liveHostToken', CHANNEL_NAME],
@@ -165,16 +148,14 @@ export default function LiveStreamingView({
     },
   });
 
-  const useNativeLive = NativeLivePlayer != null;
-
   const hostWebHtml = useMemo(() => {
-    if (!agoraAuth?.token || useNativeLive) return null;
+    if (!agoraAuth?.token) return null;
     return buildLiveStreamWebHtml(CHANNEL_NAME, 'host', {
       appId: AGORA_LIVE_APP_ID,
       token: agoraAuth.token,
       uid: agoraAuth.uid,
     });
-  }, [CHANNEL_NAME, agoraAuth?.token, agoraAuth?.uid, useNativeLive]);
+  }, [CHANNEL_NAME, agoraAuth?.token, agoraAuth?.uid]);
 
   const [audienceModalVisible, setAudienceModalVisible] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -310,13 +291,10 @@ export default function LiveStreamingView({
       }
       setMediaPermissionError(null);
 
-      // Always use WebView live path (OTA-safe). Give camera time to release after RN permission prompt.
-      const Player = loadNativeLivePlayer();
-      if (!cancelled && Player) setNativeLivePlayer(() => Player);
-
+      // WebView-only live path (OTA-safe). Brief delay so OS releases camera after permission prompt.
       timer = setTimeout(() => {
         if (!cancelled) setCameraReadyForWeb(true);
-      }, Player ? 250 : 450);
+      }, 450);
     })();
 
     return () => {
@@ -467,16 +445,7 @@ export default function LiveStreamingView({
             </View>
           ) : null}
 
-          {!!agoraAuth?.token && cameraReadyForWeb && NativeLivePlayer && (
-            <NativeLivePlayer
-              token={agoraAuth.token}
-              channelName={CHANNEL_NAME}
-              uid={agoraAuth.uid}
-              role="host"
-            />
-          )}
-
-          {!!hostWebHtml && cameraReadyForWeb && !useNativeLive && !mediaPermissionError && (
+          {!!hostWebHtml && cameraReadyForWeb && !mediaPermissionError && (
             <WebView
               originWhitelist={['*']}
               source={{

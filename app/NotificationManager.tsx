@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { AppState, InteractionManager } from 'react-native';
+import { AppState, InteractionManager, Platform } from 'react-native';
 import { registerForPushNotificationsAsync, saveFcmTokenToServer } from '@/utils/notificationService';
 import { navigateFromNotification } from '@/utils/notificationNavigation';
 import { useRouter } from 'expo-router';
@@ -10,11 +10,33 @@ import { removePendingPostByPostId } from '@/utils/pendingPosts';
 import { prefetchStoriesFromCache } from '@/utils/storyPrefetch';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
+import { startCallRingtone } from '@/utils/callRingtone';
 
 function isForUser(data: Record<string, unknown>, userId: number | undefined): boolean {
   if (!userId) return false;
-  const notifUserId = data.userId ?? data.user_id;
+  const notifUserId = data.userId ?? data.user_id ?? data.receiver_id;
+  // Call pushes always target the current device user; allow if userId matches or is missing.
+  if (notifUserId == null || notifUserId === '') {
+    return data.type === 'incoming_call';
+  }
   return parseInt(String(notifUserId), 10) === userId;
+}
+
+function openIncomingCall(
+  router: ReturnType<typeof useRouter>,
+  data: Record<string, unknown>,
+) {
+  startCallRingtone().catch(() => {});
+  router.push({
+    pathname: '/StreamIncomingCall',
+    params: {
+      receiver_id: String(data.caller_id ?? data.receiver_id ?? ''),
+      call_id: String(data.call_id ?? ''),
+      call_type: String(data.call_type ?? 'voice'),
+      caller_name: String(data.caller_name || 'Unknown'),
+      caller_avatar: String(data.caller_avatar || ''),
+    },
+  });
 }
 
 async function handleContentNotification(
@@ -97,6 +119,25 @@ async function readSession(): Promise<{ token: string; userId: number } | null> 
   }
 }
 
+async function ensureCallNotificationChannel() {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('calls', {
+    name: 'Incoming calls',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 500, 400, 500, 400, 500],
+    enableVibrate: true,
+    bypassDnd: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'General',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    sound: 'default',
+    enableVibrate: true,
+  });
+}
+
 export default function NotificationManager() {
     const notificationListener = useRef<Notifications.Subscription | null>(null);
     const responseListener = useRef<Notifications.Subscription | null>(null);
@@ -108,12 +149,25 @@ export default function NotificationManager() {
             handleNotification: async (notification) => {
                 const data = notification?.request?.content?.data || {};
                 const session = await readSession();
-                const notifUserId = data.userId ?? data.user_id;
-                if (session && parseInt(String(notifUserId), 10) === session.userId) {
+                const notifUserId = data.userId ?? data.user_id ?? data.receiver_id;
+                const isCall = data.type === 'incoming_call';
+                const forUser =
+                  !session
+                    ? false
+                    : notifUserId == null || notifUserId === ''
+                      ? isCall
+                      : parseInt(String(notifUserId), 10) === session.userId;
+
+                if (forUser) {
                     return {
                         shouldShowAlert: true,
                         shouldPlaySound: true,
                         shouldSetBadge: true,
+                        ...(isCall
+                          ? {
+                              priority: Notifications.AndroidNotificationPriority.MAX,
+                            }
+                          : {}),
                     };
                 }
                 return {
@@ -140,15 +194,7 @@ export default function NotificationManager() {
                 if (!isForUser(data, userId)) return;
 
                 if (data.type === 'incoming_call') {
-                    router.push({
-                        pathname: '/StreamIncomingCall',
-                        params: {
-                            receiver_id: String(data?.caller_id ?? ''),
-                            call_id: String(data.call_id ?? ''),
-                            call_type: String(data.call_type ?? ''),
-                            caller_name: String(data.caller_name || 'Unknown'),
-                        },
-                    });
+                    openIncomingCall(router, data);
                     return;
                 }
 
@@ -162,15 +208,7 @@ export default function NotificationManager() {
                 if (!isForUser(data, userId)) return;
 
                 if (data.type === 'incoming_call') {
-                    router.push({
-                        pathname: '/StreamIncomingCall',
-                        params: {
-                            receiver_id: String(data.caller_id ?? ''),
-                            call_id: String(data.call_id ?? ''),
-                            call_type: String(data.call_type ?? ''),
-                            caller_name: String(data.caller_name || 'Unknown'),
-                        },
-                    });
+                    openIncomingCall(router, data);
                     return;
                 }
 
@@ -189,6 +227,8 @@ export default function NotificationManager() {
         const setupNotifications = async () => {
             const session = await readSession();
             if (!session) return;
+
+            await ensureCallNotificationChannel();
 
             await new Promise<void>((resolve) => {
                 InteractionManager.runAfterInteractions(() => resolve());

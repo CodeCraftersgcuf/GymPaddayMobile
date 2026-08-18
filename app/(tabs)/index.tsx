@@ -48,6 +48,7 @@ import { sortGroupedStoriesUnseenFirst } from '@/utils/storyViews';
 import { prefetchProfilesForFeedPosts, warmFeedImagesFromCache } from '@/utils/mediaWarm';
 import { FeedVideoPoolProvider, FeedVideoLayout } from '@/contexts/FeedVideoPoolContext';
 import FeedVideoOverlay from '@/components/Social/FeedVideoOverlay';
+import { useFeedVideo } from '@/contexts/FeedVideoContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { CachedImage } from '@/components/media/CachedImage';
@@ -97,6 +98,7 @@ export default function SocialFeedScreen() {
   const savedActivePostRef = useRef<number | null>(null);
   const activePostIdRef = useRef<number | null>(null);
   const { registerFeedScroll, registerActivePostId } = useFeedSession();
+  const { setMuted } = useFeedVideo();
   const isFocused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   // Reels (fullscreen video detail) open state is owned here so we can fully
@@ -107,6 +109,13 @@ export default function SocialFeedScreen() {
   const feedActive = isFocused && appActive;
   const reelsOpen = reelsPostId != null;
   const playbackEnabled = feedActive && !reelsOpen;
+
+  // Always remute when leaving Socials so audio never bleeds into Market/other tabs.
+  useEffect(() => {
+    if (!feedActive) {
+      setMuted(true);
+    }
+  }, [feedActive, setMuted]);
   const [pendingPosts, setPendingPosts] = useState<PendingPost[]>([]);
   const prevPendingCountRef = useRef(0);
 

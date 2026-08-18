@@ -17,9 +17,10 @@ import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { useIosMonetizationHidden } from '@/utils/iosMonetization';
 import uuid from 'react-native-uuid';
+import { GP_RATE as SHARED_GP_RATE } from '@/constants/gp';
 
-/** Naira paid out per 1 GP. Must match the backend WithdrawalRequest::RATE. */
-export const GP_RATE = 2000;
+/** Naira paid out per 1 GP. Must match backend config('wallet.gp_to_naira_rate'). */
+export const GP_RATE = SHARED_GP_RATE;
 
 /** Smallest payout the backend accepts, in Naira. */
 export const MIN_WITHDRAWAL_NAIRA = 2000;

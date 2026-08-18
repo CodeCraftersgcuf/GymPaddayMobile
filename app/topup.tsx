@@ -20,6 +20,7 @@ import { buildFlutterwaveCheckoutHtml } from '@/utils/flutterwaveCheckout';
 import ThemedView from '@/components/ThemedView';
 import { useTheme } from '@/contexts/themeContext';
 import ThemeText from '@/components/ThemedText';
+import { GP_RATE } from '@/constants/gp';
 
 type ViewMode = 'deposit' | 'payment' | 'flutterwave';
 
@@ -293,7 +294,7 @@ export default function TopupScreen() {
                 {/* Exchange Rate */}
                 <View style={styles.exchangeRateContainer}>
                     <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                    <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
+                    <Text style={styles.exchangeRateValue}>N{GP_RATE.toLocaleString()} / 1GP</Text>
                 </View>
                 <TouchableOpacity 
                     style={styles.proceedButton} 
@@ -355,7 +356,7 @@ export default function TopupScreen() {
             </ThemedView>
             <View style={[styles.exchangeRateContainer, { marginHorizontal: 20 }]}>
                 <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
+                <Text style={styles.exchangeRateValue}>N{GP_RATE.toLocaleString()} / 1GP</Text>
             </View>
 
 

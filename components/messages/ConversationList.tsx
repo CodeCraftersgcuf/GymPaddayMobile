@@ -22,6 +22,10 @@ type Conversation = {
   lastMessage: {
     text: string;
     timestamp: Date;
+    unreadCount?: number;
+  };
+  other_user?: {
+    profile_picture_url?: string;
   };
 };
 
@@ -41,73 +45,82 @@ export default function ConversationList({
   onRefresh,
 }: Props) {
   const { dark } = useTheme();
-  // console.log("Conversations:", conversations);
 
   const formatMessageTime = (date: Date) =>
     isToday(date) ? format(date, 'h:mm a') : format(date, 'MMM d');
 
-  const flatListRef = React.useRef<FlatList>(null);
-
-  React.useEffect(() => {
-    if (conversations.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 0);
-    }
-  }, [conversations]);
+  const nameColor = dark ? '#FFFFFF' : '#111111';
+  const previewColor = dark ? '#B3B3B3' : '#666666';
+  const timeColor = dark ? '#A0A0A0' : '#888888';
 
   return (
     <FlatList
-      ref={flatListRef}
       data={conversations}
       keyExtractor={(item) => item.id}
       style={styles.list}
       contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
       ListEmptyComponent={() => (
         <ThemedView style={styles.emptyState}>
-          <ThemeText style={styles.emptyText}>
+          <ThemeText style={[styles.emptyText, { color: previewColor }]}>
             You have not started any conversation yet
           </ThemeText>
         </ThemedView>
       )}
-      renderItem={({ item }) => (
-        <TouchableOpacity
-          style={styles.item}
-          onPressIn={() => onConversationPressIn?.(item.id)}
-          onPress={() => onConversationPress(item.id)}
-        >
-          <View style={styles.avatarWrapper}>
-            <CachedAvatar
-              uri={item.other_user?.profile_picture_url}
-              size={50}
-              style={styles.avatar}
-            />
-            {item.user.online && <View style={styles.online} />}
-          </View>
-          <View style={styles.content}>
-            <View style={styles.header}>
-  <ThemeText style={styles.name}>{item.user.username}</ThemeText>
+      renderItem={({ item }) => {
+        const avatarUri =
+          item.user?.profile_img ||
+          item.other_user?.profile_picture_url ||
+          undefined;
+        const unread = Number(item.lastMessage?.unreadCount || 0);
 
-  <View style={styles.rightHeader}>
-    {item.lastMessage?.unreadCount > 0 && (
-      <View style={styles.unreadBadge}>
-        <ThemeText style={styles.unreadText}>
-          {item.lastMessage.unreadCount}
-        </ThemeText>
-      </View>
-    )}
-    <ThemeText style={styles.time}>
-      {formatMessageTime(item.lastMessage.timestamp)}
-    </ThemeText>
-  </View>
-</View>
+        return (
+          <TouchableOpacity
+            style={styles.item}
+            activeOpacity={0.7}
+            onPressIn={() => onConversationPressIn?.(item.id)}
+            onPress={() => onConversationPress(item.id)}
+          >
+            <View style={styles.avatarWrapper}>
+              <CachedAvatar uri={avatarUri} size={50} style={styles.avatar} />
+              {item.user.online ? <View style={styles.online} /> : null}
+            </View>
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <ThemeText
+                  style={[styles.name, { color: nameColor }]}
+                  numberOfLines={1}
+                >
+                  {item.user.username || 'User'}
+                </ThemeText>
 
-            <ThemeText style={styles.message} numberOfLines={1}>
-              {item.lastMessage.text}
-            </ThemeText>
-          </View>
-        </TouchableOpacity>
-      )}
+                <View style={styles.rightHeader}>
+                  {unread > 0 ? (
+                    <View style={styles.unreadBadge}>
+                      <ThemeText style={styles.unreadText}>{unread}</ThemeText>
+                    </View>
+                  ) : null}
+                  <ThemeText style={[styles.time, { color: timeColor }]}>
+                    {formatMessageTime(item.lastMessage.timestamp)}
+                  </ThemeText>
+                </View>
+              </View>
+
+              <ThemeText
+                style={[
+                  styles.message,
+                  { color: previewColor },
+                  unread > 0 && styles.messageUnread,
+                  unread > 0 && { color: nameColor },
+                ]}
+                numberOfLines={1}
+              >
+                {item.lastMessage.text || ' '}
+              </ThemeText>
+            </View>
+          </TouchableOpacity>
+        );
+      }}
       refreshing={!!refreshing}
       onRefresh={onRefresh}
     />
@@ -120,11 +133,15 @@ const styles = StyleSheet.create({
   },
   listContent: {
     flexGrow: 1,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: 'transparent',
   },
   avatarWrapper: {
     position: 'relative',
@@ -136,25 +153,25 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   rightHeader: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 6, // optional spacing
-},
-unreadBadge: {
-  backgroundColor: '#C61F3A',
-  borderRadius: 12,
-  minWidth: 20,
-  height: 20,
-  justifyContent: 'center',
-  alignItems: 'center',
-  paddingHorizontal: 6,
-},
-unreadText: {
-  color: '#fff',
-  fontSize: 12,
-  fontWeight: 'bold',
-},
-
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  unreadBadge: {
+    backgroundColor: '#C61F3A',
+    borderRadius: 12,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   online: {
     position: 'absolute',
     bottom: 2,
@@ -168,23 +185,27 @@ unreadText: {
   },
   content: {
     flex: 1,
+    minWidth: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
   name: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
   },
   time: {
     fontSize: 12,
-    color: '#888',
   },
   message: {
     fontSize: 14,
-    color: '#666',
+  },
+  messageUnread: {
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,
@@ -194,7 +215,6 @@ unreadText: {
   },
   emptyText: {
     fontSize: 16,
-    color: '#888',
     textAlign: 'center',
   },
 });

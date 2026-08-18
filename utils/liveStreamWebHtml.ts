@@ -207,6 +207,7 @@ let localVideoTrack = null;
 let cameras = [];
 let currentCameraIndex = 0;
 let switchInFlight = false;
+let preferredFacing = "user";
 let audioOn = true;
 let videoOn = true;
 
@@ -266,6 +267,82 @@ function getCurrentVideoDeviceId() {
   }
 }
 
+function cameraMatchesFacing(camera, facing) {
+  var label = String((camera && camera.label) || "").toLowerCase();
+  if (!label) return false;
+  if (facing === "user") {
+    return (
+      label.indexOf("front") >= 0 ||
+      label.indexOf("user") >= 0 ||
+      label.indexOf("face") >= 0
+    ) && label.indexOf("back") < 0 && label.indexOf("rear") < 0;
+  }
+  return (
+    label.indexOf("back") >= 0 ||
+    label.indexOf("rear") >= 0 ||
+    label.indexOf("environment") >= 0
+  );
+}
+
+function pickNextCamera(deviceList, currentId, facing) {
+  if (!deviceList || !deviceList.length) return null;
+  var facingMatches = deviceList.filter(function (c) {
+    return c && c.deviceId && cameraMatchesFacing(c, facing);
+  });
+  var pool = facingMatches.length ? facingMatches : deviceList;
+  var start = 0;
+  for (var i = 0; i < pool.length; i++) {
+    if (pool[i].deviceId === currentId) {
+      start = i + 1;
+      break;
+    }
+  }
+  for (var j = 0; j < pool.length; j++) {
+    var candidate = pool[(start + j) % pool.length];
+    if (candidate && candidate.deviceId && candidate.deviceId !== currentId) {
+      return candidate;
+    }
+  }
+  // Fall back to cycling the full list when labels are missing/ambiguous.
+  if (!currentId && deviceList.length) {
+    currentCameraIndex = (currentCameraIndex + 1) % deviceList.length;
+    return deviceList[currentCameraIndex];
+  }
+  for (var k = 0; k < deviceList.length; k++) {
+    currentCameraIndex = (currentCameraIndex + 1) % deviceList.length;
+    var next = deviceList[currentCameraIndex];
+    if (next && next.deviceId && next.deviceId !== currentId) return next;
+  }
+  return null;
+}
+
+async function recreateHostVideoTrack(deviceId, facingMode) {
+  var oldTrack = localVideoTrack;
+  var options = { encoderConfig: "480p_1" };
+  if (deviceId) options.cameraId = deviceId;
+  if (facingMode) options.facingMode = facingMode;
+  var newTrack = await AgoraRTC.createCameraVideoTrack(options);
+  try {
+    if (oldTrack) await client.unpublish(oldTrack);
+  } catch (e) {}
+  try {
+    if (oldTrack) {
+      oldTrack.stop();
+      oldTrack.close();
+    }
+  } catch (e) {}
+  localVideoTrack = newTrack;
+  await localVideoTrack.play("local-player", {
+    fit: "cover",
+    mirror: facingMode !== "environment",
+  });
+  if (videoOn) {
+    await client.publish(localVideoTrack);
+  } else {
+    await localVideoTrack.setEnabled(false);
+  }
+}
+
 function wireSwitchCamera() {
   var btn = document.getElementById("switch-camera");
   if (!btn || btn.__gpWired) return;
@@ -274,21 +351,39 @@ function wireSwitchCamera() {
     if (switchInFlight || !localVideoTrack || !videoOn) return;
     if (btn.classList.contains("disabled")) return;
     switchInFlight = true;
+    preferredFacing = preferredFacing === "user" ? "environment" : "user";
     try {
       cameras = await AgoraRTC.getCameras();
-      if (cameras.length < 2) return;
+      if (!cameras || cameras.length < 2) {
+        setStatus("Only one camera available", true);
+        return;
+      }
       var currentId = getCurrentVideoDeviceId();
-      var next = cameras.find(function (c) { return c.deviceId && c.deviceId !== currentId; });
-      if (!next) {
-        currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-        next = cameras[currentCameraIndex];
-      } else {
-        currentCameraIndex = cameras.indexOf(next);
+      var next = pickNextCamera(cameras, currentId, preferredFacing);
+      if (!next || !next.deviceId) {
+        setStatus("Could not switch camera", true);
+        return;
       }
-      if (next && next.deviceId) {
+      currentCameraIndex = Math.max(0, cameras.indexOf(next));
+      try {
         await localVideoTrack.setDevice(next.deviceId);
+        // Confirm the active device actually changed; some WebViews no-op setDevice.
+        var afterId = getCurrentVideoDeviceId();
+        if (afterId && afterId === currentId) {
+          throw new Error("setDevice did not change camera");
+        }
+        try {
+          await localVideoTrack.play("local-player", {
+            fit: "cover",
+            mirror: preferredFacing !== "environment",
+          });
+        } catch (e) {}
+      } catch (err) {
+        await recreateHostVideoTrack(next.deviceId, preferredFacing);
       }
+      setStatus("", false);
     } catch (err) {
+      setStatus("Could not switch camera", true);
     } finally {
       switchInFlight = false;
     }

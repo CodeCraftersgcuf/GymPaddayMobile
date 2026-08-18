@@ -38,6 +38,7 @@ import * as Clipboard from 'expo-clipboard';
 import FlutterwaveWebView from '@/components/payments/FlutterwaveWebView';
 import { buildFlutterwaveCheckoutHtml } from '@/utils/flutterwaveCheckout';
 import { DEFAULT_PROFILE_IMAGE } from '@/constants/profilePlaceholder';
+import { GP_RATE } from '@/constants/gp';
 
 
 
@@ -589,7 +590,7 @@ export default function More() {
 
                 <View style={styles.exchangeRateContainer}>
                   <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                  <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
+                  <Text style={styles.exchangeRateValue}>N{GP_RATE.toLocaleString()} / 1GP</Text>
                 </View>
               </ThemedView>
             ) : (
@@ -629,7 +630,7 @@ export default function More() {
                 </ThemedView>
                 <View style={[styles.exchangeRateContainer, { marginHorizontal: 20 }]}>
                   <Text style={styles.exchangeRateLabel}>Exchange Rate</Text>
-                  <Text style={styles.exchangeRateValue}>N2,000 / 1GP</Text>
+                  <Text style={styles.exchangeRateValue}>N{GP_RATE.toLocaleString()} / 1GP</Text>
                 </View>
               </>
             )}

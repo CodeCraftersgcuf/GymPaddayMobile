@@ -1,6 +1,6 @@
 import type { Router } from 'expo-router';
 import { openSinglePost } from '@/utils/prefetchNavigation';
-import { navigateToUserProfile } from '@/utils/navigateToProfile';
+import { startCallRingtone } from '@/utils/callRingtone';
 
 export type AppNotification = {
   id: string;
@@ -103,8 +103,20 @@ export function getNotificationRoute(notification: AppNotification): {
     case 'story_published':
     case 'story_failed':
       return { pathname: '/(tabs)' };
-    case 'incoming_call':
-      return null;
+    case 'incoming_call': {
+      const callId = readId(data, 'call_id', 'callId');
+      if (!callId) return null;
+      return {
+        pathname: '/StreamIncomingCall',
+        params: {
+          call_id: callId,
+          call_type: String(data.call_type || 'voice'),
+          caller_name: String(data.caller_name || 'Unknown'),
+          caller_avatar: String(data.caller_avatar || ''),
+          receiver_id: String(data.caller_id || data.receiver_id || ''),
+        },
+      };
+    }
     default:
       return null;
   }
@@ -129,6 +141,10 @@ export function navigateFromNotification(
 
   const route = getNotificationRoute(notification);
   if (!route) return false;
+
+  if (type === 'incoming_call') {
+    startCallRingtone().catch(() => {});
+  }
 
   router.push({
     pathname: route.pathname as any,

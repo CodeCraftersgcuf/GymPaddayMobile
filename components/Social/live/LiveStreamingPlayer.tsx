@@ -29,6 +29,7 @@ interface Props {
 export type LiveStreamingPlayerHandle = {
   toggleMic: () => void;
   toggleCamera: () => void;
+  switchCamera: () => void;
 };
 
 const LiveStreamingPlayer = forwardRef<LiveStreamingPlayerHandle, Props>(function LiveStreamingPlayer(
@@ -42,6 +43,7 @@ const LiveStreamingPlayer = forwardRef<LiveStreamingPlayerHandle, Props>(functio
   const [status, setStatus] = useState('Starting camera…');
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [usingFrontCamera, setUsingFrontCamera] = useState(true);
 
   useImperativeHandle(ref, () => ({
     toggleMic: () => {
@@ -71,6 +73,16 @@ const LiveStreamingPlayer = forwardRef<LiveStreamingPlayerHandle, Props>(functio
         }
         return next;
       });
+    },
+    switchCamera: () => {
+      const engine = engineRef.current;
+      if (!engine || role !== 'host' || !camOn) return;
+      try {
+        engine.switchCamera();
+        setUsingFrontCamera((prev) => !prev);
+      } catch {
+        /* ignore */
+      }
     },
   }));
 
@@ -232,6 +244,17 @@ const LiveStreamingPlayer = forwardRef<LiveStreamingPlayerHandle, Props>(functio
     }
   };
 
+  const flipCamera = () => {
+    const engine = engineRef.current;
+    if (!engine || role !== 'host' || !camOn) return;
+    try {
+      engine.switchCamera();
+      setUsingFrontCamera((prev) => !prev);
+    } catch {
+      /* ignore */
+    }
+  };
+
   if (error) {
     return (
       <View style={styles.center}>
@@ -283,6 +306,18 @@ const LiveStreamingPlayer = forwardRef<LiveStreamingPlayerHandle, Props>(functio
             activeOpacity={0.85}
           >
             <Ionicons name={camOn ? 'videocam' : 'videocam-off'} size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.controlBtn}
+            onPress={flipCamera}
+            activeOpacity={0.85}
+            disabled={!camOn}
+          >
+            <Ionicons
+              name={usingFrontCamera ? 'camera-reverse-outline' : 'camera-outline'}
+              size={22}
+              color="#fff"
+            />
           </TouchableOpacity>
         </View>
       ) : null}

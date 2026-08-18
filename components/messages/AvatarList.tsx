@@ -70,5 +70,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
     maxWidth: 70,
+    textAlign: 'center',
   },
 });
