@@ -9,7 +9,12 @@ import {
     CallContent,
 } from '@stream-io/video-react-native-sdk';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import { startCallRingtone, stopCallRingtone } from '@/utils/callRingtone';
+import { onCallEnded } from '@/utils/callEvents';
+import { endStreamCall, getStreamCallStatus, isCallInactive } from '@/utils/streamCalls';
+import { teardownStreamCall } from '@/utils/teardownStreamCall';
+import CallEndWatcher from '@/components/CallEndWatcher';
 
 const API_URL = 'https://api.gympaddy.com/api/user';
 
@@ -22,32 +27,89 @@ export default function StreamIncomingCall() {
         caller_avatar = '',
     } = useLocalSearchParams();
 
+    const callIdRaw = Array.isArray(call_id) ? call_id[0] : call_id;
+    const callId = String(callIdRaw || '');
+    const callTypeRaw = Array.isArray(call_type) ? call_type[0] : call_type;
+    const callType = String(callTypeRaw || 'voice');
+    const callerName = String(Array.isArray(caller_name) ? caller_name[0] : caller_name || 'Unknown');
+    const callerAvatar = String(Array.isArray(caller_avatar) ? caller_avatar[0] : caller_avatar || '');
     const [client, setClient] = useState<StreamVideoClient | null>(null);
     const [call, setCall] = useState<Call | null>(null);
     const [joined, setJoined] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
-    const ringingRef = useRef(true);
+    const callRef = useRef<Call | null>(null);
+    const clientRef = useRef<StreamVideoClient | null>(null);
+    callRef.current = call;
+    clientRef.current = client;
+    const leavingRef = useRef(false);
 
-    // Ringtone must start as soon as this screen opens (before Stream join).
-    useEffect(() => {
-        ringingRef.current = true;
-        startCallRingtone().catch(() => {});
-        return () => {
-            ringingRef.current = false;
-            stopCallRingtone().catch(() => {});
-        };
-    }, []);
-
-    const stopRinging = async () => {
-        ringingRef.current = false;
+    const leaveScreen = async (endForEveryone = false) => {
+        if (leavingRef.current) return;
+        leavingRef.current = true;
+        // Stop ringtone first (sync generation bump) before any other await.
         await stopCallRingtone();
+        try {
+            await Notifications.dismissAllNotificationsAsync();
+        } catch {
+            /* ignore */
+        }
+        await teardownStreamCall({
+            call: callRef.current,
+            client: clientRef.current,
+            endForEveryone,
+        });
+        setCall(null);
+        setClient(null);
+        router.replace('/(tabs)');
     };
+
+    useEffect(() => {
+        let cancelled = false;
+        startCallRingtone().catch(() => {});
+        const unsub = onCallEnded((payload) => {
+            if (cancelled) return;
+            if (!payload.callId || payload.callId === callId) {
+                stopCallRingtone().catch(() => {});
+                leaveScreen(false);
+            }
+        });
+        return () => {
+            cancelled = true;
+            unsub();
+            // Always kill ringtone on unmount — covers accept, decline, hangup, navigate away.
+            stopCallRingtone().catch(() => {});
+            if (!leavingRef.current) {
+                teardownStreamCall({
+                    call: callRef.current,
+                    client: clientRef.current,
+                    endForEveryone: false,
+                }).catch(() => {});
+            }
+        };
+    }, [callId]);
+
+    useEffect(() => {
+        if (!callId || joined) return;
+        let cancelled = false;
+        const poll = async () => {
+            const status = await getStreamCallStatus(callId);
+            if (!cancelled && isCallInactive(status)) {
+                await leaveScreen();
+            }
+        };
+        poll();
+        const timer = setInterval(poll, 2000);
+        return () => {
+            cancelled = true;
+            clearInterval(timer);
+        };
+    }, [callId, joined]);
 
     const handleAcceptCall = async () => {
         if (isJoining) return;
         setIsJoining(true);
-        await stopRinging();
+        await stopCallRingtone();
 
         try {
             const token = await SecureStore.getItemAsync('auth_token');
@@ -59,11 +121,16 @@ export default function StreamIncomingCall() {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ call_id }),
+                body: JSON.stringify({ call_id: callId }),
             });
 
             const result = await res.json();
-            if (!res.ok) throw new Error(result.message || 'Failed to accept call');
+            if (res.status === 410 || isCallInactive(result?.status)) {
+                Alert.alert('Call ended', 'The caller already hung up.');
+                await leaveScreen();
+                return;
+            }
+            if (!res.ok) throw new Error(result.message || result.error || 'Failed to accept call');
 
             const { token: streamToken, user_id } = result;
 
@@ -75,21 +142,21 @@ export default function StreamIncomingCall() {
                 },
                 token: streamToken,
             });
-            const normalizedCallType = String(call_type).toLowerCase();
+            const normalizedCallType = callType.toLowerCase();
             const streamCallType = normalizedCallType === 'video' ? 'default' : 'audio_room';
-            const callObj = streamClient.call(streamCallType, String(call_id));
+            const callObj = streamClient.call(streamCallType, callId);
 
             await callObj.join({
                 create: false,
-                video: call_type === 'video',
+                video: normalizedCallType === 'video',
             });
 
-            if (call_type !== 'video') {
+            if (normalizedCallType !== 'video') {
                 await callObj.microphone.enable();
             }
 
             callObj.on('call.ended', () => {
-                router.replace('/(tabs)');
+                leaveScreen();
             });
 
             setClient(streamClient);
@@ -98,18 +165,13 @@ export default function StreamIncomingCall() {
         } catch (err: any) {
             Alert.alert('Failed to join call', err.message);
             setIsJoining(false);
-            router.back();
+            await leaveScreen();
         }
     };
 
     const handleDecline = async () => {
-        await stopRinging();
-        try {
-            if (call) await call.leave();
-        } catch {
-            /* ignore */
-        }
-        router.replace('/(tabs)');
+        if (callId) await endStreamCall(callId);
+        await leaveScreen(false);
     };
 
     const handleToggleMic = async () => {
@@ -127,24 +189,37 @@ export default function StreamIncomingCall() {
     };
 
     if (joined && client && call) {
-        const isVideoCall = String(call_type).toLowerCase() === 'video';
+        const isVideoCall = callType.toLowerCase() === 'video';
 
         return (
             <StreamVideo client={client}>
                 <StreamCall call={call}>
+                    <CallEndWatcher
+                        onEnded={async () => {
+                            await leaveScreen(false);
+                        }}
+                    />
                     {isVideoCall ? (
-                        <CallContent />
+                        <CallContent
+                            onHangupCallHandler={async () => {
+                                if (callId) {
+                                    await endStreamCall(callId).catch(() => {});
+                                }
+                                // Stream Hangup already left; force full media teardown + disconnect.
+                                await leaveScreen(false);
+                            }}
+                        />
                     ) : (
                         <View style={styles.voiceCallContainer}>
                             <Image
                                 source={
-                                    caller_avatar
-                                        ? { uri: String(caller_avatar) }
+                                    callerAvatar
+                                        ? { uri: callerAvatar }
                                         : require('../../assets/icons/more/User.png')
                                 }
                                 style={styles.avatar}
                             />
-                            <Text style={styles.name}>{caller_name}</Text>
+                            <Text style={styles.name}>{callerName}</Text>
                             <Text style={styles.callTypeText}>VOICE CALL</Text>
 
                             <View style={styles.voiceButtons}>
@@ -157,8 +232,8 @@ export default function StreamIncomingCall() {
                                 <TouchableOpacity
                                     style={[styles.voiceBtn, { backgroundColor: '#C61F3A' }]}
                                     onPress={async () => {
-                                        await call.leave();
-                                        router.replace('/(tabs)');
+                                        if (callId) await endStreamCall(callId);
+                                        await leaveScreen(true);
                                     }}
                                 >
                                     <Text style={styles.voiceBtnText}>End</Text>
@@ -175,14 +250,14 @@ export default function StreamIncomingCall() {
         <View style={styles.container}>
             <Image
                 source={
-                    caller_avatar
-                        ? { uri: String(caller_avatar) }
+                    callerAvatar
+                        ? { uri: callerAvatar }
                         : require('../../assets/icons/more/User.png')
                 }
                 style={styles.avatar}
             />
-            <Text style={styles.name}>{caller_name}</Text>
-            <Text style={styles.callTypeText}>{String(call_type).toUpperCase()} CALL</Text>
+            <Text style={styles.name}>{callerName}</Text>
+            <Text style={styles.callTypeText}>{callType.toUpperCase()} CALL</Text>
             <Text style={styles.ringingHint}>Incoming call…</Text>
 
             <View style={styles.buttons}>

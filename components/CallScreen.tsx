@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { CallContent, useCall, useCallStateHooks } from '@stream-io/video-react-native-sdk';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 
 export default function CallScreen({
     receiver_avatar,
@@ -19,19 +18,27 @@ export default function CallScreen({
     const { useRemoteParticipants } = useCallStateHooks();
     const remoteParticipants = useRemoteParticipants();
     const call = useCall();
-    const router = useRouter();
+    const hadRemoteRef = useRef(false);
 
     const receiverJoined = remoteParticipants.length > 0;
     const isAudio = call_type?.toLowerCase() === 'voice';
     const [isMuted, setIsMuted] = useState(false);
 
     useEffect(() => {
+        if (receiverJoined) {
+            hadRemoteRef.current = true;
+            return;
+        }
+        if (hadRemoteRef.current) {
+            onEndCall();
+        }
+    }, [receiverJoined]);
+
+    useEffect(() => {
         if (!call) return;
-
         const unsubscribe = call.on('call.ended', () => {
-            router.back();
+            onEndCall();
         });
-
         return () => unsubscribe?.();
     }, [call]);
 
@@ -106,7 +113,15 @@ export default function CallScreen({
         );
     }
 
-    return <CallContent />;
+    return (
+        <CallContent
+            onHangupCallHandler={() => {
+                // Stream HangupCallButton already called leave(); this finishes
+                // client disconnect + InCallManager stop via parent hangUp.
+                onEndCall();
+            }}
+        />
+    );
 }
 const styles = StyleSheet.create({
     voiceCallContainer: {

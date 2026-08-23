@@ -22,12 +22,13 @@ async function fetchMonetizationHiddenFromApi(): Promise<boolean> {
   try {
     const response = await fetch(IOS_STATUS_CHECK_URL, { method: 'GET' });
     const payload = await response.json();
-    // For now, always enable wallet/monetization on iOS (ignore API flag).
-    const enabled = true; // payload?.status === true;
+    // iOS: show wallet/monetization only when API returns { "status": true }.
+    const enabled = payload?.status === true;
     return !enabled;
   } catch (error) {
     console.warn('iOS status-check failed:', error);
-    return false;
+    // Fail closed on iOS — keep wallet/monetization hidden if the check fails.
+    return true;
   }
 }
 

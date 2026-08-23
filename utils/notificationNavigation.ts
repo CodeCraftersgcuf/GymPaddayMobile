@@ -1,6 +1,5 @@
 import type { Router } from 'expo-router';
 import { openSinglePost } from '@/utils/prefetchNavigation';
-import { startCallRingtone } from '@/utils/callRingtone';
 
 export type AppNotification = {
   id: string;
@@ -142,10 +141,7 @@ export function navigateFromNotification(
   const route = getNotificationRoute(notification);
   if (!route) return false;
 
-  if (type === 'incoming_call') {
-    startCallRingtone().catch(() => {});
-  }
-
+  // Ringtone is owned by StreamIncomingCall — do not start it here.
   router.push({
     pathname: route.pathname as any,
     params: route.params,

@@ -10,33 +10,59 @@ import { removePendingPostByPostId } from '@/utils/pendingPosts';
 import { prefetchStoriesFromCache } from '@/utils/storyPrefetch';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
-import { startCallRingtone } from '@/utils/callRingtone';
+import { stopCallRingtone } from '@/utils/callRingtone';
+import { emitCallEnded } from '@/utils/callEvents';
+import {
+  extractNotificationData,
+  isCallEndedType,
+  isIncomingCallPayload,
+} from '@/utils/notificationData';
+
+let didConsumeLaunchNotification = false;
 
 function isForUser(data: Record<string, unknown>, userId: number | undefined): boolean {
   if (!userId) return false;
   const notifUserId = data.userId ?? data.user_id ?? data.receiver_id;
   // Call pushes always target the current device user; allow if userId matches or is missing.
   if (notifUserId == null || notifUserId === '') {
-    return data.type === 'incoming_call';
+    return isIncomingCallPayload(data) || isCallEndedType(data.type);
   }
   return parseInt(String(notifUserId), 10) === userId;
+}
+
+async function dismissCallNotifications() {
+  try {
+    await Notifications.dismissAllNotificationsAsync();
+  } catch {
+    /* ignore */
+  }
 }
 
 function openIncomingCall(
   router: ReturnType<typeof useRouter>,
   data: Record<string, unknown>,
 ) {
-  startCallRingtone().catch(() => {});
-  router.push({
+  const callId = String(data.call_id ?? '');
+  if (!callId) return;
+  // Do NOT start ringtone here — StreamIncomingCall owns ringtone lifecycle.
+  // Starting in both places races createAsync and orphans a looping Sound.
+  router.replace({
     pathname: '/StreamIncomingCall',
     params: {
       receiver_id: String(data.caller_id ?? data.receiver_id ?? ''),
-      call_id: String(data.call_id ?? ''),
+      call_id: callId,
       call_type: String(data.call_type ?? 'voice'),
       caller_name: String(data.caller_name || 'Unknown'),
       caller_avatar: String(data.caller_avatar || ''),
     },
   });
+}
+
+async function handleCallEnded(data: Record<string, unknown>) {
+  // Stop ringtone immediately — do not wait for screen teardown.
+  await stopCallRingtone();
+  emitCallEnded({ callId: String(data.call_id ?? '') || undefined });
+  await dismissCallNotifications();
 }
 
 async function handleContentNotification(
@@ -147,16 +173,26 @@ export default function NotificationManager() {
     useEffect(() => {
         Notifications.setNotificationHandler({
             handleNotification: async (notification) => {
-                const data = notification?.request?.content?.data || {};
+                const data = extractNotificationData(notification);
                 const session = await readSession();
                 const notifUserId = data.userId ?? data.user_id ?? data.receiver_id;
-                const isCall = data.type === 'incoming_call';
+                const isCall = isIncomingCallPayload(data);
+                const isEnded = isCallEndedType(data.type);
                 const forUser =
                   !session
                     ? false
                     : notifUserId == null || notifUserId === ''
-                      ? isCall
+                      ? isCall || isEnded
                       : parseInt(String(notifUserId), 10) === session.userId;
+
+                if (isEnded) {
+                    handleCallEnded(data).catch(() => {});
+                    return {
+                        shouldShowAlert: false,
+                        shouldPlaySound: false,
+                        shouldSetBadge: false,
+                    };
+                }
 
                 if (forUser) {
                     return {
@@ -188,12 +224,17 @@ export default function NotificationManager() {
             responseListener.current?.remove();
 
             notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-                const data = (notification.request.content.data || {}) as Record<string, unknown>;
+                const data = extractNotificationData(notification);
                 console.log('📥 Notification received (foreground):', data);
 
                 if (!isForUser(data, userId)) return;
 
-                if (data.type === 'incoming_call') {
+                if (isCallEndedType(data.type)) {
+                    handleCallEnded(data).catch(() => {});
+                    return;
+                }
+
+                if (isIncomingCallPayload(data) && data.call_id) {
                     openIncomingCall(router, data);
                     return;
                 }
@@ -202,12 +243,17 @@ export default function NotificationManager() {
             });
 
             responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-                const data = (response.notification.request.content.data || {}) as Record<string, unknown>;
+                const data = extractNotificationData(response.notification);
                 console.log('📥 Notification tap response received:', data);
 
                 if (!isForUser(data, userId)) return;
 
-                if (data.type === 'incoming_call') {
+                if (isCallEndedType(data.type)) {
+                    handleCallEnded(data).catch(() => {});
+                    return;
+                }
+
+                if (isIncomingCallPayload(data) && data.call_id) {
                     openIncomingCall(router, data);
                     return;
                 }
@@ -241,6 +287,17 @@ export default function NotificationManager() {
             }
 
             bindListeners(session.userId);
+
+            if (!didConsumeLaunchNotification) {
+                didConsumeLaunchNotification = true;
+                const lastResponse = await Notifications.getLastNotificationResponseAsync();
+                if (lastResponse) {
+                    const data = extractNotificationData(lastResponse.notification);
+                    if (isForUser(data, session.userId) && isIncomingCallPayload(data) && data.call_id) {
+                        openIncomingCall(router, data);
+                    }
+                }
+            }
         };
 
         setupNotifications();
